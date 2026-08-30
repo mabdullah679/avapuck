@@ -1,0 +1,44 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash",
+      "Read",
+      "Write",
+      "Edit",
+      "Glob",
+      "Grep",
+      "NotebookEdit",
+      "TodoWrite",
+      "Skill",
+      "Task",
+      "TaskOutput",
+      "TaskStop",
+      "Monitor",
+      "Agent",
+      "Workflow",
+      "WebFetch",
+      "WebSearch",
+      "PushNotification",
+      "ScheduleWakeup",
+      "AskUserQuestion"
+    ],
+    "deny": [
+      "Read(.env*)",
+      "Read(**/.env*)",
+      "Read(**/secrets/**)",
+      "Bash(terraform apply:*)",
+      "Bash(databricks:*)",
+      "Bash(aws:*)",
+      "Bash(gcloud:*)",
+      "Bash(az:*)"
+    ],
+    "defaultMode": "auto"
+  },
+  "env": {
+    "WPS_POC": "1",
+    "PYSPARK_PYTHON": "python3",
+    "PYTHONUNBUFFERED": "1",
+    "AIRFLOW__CORE__LOAD_EXAMPLES": "False",
+    "AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION": "True"
+  }
+}

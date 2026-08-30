@@ -1,0 +1,144 @@
+# SERVICE A BINDING — OCIO team, legacy mainframe fixed-width (COBOL-style)
+#
+# This is the exemplar binding. It is ALL of what the platform knows about
+# Service A: how to authenticate to it, how to read its bytes, what its nulls
+# mean, and which business rules it actually applies. No line of pipeline code
+# mentions Service A. Adding service E is a new file like this one and nothing
+# else.
+schema: wps.binding/v1
+service_id: service_a
+service_name: OCIO Quarterly Reporting Extract
+binds_contract: quarterly_performance
+binds_contract_version: "1.0.0"
+dictionary_version: "1.0.0"
+
+jurisdiction: US            # -> calendar fiscal year, USD, 2 minor units
+auth_profile: auth/profiles.yaml#/service_a_oauth2
+
+source:
+  format: fixed_width
+  encoding: cp037           # EBCDIC, because of course it is
+  record_length: 220
+  header_records: 1
+  trailer_records: 1
+  trailer_contains_control_total: true
+
+# Each service invented its own way of saying "nothing here". Declaring them
+# is what keeps "absent" from silently becoming "zero" in a revenue figure.
+null_convention:
+  tokens: ["", "          ", "*NONE*", "0000-00-00"]
+  zero_is_null: false       # Service A genuinely distinguishes 0 from absent
+
+# Physical layout. Offsets are 1-indexed inclusive, as the copybook states them.
+layout:
+  MERCH-ID:        { start: 1,   len: 12,  pic: "X(12)" }
+  MERCH-NAME:      { start: 13,  len: 40,  pic: "X(40)" }
+  CONTR-ID:        { start: 53,  len: 14,  pic: "X(14)" }
+  RPT-FY-QTR:      { start: 67,  len: 6,   pic: "X(6)",  note: "e.g. FY26Q3" }
+  ACCT-OPEN-CNT:   { start: 73,  len: 9,   pic: "9(9)" }
+  ACCT-CLOSED-CNT: { start: 82,  len: 9,   pic: "9(9)" }
+  GROSS-AMT:       { start: 91,  len: 13,  pic: "S9(11)V99", note: "implied 2 decimals, no point in the data" }
+  REV-AMT:         { start: 104, len: 13,  pic: "S9(11)V99", note: "gross of platform fees" }
+  TXN-CNT:         { start: 117, len: 11,  pic: "9(11)" }
+  RFND-CNT:        { start: 128, len: 9,   pic: "9(9)" }
+  CHBK-CNT:        { start: 137, len: 9,   pic: "9(9)" }
+  FEE-AMT:         { start: 146, len: 13,  pic: "S9(11)V99" }
+  ONBOARD-DT:      { start: 159, len: 8,   pic: "9(8)",  note: "YYYYMMDD" }
+  TAX-REF:         { start: 167, len: 20,  pic: "X(20)" }
+  FILLER:          { start: 187, len: 34,  pic: "X(34)" }
+
+# Every field this service sends declares its classification. An undeclared
+# field is rejected by the contract, never defaulted to safe.
+classification_declarations:
+  MERCH-NAME: pii
+  TAX-REF:    pii
+  # everything else non_pci
+
+# --------------------------------------------------------------------------
+# MAPPINGS — composed only from operators in canonical/operators.yaml
+# --------------------------------------------------------------------------
+mappings:
+
+  merchant.merchant_id:
+    from: MERCH-ID
+    ops: [ { trim: { chars: " " } },
+           { lookup: { table: lookups/merchant_xref.yaml#/service_a, on_missing: fail } } ]
+
+  merchant.legal_name:
+    from: MERCH-NAME
+    ops: [ { trim: {} }, { tokenize: { scheme: classification/policy.yaml#/classifications/pii } } ]
+
+  merchant.tax_ref:
+    from: TAX-REF
+    ops: [ { trim: {} }, { tokenize: { scheme: classification/policy.yaml#/classifications/pii } } ]
+
+  merchant.onboarded_on:
+    from: ONBOARD-DT
+    ops: [ { coalesce_null_convention: { tokens: ["0000-00-00", "00000000"], zero_is_null: true } },
+           { date_parse: { format: "%Y%m%d" } } ]
+
+  contract.contract_id:
+    from: CONTR-ID
+    ops: [ { trim: {} } ]
+
+  # The period conflict. Service A is US, so its fiscal year IS the calendar
+  # year and FY26Q3 lands on Jul-Sep 2026. Service B sends the same literal
+  # string and means Oct-Dec. Neither is wrong; the jurisdiction decides.
+  period.period_id:
+    from: RPT-FY-QTR
+    ops: [ { fiscal_to_calendar_quarter: { jurisdiction: "$.jurisdiction", label_format: "FY%yQ%q" } },
+           { period_id: {} } ]
+
+  # Contested metric. Service A applies incl_any_open — it counts every open
+  # account whether or not it transacted. Gold will carry BOTH this value
+  # under its own rule name AND the canonical recomputation.
+  quarterly_performance.active_accounts:
+    from: ACCT-OPEN-CNT
+    applies_rule: rules.yaml#/active_account/incl_any_open
+    ops: [ { coalesce_null_convention: { tokens: ["*NONE*"], zero_is_null: false } },
+           { cast: { to: int } } ]
+    canonical_recomputable: false
+    canonical_gap_reason: >
+      Service A does not send per-account transaction recency, so canon_v1
+      cannot be recomputed from this extract. Gold records the native value
+      and marks the canonical variant as not-derivable from this source
+      rather than guessing. Recorded in TRUST-BOUNDARY.md.
+
+  # Implied-decimal handling. GROSS-AMT arrives as "000000123456" meaning
+  # 1234.56 USD, which is 123456 USD minor units. The two operations happen
+  # to cancel for a 2-minor-unit currency — and would NOT cancel for JPY or
+  # BHD, which is exactly why the operators are declared separately.
+  quarterly_performance.gross_volume_minor:
+    from: GROSS-AMT
+    applies_rule: rules.yaml#/gross_volume/canon_v1
+    ops: [ { implied_decimal: { places: 2 } },
+           { to_minor_units: { currency_from: "contract.settlement_currency" } } ]
+
+  quarterly_performance.net_revenue_minor:
+    from: REV-AMT
+    applies_rule: rules.yaml#/net_revenue/gross_of_platform_fees
+    ops: [ { implied_decimal: { places: 2 } },
+           { to_minor_units: { currency_from: "contract.settlement_currency" } } ]
+    canonical_recomputable: true
+    canonical_recompute:
+      description: "Subtract the separately reported fee amount to reach canon_v1."
+      from: [REV-AMT, FEE-AMT]
+      ops: [ { implied_decimal: { places: 2 } },
+             { to_minor_units: { currency_from: "contract.settlement_currency" } } ]
+      combine: subtract
+
+  quarterly_performance.settled_txn_count:
+    from: TXN-CNT
+    ops: [ { cast: { to: bigint } } ]
+
+  quarterly_performance.refund_count:
+    from: RFND-CNT
+    ops: [ { cast: { to: bigint } } ]
+
+  quarterly_performance.chargeback_count:
+    from: CHBK-CNT
+    ops: [ { cast: { to: bigint } } ]
+
+quality:
+  - { id: control_total_matches, rule: "Trailer control total equals the sum of GROSS-AMT across data records.", on_fail: fail_batch }
+  - { id: record_length_exact,   rule: "Every record is exactly 220 bytes.", on_fail: fail_batch }

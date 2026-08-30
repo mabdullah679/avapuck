@@ -1,0 +1,71 @@
+# PCI / PII / NON-PCI HANDLING POLICY
+#
+# Classification is declared once in the dictionary. THIS file declares what
+# each classification is permitted to do at each medallion layer. The pipeline
+# reads this and enforces it; no layer logic hardcodes a field name.
+#
+# NOT a compliance artefact. See TRUST-BOUNDARY.md §2.4 — no compliance
+# function has reviewed this, and nothing here constitutes a PCI-DSS claim.
+schema: wps.classification.policy/v1
+dictionary_version: "1.0.0"
+
+classifications:
+
+  non_pci:
+    description: Business data outside cardholder and personal-data scope.
+    bronze: { land: raw }
+    silver: { land: raw }
+    gold:   { land: raw }
+    dashboard: allowed
+
+  pii:
+    description: Personally identifiable information.
+    bronze:
+      land: raw
+      justification: >
+        Bronze is immutable source-fidelity landing. Transforming on the way
+        in would destroy the ability to prove what the source actually sent.
+      controls: [restricted_read, retention_capped]
+      retention_days: 90
+    silver:
+      land: transformed
+      required_operator: tokenize
+      note: PII must be tokenized before it may cross into Silver.
+    gold:
+      land: denied
+      exceptions:
+        - field: merchant.display_name
+          reason: Trading name is public commercial information, not personal data.
+    dashboard: denied
+
+  pci:
+    description: Cardholder data. PCI-DSS scoped.
+    bronze:
+      land: encrypted_only
+      justification: >
+        PCI values may only land already-opaque. This POC's one PCI-bearing
+        field arrives encrypted from Service D and is never in plaintext
+        anywhere in this repo. Deliberate: it keeps throwaway POC
+        infrastructure out of PCI-DSS scope entirely.
+      controls: [restricted_read, no_export, retention_capped]
+      retention_days: 30
+    silver:
+      land: transformed
+      required_operator: tokenize
+      forbid_operators: [decrypt_ref]
+      note: >
+        Silver may hold a token. It may never hold the decrypted value. The
+        decryption interface exists for a downstream consumer that has the
+        keys and the PCI scope — not for this pipeline.
+    gold:
+      land: denied
+      exceptions: []
+    dashboard: denied
+
+enforcement:
+  on_violation: fail_batch
+  rationale: >
+    A classification breach is not a warning. The batch fails, loudly, and the
+    offending field and rule are named in the failure. Silent degradation is
+    how PII reaches a dashboard.
+  audit_log: lake/_audit/classification_events

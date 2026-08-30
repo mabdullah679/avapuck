@@ -1,0 +1,37 @@
+# DERIVED METRIC FORMULAE
+#
+# The merchant credibility score is computed by Gold, not ingested. Its
+# weights live here so the business can see and change them without a
+# deployment — the same config-over-code stance as every mapping.
+schema: wps.canonical.scoring/v1
+dictionary_version: "1.0.0"
+
+merchant_credibility:
+  v1:
+    output_field: merchant_credibility_score
+    range: [0, 100]
+    rounding: half_even
+    precision: 2
+    null_policy: >
+      If any required component is NULL, the score is NULL — never zero.
+      A missing score and a bad score must never look alike on a dashboard
+      that drives investment decisions.
+    components:
+      - name: dispute_behaviour
+        weight: 0.35
+        source: dispute_ratio
+        transform: { kind: inverse_band, bands: [[0.000, 0.002, 100], [0.002, 0.005, 80], [0.005, 0.010, 55], [0.010, 0.020, 30], [0.020, null, 5]] }
+      - name: settlement_consistency
+        weight: 0.25
+        source: settled_txn_count
+        transform: { kind: coefficient_of_variation_inverse, lookback_periods: 4 }
+      - name: volume_stability
+        weight: 0.25
+        source: gross_volume_reporting_usd_minor
+        transform: { kind: coefficient_of_variation_inverse, lookback_periods: 4 }
+      - name: contract_tenure
+        weight: 0.15
+        source: contract.effective_from
+        transform: { kind: tenure_band_months, bands: [[0, 6, 20], [6, 18, 55], [18, 36, 80], [36, null, 100]] }
+    min_periods_required: 2
+    insufficient_history_behaviour: emit_null_with_reason

@@ -1,0 +1,128 @@
+# THE PUBLIC CONTRACT — quarterly_performance v1.0
+#
+# FROZEN. Never edited in place. Additive changes mint v1.1; any breaking
+# change mints v2.0 and requires services to be reworked to fit. Every Gold
+# row stamps the contract version that produced it, so any past quarter can
+# be replayed under exactly the rules that were in force at the time.
+#
+# The dictionary defines MEANING. This contract defines what a consumer may
+# RELY ON: the field set, the guarantees, the quality bar, and the terms of
+# change. Services bind to this. "Every service must fit the contract
+# bindings or be reworked until it does. No flexibility."
+schema: wps.contract/v1
+contract: quarterly_performance
+version: "1.0.0"
+status: frozen
+frozen_on: 2026-08-30
+owner: platform_ssot
+dictionary_version: "1.0.0"
+
+grain: [merchant_id, contract_id, period_id]
+
+# --------------------------------------------------------------------------
+# GUARANTEED SURFACE — what consumers may depend on
+# --------------------------------------------------------------------------
+guarantees:
+
+  identity:
+    - { field: merchant_id,  nullable: false }
+    - { field: contract_id,  nullable: false }
+    - { field: period_id,    nullable: false }
+    - { field: jurisdiction, nullable: false }
+    - { field: settlement_currency, nullable: false }
+
+  canonical_metrics:
+    - { field: active_accounts,     nullable: true, rule: rules.yaml#/active_account/canon_v1 }
+    - { field: gross_volume_minor,  nullable: true, rule: rules.yaml#/gross_volume/canon_v1 }
+    - { field: net_revenue_minor,   nullable: true, rule: rules.yaml#/net_revenue/canon_v1 }
+    - { field: settled_txn_count,   nullable: true }
+    - { field: refund_count,        nullable: true }
+    - { field: chargeback_count,    nullable: true }
+    - { field: dispute_ratio,       nullable: true }
+    - { field: merchant_credibility_score, nullable: true }
+
+  # Reconciliation is a first-class part of the contract, not a debug aid.
+  # A team must always be able to find its OWN number next to the canonical
+  # one, with the rule that produced each. Without this, "standardization"
+  # reads to the service teams as "the platform changed our figures."
+  source_variants:
+    required_for: [active_accounts, gross_volume_minor, net_revenue_minor]
+    shape:
+      - { field: "<metric>_by_source", type: map[service_id -> variant] }
+      - variant:
+          value:            { type: same_as_canonical_metric }
+          rule:             { type: rule_ref }
+          reported_natively:{ type: bool, definition: "False when the platform derived it because the service did not report the metric at all." }
+      - { field: "<metric>_variance_pct", type: decimal, definition: "Max spread across reporting services as a percentage of the canonical value." }
+
+  lineage:
+    - contract_version
+    - binding_hash
+    - dictionary_version
+    - source_services
+    - produced_at
+    - is_projection
+
+# --------------------------------------------------------------------------
+# QUALITY ASSERTIONS — enforced at the Silver -> Gold boundary
+# --------------------------------------------------------------------------
+assertions:
+  - id: grain_unique
+    rule: "No duplicate (merchant_id, contract_id, period_id)."
+    on_fail: fail_batch
+  - id: currency_precision_respected
+    rule: "Every *_minor value is an integer in the declared minor units of its settlement_currency."
+    on_fail: fail_batch
+  - id: period_is_calendar
+    rule: "period_id is calendar-anchored; no fiscal label survives into Gold."
+    on_fail: fail_batch
+  - id: no_pci_or_pii_in_gold
+    rule: "No field classified pci, or pii without a declared exception, appears in Gold."
+    on_fail: fail_batch
+  - id: null_is_not_zero
+    rule: "A metric not reported by any service is NULL, never 0."
+    on_fail: fail_batch
+  - id: projection_marked
+    rule: "Any row whose period is not closed carries is_projection = true."
+    on_fail: fail_batch
+  - id: contract_referential_integrity
+    rule: "Every contract_id resolves to a known merchant_id and jurisdiction."
+    on_fail: quarantine_row
+  - id: variance_bounded
+    rule: "Cross-service variance above 25% on a canonical metric is flagged for review."
+    on_fail: warn_and_flag
+
+# --------------------------------------------------------------------------
+# BINDING OBLIGATIONS — what a service must supply to be admitted
+# --------------------------------------------------------------------------
+binding_obligations:
+  required:
+    - "Declare a resolution from its native merchant identifier to canonical merchant_id."
+    - "Declare its jurisdiction, and therefore its fiscal calendar and currency precision."
+    - "Declare its own null tokens, and state explicitly whether zero means zero or means absent."
+    - "For every contested metric it reports, name the rule it actually applies."
+    - "Declare the classification of every field it sends. Undeclared fields are rejected, not defaulted."
+    - "Compose transforms only from operators declared in canonical/operators.yaml."
+  rejected:
+    - "A service that cannot name the rule behind a contested metric. An unnamed rule is an unauditable one."
+    - "A service supplying a field whose classification is unknown."
+    - "A service requiring an inline expression rather than a declared operator."
+
+# --------------------------------------------------------------------------
+# CHANGE POLICY
+# --------------------------------------------------------------------------
+change_policy:
+  additive_minor:
+    - Adding a new nullable metric
+    - Adding a new source variant
+    - Adding a new jurisdiction or currency
+  breaking_major:
+    - Removing or renaming a guaranteed field
+    - Changing the meaning of a canonical rule
+    - Changing grain
+    - Tightening nullability
+  process: >
+    A frozen version is immutable. Consumers pin a version. A major bump
+    requires every bound service to be reworked to fit before the new version
+    is published — no service is exempted and no per-service special case is
+    admitted.

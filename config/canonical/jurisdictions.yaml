@@ -1,0 +1,54 @@
+# Canonical jurisdiction definitions.
+# Jurisdiction is a LOAD-BEARING dimension: fiscal calendar, currency
+# precision, and data-handling rules all branch on it. Contract terms vary by
+# jurisdiction and change on business timelines, not release timelines —
+# which is exactly why they live here and not in pipeline code.
+schema: wps.canonical.jurisdictions/v1
+dictionary_version: "1.0.0"
+
+jurisdictions:
+  US:
+    name: United States
+    fiscal_year_start_month: 1        # fiscal == calendar
+    fiscal_calendar: calendar
+    default_currency: USD
+    # PII regime affects what may surface in Gold; see classification/policy.yaml
+    privacy_regime: US_STATE_PATCHWORK
+    pii_residency_required: false
+
+  UK:
+    name: United Kingdom
+    fiscal_year_start_month: 4        # Apr-Mar: FY26Q1 == Apr-Jun 2026
+    fiscal_calendar: apr_mar
+    default_currency: GBP
+    privacy_regime: UK_GDPR
+    pii_residency_required: true
+
+  JP:
+    name: Japan
+    fiscal_year_start_month: 4        # Apr-Mar
+    fiscal_calendar: apr_mar
+    default_currency: JPY
+    privacy_regime: APPI
+    pii_residency_required: true
+
+  BH:
+    name: Bahrain
+    fiscal_year_start_month: 1        # fiscal == calendar
+    fiscal_calendar: calendar
+    default_currency: BHD
+    privacy_regime: PDPL
+    pii_residency_required: true
+
+# Currency precision is the second seeded conflict. A "minor unit" is not
+# universally 1/100. Any pipeline that assumes 2 decimal places silently
+# corrupts JPY by 100x and BHD by 10x.
+currencies:
+  USD: { minor_units: 2, name: US Dollar }
+  GBP: { minor_units: 2, name: Pound Sterling }
+  JPY: { minor_units: 0, name: Japanese Yen }
+  BHD: { minor_units: 3, name: Bahraini Dinar }
+
+# Canonical reporting currency for cross-jurisdiction Gold aggregates.
+# Per-jurisdiction native figures are ALWAYS preserved alongside.
+reporting_currency: USD

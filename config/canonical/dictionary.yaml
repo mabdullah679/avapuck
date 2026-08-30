@@ -1,0 +1,214 @@
+# THE CANONICAL DICTIONARY
+#
+# What each business term MEANS, exactly once, for the whole platform.
+# This file defines meaning. It says nothing about any service's format —
+# that lives in config/bindings/. It says nothing about what consumers may
+# rely on — that lives in config/contracts/. The separation is deliberate:
+# meaning changes rarely, contracts change on governance timelines, and
+# bindings change whenever a service team changes their export.
+schema: wps.canonical.dictionary/v1
+dictionary_version: "1.0.0"
+
+# ---------------------------------------------------------------------------
+# ENTITIES
+# ---------------------------------------------------------------------------
+entities:
+
+  merchant:
+    grain: One row per merchant, globally unique across all services.
+    natural_key_note: >
+      Each service has its own merchant identifier scheme. The canonical
+      merchant_id is assigned by the platform; every binding declares how its
+      native identifier resolves to it. No service's ID becomes the canonical
+      one — that would privilege one dialect over the others.
+    fields:
+      merchant_id:        { type: string,  classification: non_pci, required: true,  definition: "Platform-assigned canonical merchant identifier." }
+      legal_name:         { type: string,  classification: pii,     required: true,  definition: "Registered legal entity name." }
+      display_name:       { type: string,  classification: non_pci, required: false, definition: "Trading name shown on dashboards." }
+      primary_contact_email: { type: string, classification: pii,   required: false, definition: "Merchant relationship contact." }
+      tax_ref:            { type: string,  classification: pii,     required: false, definition: "Jurisdictional tax registration reference." }
+      onboarded_on:       { type: date,    classification: non_pci, required: true,  definition: "Date the merchant first became contracted." }
+      status:             { type: string,  classification: non_pci, required: true,  definition: "Lifecycle state.", enum: [prospective, active, suspended, terminated] }
+
+  contract:
+    grain: One row per contract. A merchant may hold several, in different jurisdictions.
+    definition: >
+      An international commercial agreement governing how a merchant's
+      activity is priced, settled, and reported. The contract — not the
+      merchant — carries jurisdiction and currency, because the same merchant
+      trading in two jurisdictions is genuinely subject to two rule sets.
+    fields:
+      contract_id:        { type: string,  classification: non_pci, required: true,  definition: "Canonical contract identifier." }
+      merchant_id:        { type: string,  classification: non_pci, required: true,  definition: "Owning merchant." }
+      jurisdiction:       { type: string,  classification: non_pci, required: true,  definition: "Governing jurisdiction.", enum_ref: jurisdictions.yaml#/jurisdictions }
+      settlement_currency:{ type: string,  classification: non_pci, required: true,  definition: "Currency of settlement. Drives minor-unit precision.", enum_ref: jurisdictions.yaml#/currencies }
+      effective_from:     { type: date,    classification: non_pci, required: true,  definition: "First day the contract terms apply." }
+      effective_to:       { type: date,    classification: non_pci, required: false, definition: "Last day the terms apply. NULL means open-ended." }
+      pricing_tier:       { type: string,  classification: non_pci, required: true,  definition: "Commercial tier governing fee schedule." }
+      settlement_account_ref: { type: string, classification: pci,   required: false, definition: "Reference to the settlement instrument. PCI-scoped: tokenized before Silver, never surfaced in Gold." }
+
+  period:
+    grain: One row per canonical reporting period.
+    definition: >
+      A CALENDAR quarter. The canonical period is always calendar-anchored,
+      never fiscal, because four jurisdictions with two different fiscal
+      calendars cannot share a fiscal period without one of them being wrong.
+      Fiscal labels are translated inbound and re-derived outbound for display.
+    fields:
+      period_id:          { type: string,  classification: non_pci, required: true,  definition: "Canonical period key, e.g. 2026CQ3." }
+      calendar_year:      { type: int,     classification: non_pci, required: true }
+      calendar_quarter:   { type: int,     classification: non_pci, required: true }
+      start_date:         { type: date,    classification: non_pci, required: true }
+      end_date:           { type: date,    classification: non_pci, required: true }
+      is_closed:          { type: bool,    classification: non_pci, required: true,  definition: "False for the in-flight quarter. Gold rows for an open period are PROJECTIONS and must be marked as such downstream." }
+
+# ---------------------------------------------------------------------------
+# FACT — the grain of Gold
+# ---------------------------------------------------------------------------
+facts:
+  quarterly_performance:
+    grain: [merchant_id, contract_id, period_id]
+    definition: >
+      One row per merchant, per contract, per calendar quarter. This grain was
+      chosen over merchant-x-period because a merchant holding contracts in
+      two jurisdictions has two genuinely different sets of governing rules,
+      and collapsing them would force a fiction about which jurisdiction the
+      row belongs to.
+
+    # -----------------------------------------------------------------
+    # CONTESTED METRICS
+    # A contested metric is one where services do not agree on meaning.
+    # These are the POC's actual subject matter. Each carries ONE canonical
+    # definition plus the per-service rules that reconcile to it, and Gold
+    # preserves BOTH so no team loses sight of its own reported figure.
+    # -----------------------------------------------------------------
+    metrics:
+
+      active_accounts:
+        type: int
+        unit: count
+        classification: non_pci
+        contested: true
+        canonical_definition: >
+          An account is ACTIVE in a period if it was open at any point during
+          the period AND recorded at least one settled transaction within the
+          trailing 90 days of the period end.
+        canonical_rule: rules.yaml#/active_account/canon_v1
+        why_contested: >
+          Four teams each solved this locally and none is wrong in its own
+          frame. OCIO counts any open account; the MySQL team counts 30-day
+          transacting accounts; the PII team excludes accounts pending
+          verification; the legacy mainframe counts accounts with a non-zero
+          closing balance. The spread between them is material at the volumes
+          that drive investment decisions.
+        reconciliation: preserve_both
+        source_variants_required: true
+        null_semantics: "NULL means not reported by that service. Distinct from 0, which means reported as none."
+
+      gross_volume_minor:
+        type: bigint
+        unit: minor_units_of_settlement_currency
+        classification: non_pci
+        contested: true
+        canonical_definition: >
+          Total value of settled transactions in the period, in integer minor
+          units of the contract's settlement currency, before any deduction.
+        canonical_rule: rules.yaml#/gross_volume/canon_v1
+        why_contested: >
+          Two independent conflicts. (1) Precision: JPY has zero minor units
+          and BHD has three, so a shared "multiply by 100" assumption
+          corrupts two of four jurisdictions. (2) Inclusion: two services net
+          refunds out of gross before reporting; two do not.
+        reconciliation: preserve_both
+        source_variants_required: true
+        companion_fields:
+          gross_volume_reporting_usd_minor:
+            type: bigint
+            definition: "FX-converted companion for cross-jurisdiction aggregation. Never replaces the native figure."
+
+      net_revenue_minor:
+        type: bigint
+        unit: minor_units_of_settlement_currency
+        classification: non_pci
+        contested: true
+        canonical_definition: >
+          Gross volume less refunds, chargebacks, and contracted fees, in
+          integer minor units of the settlement currency.
+        canonical_rule: rules.yaml#/net_revenue/canon_v1
+        why_contested: >
+          Fee treatment differs: some services report revenue gross of
+          platform fees, others net. The difference is a pure accounting
+          convention and invisible without the dictionary saying which is meant.
+        reconciliation: preserve_both
+        source_variants_required: true
+
+    # -----------------------------------------------------------------
+    # UNCONTESTED METRICS
+    # All four services agree on meaning; only format differs. These prove
+    # the mapping layer handles the easy case cleanly, so that the contested
+    # ones stand out as the real work.
+    # -----------------------------------------------------------------
+      settled_txn_count:
+        type: bigint
+        unit: count
+        classification: non_pci
+        contested: false
+        canonical_definition: "Count of transactions reaching settled state within the period."
+        null_semantics: "NULL means not reported. 0 means reported as none."
+
+      refund_count:
+        type: bigint
+        unit: count
+        classification: non_pci
+        contested: false
+        canonical_definition: "Count of full or partial refunds initiated within the period."
+
+      chargeback_count:
+        type: bigint
+        unit: count
+        classification: non_pci
+        contested: false
+        canonical_definition: "Count of disputes reaching chargeback status within the period."
+
+      dispute_ratio:
+        type: decimal
+        precision: [7, 6]
+        unit: ratio
+        classification: non_pci
+        contested: false
+        derived: true
+        derivation: "chargeback_count / settled_txn_count, NULL when settled_txn_count is 0 or NULL."
+        canonical_definition: "Share of settled transactions that became chargebacks."
+
+    # -----------------------------------------------------------------
+    # DERIVED — computed by Gold, not ingested
+    # -----------------------------------------------------------------
+      merchant_credibility_score:
+        type: decimal
+        precision: [5, 2]
+        unit: score_0_100
+        classification: non_pci
+        contested: false
+        derived: true
+        derivation_config: scoring.yaml#/merchant_credibility/v1
+        canonical_definition: >
+          A 0-100 composite of dispute behaviour, settlement consistency,
+          volume stability, and contract tenure.
+        decision_note: >
+          Resolved as a GOLD OUTPUT rather than an ingested input. The source
+          notes were ambiguous. Ingesting a score would make it a black box
+          that the business could not audit and that would prove nothing about
+          the translation thesis. Computing it from canonical fields, with the
+          weights declared in config, makes both the inputs and the formula
+          inspectable. Recorded in TRUST-BOUNDARY.md §4.2.
+
+    # -----------------------------------------------------------------
+    # LINEAGE — stamped on every Gold row
+    # -----------------------------------------------------------------
+    lineage_fields:
+      contract_version:   { type: string, definition: "Version of the contract that produced this row." }
+      binding_hash:       { type: string, definition: "Content hash of the service binding applied." }
+      dictionary_version: { type: string, definition: "Dictionary version in force." }
+      source_services:    { type: string, definition: "Which services contributed to this row." }
+      produced_at:        { type: date,   definition: "Batch timestamp." }
+      is_projection:      { type: bool,   definition: "True when the period is not closed. Downstream MUST render projections distinctly." }
