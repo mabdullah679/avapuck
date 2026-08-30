@@ -18,9 +18,6 @@ from datetime import date, datetime, timezone
 from decimal import Decimal
 from pathlib import Path
 
-import pyarrow as pa
-from deltalake import DeltaTable, write_deltalake
-
 from wps.config import Bundle
 from wps.engine import MappedRecord, map_service
 from wps.periods import Period
@@ -65,6 +62,13 @@ def _now() -> datetime:
 
 
 def _write(table: str, rows: list[dict], mode: str = "overwrite") -> int:
+    # Imported here rather than at module scope so that the pure-Python helpers
+    # in this file (service_order, metric_names) can be used by the Spark path,
+    # where pyarrow and deltalake are not installed and are not wanted -- Spark
+    # writes Delta through its own JVM connector.
+    import pyarrow as pa
+    from deltalake import write_deltalake
+
     path = LAKE / table
     path.parent.mkdir(parents=True, exist_ok=True)
     if not rows:

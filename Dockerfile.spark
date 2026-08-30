@@ -1,0 +1,15 @@
+# WPS Spark image.
+#
+# The stock apache/spark image has no PyYAML, and the config-driven engine runs
+# INSIDE the executors -- so the dependency has to be present on every worker,
+# not pip-installed into the driver at runtime. Baking it in is the only way
+# that is actually true of the whole cluster.
+#
+# Deliberately thin: the engine itself is bind-mounted, so a code change needs
+# no rebuild.
+FROM apache/spark:4.0.0-python3
+
+USER root
+RUN pip install --no-cache-dir "pyyaml==6.0.3" && \
+    mkdir -p /tmp/.ivy2 && chmod 777 /tmp/.ivy2
+USER spark

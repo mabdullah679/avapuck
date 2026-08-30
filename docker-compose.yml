@@ -1,0 +1,84 @@
+# Spark standalone cluster for the WPS medallion build.
+#
+# WHY DOCKER: the host carries Java 26 and Spark 4 supports 17/21. The image
+# brings its own JDK 17, so the host JDK never enters the picture. This is the
+# fallback ladder in .claude/skills/wps-run/SKILL.md, rung three.
+#
+# WHAT THIS PROVES AND DOES NOT: it proves the medallion build runs on a real
+# distributed engine across multiple executors. It does NOT prove scale -- the
+# corpus is ~680 fact rows by design. See TRUST-BOUNDARY.md.
+#
+# SIZING: deliberately small, and explicitly capped with mem_limit. This
+# machine's Docker has ~7.9GB shared with ~130 containers from unrelated
+# projects, leaving barely 1.2GB free. Without caps the driver JVM sizes its
+# heap from the HOST total, not the free memory, and is OOM-killed before any
+# stage runs -- which is exactly what happened five times before these caps
+# were added. See TRUST-BOUNDARY.md.
+
+x-spark-common: &spark-common
+  # Built from Dockerfile.spark: stock Spark 4.0.0 plus PyYAML, which the
+  # config-driven engine needs ON EVERY WORKER, not just the driver.
+  image: wps-spark:4.0.0
+  build:
+    context: .
+    dockerfile: Dockerfile.spark
+  networks: [wps]
+  volumes:
+    - ./:/opt/wps:rw
+  environment: &spark-env
+    SPARK_NO_DAEMONIZE: "true"
+    PYTHONPATH: /opt/wps
+    PYSPARK_PYTHON: python3
+    PYSPARK_DRIVER_PYTHON: python3
+
+services:
+
+  spark-master:
+    <<: *spark-common
+    container_name: wps-spark-master
+    command: /opt/spark/bin/spark-class org.apache.spark.deploy.master.Master
+    environment:
+      <<: *spark-env
+      SPARK_MASTER_HOST: spark-master
+    mem_limit: 1400m      # the driver runs here; cap it so the JVM cannot
+                          # size its heap from the host and get OOM-killed
+    ports:
+      - "8080:8080"     # master web UI — the cluster, visible
+      - "7077:7077"     # cluster submit endpoint
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:8080 >/dev/null || exit 1"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  spark-worker-1:
+    <<: *spark-common
+    container_name: wps-spark-worker-1
+    command: /opt/spark/bin/spark-class org.apache.spark.deploy.worker.Worker spark://spark-master:7077
+    depends_on:
+      spark-master: {condition: service_healthy}
+    environment:
+      <<: *spark-env
+      SPARK_WORKER_CORES: "1"
+      SPARK_WORKER_MEMORY: "512m"
+      SPARK_WORKER_WEBUI_PORT: "8081"
+    mem_limit: 900m
+    ports: ["8081:8081"]
+
+  spark-worker-2:
+    <<: *spark-common
+    container_name: wps-spark-worker-2
+    command: /opt/spark/bin/spark-class org.apache.spark.deploy.worker.Worker spark://spark-master:7077
+    depends_on:
+      spark-master: {condition: service_healthy}
+    environment:
+      <<: *spark-env
+      SPARK_WORKER_CORES: "1"
+      SPARK_WORKER_MEMORY: "512m"
+      SPARK_WORKER_WEBUI_PORT: "8082"
+    mem_limit: 900m
+    ports: ["8082:8082"]
+
+networks:
+  wps:
+    name: wps-net
