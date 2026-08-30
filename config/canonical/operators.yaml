@@ -27,13 +27,13 @@ operators:
     args: { value: any }
   cast:
     summary: Coerce to a canonical type, failing loudly on impossible casts.
-    args: { to: enum[int,bigint,decimal,string,bool,date] }
+    args: { to: "enum[int,bigint,decimal,string,bool,date]" }
   concat:
     summary: Join several source values with a separator.
     args: { sep: string }
   trim:
     summary: Strip surrounding whitespace and COBOL filler characters.
-    args: { chars: string? }
+    args: { chars: "string?" }
   sum_repeating_group:
     summary: >
       Sum a repeated child element/segment into one canonical scalar.
@@ -88,12 +88,12 @@ operators:
       its own: spaces, "N/A", "-1", "0000-00-00", empty tag, "\\N". Critically,
       this distinguishes "absent" from "genuinely zero" — conflating them
       misstates revenue.
-    args: { tokens: list[string], zero_is_null: bool }
+    args: { tokens: "list[string]", zero_is_null: bool }
   lookup:
     summary: >
       Resolve a terse source code through a declared lookup table.
       Service D is entirely lookup-dependent.
-    args: { table: ref, on_missing: enum[null,fail,passthrough] }
+    args: { table: ref, on_missing: "enum[null,fail,passthrough]" }
 
   # --- governance-sensitive --------------------------------------------
   decrypt_ref:

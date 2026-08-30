@@ -22,6 +22,20 @@ source:
   format: fixed_width
   encoding: cp037           # EBCDIC, because of course it is
   record_length: 220
+  # DECLARED PRECISION CEILING. Every monetary field in this copybook is
+  # PIC S9(11)V99 -- two decimal places, full stop. The mainframe predates
+  # anyone asking whether a currency might have three.
+  #
+  # BHD has three minor units. Service A therefore CANNOT represent a Bahraini
+  # amount at full precision: the third decimal is gone before the platform
+  # ever sees the file. This is a source fidelity limit, not a mapping bug,
+  # and no amount of downstream cleverness recovers the lost digit.
+  #
+  # Declaring it here lets the pipeline mark affected rows as
+  # precision-degraded, prefer a better source where one exists, and tell the
+  # grading harness to expect the quantisation instead of silently widening a
+  # tolerance until the problem disappears.
+  max_decimal_places: 2
   header_records: 1
   trailer_records: 1
   trailer_contains_control_total: true
@@ -48,7 +62,8 @@ layout:
   FEE-AMT:         { start: 146, len: 13,  pic: "S9(11)V99" }
   ONBOARD-DT:      { start: 159, len: 8,   pic: "9(8)",  note: "YYYYMMDD" }
   TAX-REF:         { start: 167, len: 20,  pic: "X(20)" }
-  FILLER:          { start: 187, len: 34,  pic: "X(34)" }
+  CCY-CD:          { start: 187, len: 3,   pic: "X(3)",  note: "ISO alpha currency of the agreement" }
+  FILLER:          { start: 190, len: 31,  pic: "X(31)" }
 
 # Every field this service sends declares its classification. An undeclared
 # field is rejected by the contract, never defaulted to safe.
@@ -82,6 +97,12 @@ mappings:
 
   contract.contract_id:
     from: CONTR-ID
+    ops: [ { trim: {} } ]
+
+  # Declared explicitly. Defaulting an absent currency to USD would silently
+  # misprice every non-US agreement OCIO reports, and OCIO reports all of them.
+  contract.settlement_currency:
+    from: CCY-CD
     ops: [ { trim: {} } ]
 
   # The period conflict. Service A is US, so its fiscal year IS the calendar
@@ -125,7 +146,9 @@ mappings:
     canonical_recomputable: true
     canonical_recompute:
       description: "Subtract the separately reported fee amount to reach canon_v1."
-      from: [REV-AMT, FEE-AMT]
+      # `from` lists the ADDITIONAL fields combined with this field's own
+      # mapped value, which is the base of the recomputation.
+      from: [FEE-AMT]
       ops: [ { implied_decimal: { places: 2 } },
              { to_minor_units: { currency_from: "contract.settlement_currency" } } ]
       combine: subtract

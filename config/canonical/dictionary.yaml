@@ -41,7 +41,7 @@ entities:
       contract_id:        { type: string,  classification: non_pci, required: true,  definition: "Canonical contract identifier." }
       merchant_id:        { type: string,  classification: non_pci, required: true,  definition: "Owning merchant." }
       jurisdiction:       { type: string,  classification: non_pci, required: true,  definition: "Governing jurisdiction.", enum_ref: jurisdictions.yaml#/jurisdictions }
-      settlement_currency:{ type: string,  classification: non_pci, required: true,  definition: "Currency of settlement. Drives minor-unit precision.", enum_ref: jurisdictions.yaml#/currencies }
+      settlement_currency: { type: string,  classification: non_pci, required: true,  definition: "Currency of settlement. Drives minor-unit precision.", enum_ref: jurisdictions.yaml#/currencies }
       effective_from:     { type: date,    classification: non_pci, required: true,  definition: "First day the contract terms apply." }
       effective_to:       { type: date,    classification: non_pci, required: false, definition: "Last day the terms apply. NULL means open-ended." }
       pricing_tier:       { type: string,  classification: non_pci, required: true,  definition: "Commercial tier governing fee schedule." }

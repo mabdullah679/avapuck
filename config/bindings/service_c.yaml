@@ -121,7 +121,7 @@ mappings:
     canonical_recomputable: true
     canonical_recompute:
       description: "Add refund value and platform fees back to reach canon_v1 gross."
-      from: [gross_net, refund_value, fees]
+      from: [refund_value, fees]
       ops: [ { to_minor_units: { currency_from: "contract.settlement_currency" } } ]
       combine: add
 

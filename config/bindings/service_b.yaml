@@ -15,8 +15,22 @@ auth_profile: auth/profiles.yaml#/service_b_mtls
 source:
   format: xml
   encoding: utf-8
+  # DECLARED PRECISION CEILING. The merchant platform stores money as
+  # DECIMAL(18,2) and its exporter serialises two decimal places. Like Service
+  # A, it cannot represent a BHD amount at full precision -- the third decimal
+  # is lost at the source. Declared so affected rows are marked rather than
+  # silently rounded, and so a better source is preferred where one exists.
+  max_decimal_places: 2
   root_path: /QuarterlyExport
-  record_path: /QuarterlyExport/Merchants/Merchant
+  # The entity record is the Merchant; the FACT record is each Reporting block
+  # beneath it. Agreement context is inherited by matching @agreement to @ref.
+  # All three paths are declared here rather than assumed by the parser.
+  entity_record_path: Merchants/Merchant
+  fact_record_path: mp:Reporting
+  child_paths:
+    agreement: mp:Agreements/mp:Agreement
+    agreement_key_attr: ref
+    fact_parent_attr: agreement
   namespaces:
     mp: "urn:mysql-team:merchant-platform:v3"
 
@@ -38,6 +52,7 @@ layout:
   contract_tier:     { xpath: "mp:Agreements/mp:Agreement/@tier" }
   contract_from:     { xpath: "mp:Agreements/mp:Agreement/mp:Term/@from" }
   contract_to:       { xpath: "mp:Agreements/mp:Agreement/mp:Term/@to" }
+  currency_code:     { xpath: "mp:Agreements/mp:Agreement/@ccy" }
   fiscal_period:     { xpath: "mp:Reporting/@period", note: "e.g. FY26Q3 — UK fiscal, Oct-Dec 2026" }
   # Repeating group: monthly buckets that must be summed to a quarterly figure.
   monthly_gross:     { xpath: "mp:Reporting/mp:Month/mp:GrossNetOfRefunds/text()", repeating: true }
@@ -76,6 +91,10 @@ mappings:
 
   contract.contract_id:
     from: contract_ref
+    ops: [ { trim: {} } ]
+
+  contract.settlement_currency:
+    from: currency_code
     ops: [ { trim: {} } ]
 
   contract.pricing_tier:
@@ -120,7 +139,7 @@ mappings:
     canonical_recomputable: true
     canonical_recompute:
       description: "Add the separately reported refund value back to reach canon_v1 gross."
-      from: [monthly_gross, refund_value]
+      from: [refund_value]
       ops: [ { to_minor_units: { currency_from: "contract.settlement_currency" } } ]
       combine: add
 

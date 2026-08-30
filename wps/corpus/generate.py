@@ -36,7 +36,7 @@ SEED = 20260830
 AS_OF = date(2026, 8, 30)
 
 FIRST_PERIOD = Period(2025, 3)
-LAST_PERIOD = Period(2026, 4)          # 2026CQ4 is entirely in the future
+LAST_PERIOD = Period(2026, 3)          # 2026CQ3 is IN FLIGHT as of AS_OF
 N_MERCHANTS = 90
 
 JURISDICTIONS = {
@@ -235,6 +235,13 @@ def build_truth(rng: random.Random, contracts: list[Contract], periods: list[Per
                 continue
 
             growth = (1 + drift) ** idx
+            # The in-flight quarter is only partially reported. Services send
+            # what has settled so far, with no indication that it is partial --
+            # which is precisely why the dashboard must not read it as a
+            # finished figure, and why projections exist.
+            if not p.is_closed(AS_OF):
+                elapsed = (AS_OF - p.start_date).days / max(1, (p.end_date - p.start_date).days)
+                growth *= max(0.05, min(1.0, elapsed))
             accounts = []
             for _ in range(int(n_acc * growth)):
                 open_in = rng.random() < 0.93
@@ -318,7 +325,8 @@ def emit_service_a(merchants, contracts, truths, rng):
             + _num(int(t.fee_major * 100), 13)
             + (_fixed(m.onboarded_on.strftime("%Y%m%d"), 8) if rng.random() > 0.03 else _fixed("0000-00-00", 8))
             + _fixed(m.tax_ref, 20)
-            + " " * 34
+            + _fixed(c.settlement_currency, 3)
+            + " " * 31
         )
         lines.append(_fixed(rec, 220))
         total_gross += t.gross_major
@@ -347,6 +355,7 @@ def emit_service_b(merchants, contracts, truths, rng):
 
     x = ['<?xml version="1.0" encoding="UTF-8"?>',
          '<QuarterlyExport xmlns:mp="urn:mysql-team:merchant-platform:v3" '
+         'xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" '
          f'generated="{AS_OF.isoformat()}">', "  <Merchants>"]
     n = 0
     for mid, ts in grouped.items():

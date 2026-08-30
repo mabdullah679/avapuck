@@ -48,11 +48,11 @@ guarantees:
   source_variants:
     required_for: [active_accounts, gross_volume_minor, net_revenue_minor]
     shape:
-      - { field: "<metric>_by_source", type: map[service_id -> variant] }
+      - { field: "<metric>_by_source", type: "map[service_id -> variant]" }
       - variant:
           value:            { type: same_as_canonical_metric }
           rule:             { type: rule_ref }
-          reported_natively:{ type: bool, definition: "False when the platform derived it because the service did not report the metric at all." }
+          reported_natively: { type: bool, definition: "False when the platform derived it because the service did not report the metric at all." }
       - { field: "<metric>_variance_pct", type: decimal, definition: "Max spread across reporting services as a percentage of the canonical value." }
 
   lineage:
