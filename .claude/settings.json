@@ -23,13 +23,10 @@
       "AskUserQuestion"
     ],
     "deny": [
-      "Read(.env*)",
-      "Read(**/.env*)",
       "Read(**/secrets/**)",
       "Bash(terraform apply:*)",
       "Bash(databricks:*)",
       "Bash(aws:*)",
-      "Bash(gcloud:*)",
       "Bash(az:*)"
     ],
     "defaultMode": "auto"

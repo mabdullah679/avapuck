@@ -1,0 +1,14 @@
+# Spark image with the pipeline's Python dependencies.
+#
+# The Python deps must be present on EVERY worker, not just the driver --
+# the transform runs inside executors. Baking them in is the only way that is
+# actually true of the whole cluster.
+FROM apache/spark:4.0.0-python3
+
+USER root
+RUN pip install --no-cache-dir \
+      "requests==2.32.3" "PyJWT[crypto]==2.10.1" "cryptography==44.0.0" \
+      "pyarrow==18.1.0" && \
+    mkdir -p /tmp/.ivy2 && chmod 777 /tmp/.ivy2
+ENV PYTHONPATH=/opt/pipeline PYTHONUNBUFFERED=1
+USER spark

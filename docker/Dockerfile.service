@@ -1,0 +1,17 @@
+# Shared image for the IdP and crypto services.
+FROM python:3.12-slim
+
+WORKDIR /opt/pipeline
+RUN pip install --no-cache-dir \
+      "fastapi==0.115.6" "uvicorn[standard]==0.34.0" \
+      "PyJWT[crypto]==2.10.1" "cryptography==44.0.0" \
+      "pydantic==2.10.4" "requests==2.32.3" \
+      "python-multipart==0.0.20"
+
+COPY pipeline/ /opt/pipeline/pipeline/
+COPY services/ /opt/pipeline/services/
+ENV PYTHONPATH=/opt/pipeline PYTHONUNBUFFERED=1
+
+# Run as non-root: these processes hold key material in memory.
+RUN useradd -r -u 10001 svc && chown -R svc /opt/pipeline
+USER svc

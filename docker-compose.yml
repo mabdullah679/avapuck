@@ -1,84 +1,229 @@
-# Spark standalone cluster for the WPS medallion build.
+# Local stack for the BigQuery -> Spark -> Hive -> Postgres -> PDF pipeline.
 #
-# WHY DOCKER: the host carries Java 26 and Spark 4 supports 17/21. The image
-# brings its own JDK 17, so the host JDK never enters the picture. This is the
-# fallback ladder in .claude/skills/wps-run/SKILL.md, rung three.
+# Sized for a 23GB Docker allocation. Profiles let you bring up only what you
+# need: the `core` profile is enough to run the pipeline end to end; `ranger`
+# adds the real Apache Ranger admin, which is heavy and slow to start.
 #
-# WHAT THIS PROVES AND DOES NOT: it proves the medallion build runs on a real
-# distributed engine across multiple executors. It does NOT prove scale -- the
-# corpus is ~680 fact rows by design. See TRUST-BOUNDARY.md.
-#
-# SIZING: deliberately small, and explicitly capped with mem_limit. This
-# machine's Docker has ~7.9GB shared with ~130 containers from unrelated
-# projects, leaving barely 1.2GB free. Without caps the driver JVM sizes its
-# heap from the HOST total, not the free memory, and is OOM-killed before any
-# stage runs -- which is exactly what happened five times before these caps
-# were added. See TRUST-BOUNDARY.md.
+#   docker compose --profile core up -d              # ~8GB, fast
+#   docker compose --profile core --profile ranger up -d   # ~14GB, slow start
 
-x-spark-common: &spark-common
-  # Built from Dockerfile.spark: stock Spark 4.0.0 plus PyYAML, which the
-  # config-driven engine needs ON EVERY WORKER, not just the driver.
-  image: wps-spark:4.0.0
-  build:
-    context: .
-    dockerfile: Dockerfile.spark
-  networks: [wps]
-  volumes:
-    - ./:/opt/wps:rw
-  environment: &spark-env
-    SPARK_NO_DAEMONIZE: "true"
-    PYTHONPATH: /opt/wps
-    PYSPARK_PYTHON: python3
-    PYSPARK_DRIVER_PYTHON: python3
+x-common: &common
+  restart: unless-stopped
+  networks: [pipeline]
 
 services:
 
-  spark-master:
-    <<: *spark-common
-    container_name: wps-spark-master
-    command: /opt/spark/bin/spark-class org.apache.spark.deploy.master.Master
+  # ── Identity Provider ────────────────────────────────────────────────────
+  idp:
+    <<: *common
+    profiles: [core]
+    build: {context: ., dockerfile: docker/Dockerfile.service}
+    container_name: pl-idp
+    command: uvicorn services.idp.app:app --host 0.0.0.0 --port 8443
     environment:
-      <<: *spark-env
-      SPARK_MASTER_HOST: spark-master
-    mem_limit: 1400m      # the driver runs here; cap it so the JVM cannot
-                          # size its heap from the host and get OOM-killed
-    ports:
-      - "8080:8080"     # master web UI — the cluster, visible
-      - "7077:7077"     # cluster submit endpoint
+      IDP_ISSUER: http://idp:8443
+      IDP_TOKEN_TTL: "300"
+      CLIENT_SECRET_EXTRACT_JOB: ${CLIENT_SECRET_EXTRACT_JOB:-dev-extract-secret}
+      CLIENT_SECRET_SPARK_JOB: ${CLIENT_SECRET_SPARK_JOB:-dev-spark-secret}
+      CLIENT_SECRET_HIVE_JOB: ${CLIENT_SECRET_HIVE_JOB:-dev-hive-secret}
+      CLIENT_SECRET_POSTGRES_JOB: ${CLIENT_SECRET_POSTGRES_JOB:-dev-postgres-secret}
+      CLIENT_SECRET_REPORT_JOB: ${CLIENT_SECRET_REPORT_JOB:-dev-report-secret}
+      IDP_SIGNING_KEY: ${IDP_SIGNING_KEY:-}
+    ports: ["8443:8443"]
+    mem_limit: 512m
     healthcheck:
-      test: ["CMD-SHELL", "curl -sf http://localhost:8080 >/dev/null || exit 1"]
+      test: ["CMD", "python", "-c", "import urllib.request;urllib.request.urlopen('http://localhost:8443/health')"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+
+  # ── Crypto service (AES-256-GCM) ─────────────────────────────────────────
+  crypto:
+    <<: *common
+    profiles: [core]
+    build: {context: ., dockerfile: docker/Dockerfile.service}
+    container_name: pl-crypto
+    command: uvicorn services.crypto.app:app --host 0.0.0.0 --port 8444
+    environment:
+      IDP_ISSUER: http://idp:8443
+      IDP_JWKS_URL: http://idp:8443/.well-known/jwks.json
+      CRYPTO_MASTER_KEY: ${CRYPTO_MASTER_KEY:-}
+      BLIND_INDEX_KEY: ${BLIND_INDEX_KEY:-}
+      CRYPTO_KEY_VERSION: v1
+    ports: ["8444:8444"]
+    mem_limit: 512m
+    depends_on:
+      idp: {condition: service_healthy}
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request;urllib.request.urlopen('http://localhost:8444/health')"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+
+  # ── Warehouse ────────────────────────────────────────────────────────────
+  postgres:
+    <<: *common
+    profiles: [core]
+    image: postgres:16-alpine
+    container_name: pl-postgres
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-analytics}
+      POSTGRES_USER: ${POSTGRES_USER:-pipeline}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-pipeline-dev-password}
+    ports: ["5433:5432"]
+    mem_limit: 1g
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+      - ./docker/init-warehouse.sql:/docker-entrypoint-initdb.d/10-warehouse.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-pipeline} -d ${POSTGRES_DB:-analytics}"]
       interval: 5s
       timeout: 3s
       retries: 20
 
-  spark-worker-1:
-    <<: *spark-common
-    container_name: wps-spark-worker-1
-    command: /opt/spark/bin/spark-class org.apache.spark.deploy.worker.Worker spark://spark-master:7077
-    depends_on:
-      spark-master: {condition: service_healthy}
+  # ── Hive metastore backing DB ────────────────────────────────────────────
+  hive-metastore-db:
+    <<: *common
+    profiles: [core]
+    image: postgres:16-alpine
+    container_name: pl-hive-metastore-db
     environment:
-      <<: *spark-env
-      SPARK_WORKER_CORES: "1"
-      SPARK_WORKER_MEMORY: "512m"
-      SPARK_WORKER_WEBUI_PORT: "8081"
-    mem_limit: 900m
-    ports: ["8081:8081"]
+      POSTGRES_DB: metastore
+      POSTGRES_USER: hive
+      POSTGRES_PASSWORD: ${HIVE_METASTORE_PASSWORD:-hive-dev-password}
+    mem_limit: 512m
+    volumes: [hive_meta_data:/var/lib/postgresql/data]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U hive -d metastore"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
 
-  spark-worker-2:
-    <<: *spark-common
-    container_name: wps-spark-worker-2
+  # ── Hive metastore + HiveServer2 ─────────────────────────────────────────
+  hive-metastore:
+    <<: *common
+    profiles: [core]
+    image: apache/hive:4.0.0
+    container_name: pl-hive-metastore
+    environment:
+      SERVICE_NAME: metastore
+      DB_DRIVER: postgres
+      SERVICE_OPTS: >-
+        -Djavax.jdo.option.ConnectionDriverName=org.postgresql.Driver
+        -Djavax.jdo.option.ConnectionURL=jdbc:postgresql://hive-metastore-db:5432/metastore
+        -Djavax.jdo.option.ConnectionUserName=hive
+        -Djavax.jdo.option.ConnectionPassword=${HIVE_METASTORE_PASSWORD:-hive-dev-password}
+    ports: ["9083:9083"]
+    mem_limit: 2g
+    depends_on:
+      hive-metastore-db: {condition: service_healthy}
+    volumes:
+      - ./data/hive:/opt/hive/data/warehouse
+      - ./docker/postgresql-jdbc.jar:/opt/hive/lib/postgresql.jar:ro
+
+  hiveserver2:
+    <<: *common
+    profiles: [core]
+    image: apache/hive:4.0.0
+    container_name: pl-hiveserver2
+    environment:
+      SERVICE_NAME: hiveserver2
+      SERVICE_OPTS: -Dhive.metastore.uris=thrift://hive-metastore:9083
+      IS_RESUME: "true"
+    ports: ["10000:10000", "10002:10002"]
+    mem_limit: 2g
+    depends_on: [hive-metastore]
+    volumes:
+      - ./data/hive:/opt/hive/data/warehouse
+
+  # ── Spark ────────────────────────────────────────────────────────────────
+  spark-master:
+    <<: *common
+    profiles: [core]
+    build: {context: ., dockerfile: docker/Dockerfile.spark}
+    container_name: pl-spark-master
+    command: /opt/spark/bin/spark-class org.apache.spark.deploy.master.Master
+    environment:
+      SPARK_NO_DAEMONIZE: "true"
+      SPARK_MASTER_HOST: spark-master
+      PYTHONPATH: /opt/pipeline
+    ports: ["8080:8080", "7077:7077"]
+    mem_limit: 2g
+    volumes: [./:/opt/pipeline:rw]
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:8080 >/dev/null"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  spark-worker:
+    <<: *common
+    profiles: [core]
+    build: {context: ., dockerfile: docker/Dockerfile.spark}
     command: /opt/spark/bin/spark-class org.apache.spark.deploy.worker.Worker spark://spark-master:7077
+    environment:
+      SPARK_NO_DAEMONIZE: "true"
+      SPARK_WORKER_CORES: "2"
+      SPARK_WORKER_MEMORY: 2g
+      PYTHONPATH: /opt/pipeline
+    mem_limit: 3g
     depends_on:
       spark-master: {condition: service_healthy}
+    volumes: [./:/opt/pipeline:rw]
+    deploy:
+      replicas: 2
+
+  # ── Apache Ranger (heavy; opt in with --profile ranger) ──────────────────
+  ranger-db:
+    <<: *common
+    profiles: [ranger]
+    image: postgres:16-alpine
+    container_name: pl-ranger-db
     environment:
-      <<: *spark-env
-      SPARK_WORKER_CORES: "1"
-      SPARK_WORKER_MEMORY: "512m"
-      SPARK_WORKER_WEBUI_PORT: "8082"
-    mem_limit: 900m
-    ports: ["8082:8082"]
+      POSTGRES_DB: ranger
+      POSTGRES_USER: ranger
+      POSTGRES_PASSWORD: ${RANGER_DB_PASSWORD:-ranger-dev-password}
+    mem_limit: 512m
+    volumes: [ranger_db_data:/var/lib/postgresql/data]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ranger -d ranger"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  ranger-solr:
+    <<: *common
+    profiles: [ranger]
+    image: solr:9
+    container_name: pl-ranger-solr
+    command: solr-precreate ranger_audits
+    mem_limit: 1500m
+    volumes: [ranger_solr_data:/var/solr]
+
+  ranger-admin:
+    <<: *common
+    profiles: [ranger]
+    image: apache/ranger:2.4.0
+    container_name: pl-ranger-admin
+    environment:
+      RANGER_DB_TYPE: postgres
+      RANGER_DB_HOST: ranger-db
+      RANGER_DB_NAME: ranger
+      RANGER_DB_USER: ranger
+      RANGER_DB_PASSWORD: ${RANGER_DB_PASSWORD:-ranger-dev-password}
+      RANGER_ADMIN_PASSWORD: ${RANGER_ADMIN_PASSWORD:-rangerR0cks!}
+      RANGER_AUDIT_SOLR_URLS: http://ranger-solr:8983/solr/ranger_audits
+    ports: ["6080:6080"]
+    mem_limit: 3g
+    depends_on:
+      ranger-db: {condition: service_healthy}
 
 networks:
-  wps:
-    name: wps-net
+  pipeline:
+    name: pipeline-net
+
+volumes:
+  pg_data:
+  hive_meta_data:
+  ranger_db_data:
+  ranger_solr_data:

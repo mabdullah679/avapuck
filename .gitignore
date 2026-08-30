@@ -1,5 +1,28 @@
+# ── Credentials. Never commit. ────────────────────────────────────────────
+# The whole secrets/ directory is ignored rather than individual filenames,
+# so a differently-named key file cannot slip through.
+secrets/
+*.json.key
+*-sa.json
+service-account*.json
+.env
+.env.*
+.env.local
+.env.local.resolved
+!.env.example
+!.env.local.example
+
+# Local state
 .venv/
 __pycache__/
 *.pyc
-lake/
+data/csv/
+data/parquet/
+data/hive/
+data/reports/
 airflow_home/
+logs/
+*.log
+
+# Docker volumes
+docker/volumes/

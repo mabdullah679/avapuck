@@ -1,0 +1,113 @@
+{
+  "_comment": [
+    "Apache Ranger masking policies for the trips warehouse.",
+    "",
+    "This is genuine Ranger policy JSON in the shape the Ranger REST API",
+    "accepts at POST /service/public/v2/api/policy. It is authored ONCE here",
+    "and enforced at the Hive boundary; no masking rule lives in",
+    "transformation code, which is the whole point of using Ranger.",
+    "",
+    "Masking is column-level and role-dependent: an analyst sees masked",
+    "values, the data-steward role sees more, and nobody sees raw PII from a",
+    "query path. The pipeline itself decrypts, applies the mask, and writes",
+    "the MASKED value -- so the Hive table never holds plaintext PII at rest."
+  ],
+  "policies": [
+    {
+      "service": "hive_pipeline",
+      "name": "mask-bikeid",
+      "policyType": 1,
+      "description": "bikeid is a quasi-identifier: it links trips into a rider history. Show last 4 only.",
+      "isEnabled": true,
+      "resources": {
+        "database": {"values": ["trips_warehouse"], "isExcludes": false, "isRecursive": false},
+        "table":    {"values": ["trips"], "isExcludes": false, "isRecursive": false},
+        "column":   {"values": ["bikeid"], "isExcludes": false, "isRecursive": false}
+      },
+      "dataMaskPolicyItems": [
+        {
+          "accesses": [{"type": "select", "isAllowed": true}],
+          "users": [], "groups": ["analyst"], "roles": [],
+          "dataMaskInfo": {"dataMaskType": "MASK_SHOW_LAST_4"}
+        },
+        {
+          "accesses": [{"type": "select", "isAllowed": true}],
+          "users": [], "groups": ["data_steward"], "roles": [],
+          "dataMaskInfo": {"dataMaskType": "MASK_NONE"}
+        }
+      ]
+    },
+    {
+      "service": "hive_pipeline",
+      "name": "mask-subscriber-type",
+      "policyType": 1,
+      "description": "Membership tier is sensitive customer attribute data. Hash for analysts so cohorts remain countable without revealing the tier.",
+      "isEnabled": true,
+      "resources": {
+        "database": {"values": ["trips_warehouse"], "isExcludes": false, "isRecursive": false},
+        "table":    {"values": ["trips"], "isExcludes": false, "isRecursive": false},
+        "column":   {"values": ["subscriber_type"], "isExcludes": false, "isRecursive": false}
+      },
+      "dataMaskPolicyItems": [
+        {
+          "accesses": [{"type": "select", "isAllowed": true}],
+          "users": [], "groups": ["analyst"], "roles": [],
+          "dataMaskInfo": {"dataMaskType": "MASK_HASH"}
+        },
+        {
+          "accesses": [{"type": "select", "isAllowed": true}],
+          "users": [], "groups": ["data_steward"], "roles": [],
+          "dataMaskInfo": {"dataMaskType": "MASK_NONE"}
+        }
+      ]
+    },
+    {
+      "service": "hive_pipeline",
+      "name": "mask-station-names",
+      "policyType": 1,
+      "description": "Trip endpoints are location data, which is PII in every regime that matters. Partial mask keeps the value recognisable for aggregation without pinpointing an individual's origin.",
+      "isEnabled": true,
+      "resources": {
+        "database": {"values": ["trips_warehouse"], "isExcludes": false, "isRecursive": false},
+        "table":    {"values": ["trips"], "isExcludes": false, "isRecursive": false},
+        "column":   {"values": ["start_station_name", "end_station_name"], "isExcludes": false, "isRecursive": false}
+      },
+      "dataMaskPolicyItems": [
+        {
+          "accesses": [{"type": "select", "isAllowed": true}],
+          "users": [], "groups": ["analyst"], "roles": [],
+          "dataMaskInfo": {"dataMaskType": "CUSTOM", "valueExpr": "MASK_SHOW_FIRST_8"}
+        },
+        {
+          "accesses": [{"type": "select", "isAllowed": true}],
+          "users": [], "groups": ["data_steward"], "roles": [],
+          "dataMaskInfo": {"dataMaskType": "MASK_NONE"}
+        }
+      ]
+    },
+    {
+      "service": "hive_pipeline",
+      "name": "nullify-station-ids-for-analysts",
+      "policyType": 1,
+      "description": "Station IDs re-identify a masked station name by join. Masking the name while leaving the ID exposed would be theatre, so the ID is nullified for the same audience.",
+      "isEnabled": true,
+      "resources": {
+        "database": {"values": ["trips_warehouse"], "isExcludes": false, "isRecursive": false},
+        "table":    {"values": ["trips"], "isExcludes": false, "isRecursive": false},
+        "column":   {"values": ["start_station_id", "end_station_id"], "isExcludes": false, "isRecursive": false}
+      },
+      "dataMaskPolicyItems": [
+        {
+          "accesses": [{"type": "select", "isAllowed": true}],
+          "users": [], "groups": ["analyst"], "roles": [],
+          "dataMaskInfo": {"dataMaskType": "MASK_NULL"}
+        },
+        {
+          "accesses": [{"type": "select", "isAllowed": true}],
+          "users": [], "groups": ["data_steward"], "roles": [],
+          "dataMaskInfo": {"dataMaskType": "MASK_NONE"}
+        }
+      ]
+    }
+  ]
+}
