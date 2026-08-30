@@ -86,10 +86,21 @@ This is the part worth slowing down for. The configuration *is* the argument.
 Two checks that prove the thesis rather than assert it:
 
 ```bash
-grep -rn "service_a\|COBOL\|xpath" wps/ | grep -v "^wps/corpus"
+grep -rn 'service_a"\|COBOL\|GROSS-AMT\|mp:Reporting' wps/ --include="*.py" \
+  | grep -v "^wps/corpus/" | grep -v "^wps/pipeline.py"
 ```
 
-Nothing. **No service-specific fact exists anywhere in the pipeline code.**
+One hit, and it is a docstring saying this is true. **No service-specific fact
+exists anywhere in the pipeline code.** Two files are excluded and both are
+honest exclusions: `wps/corpus/` is the synthetic data generator, which must
+know each dialect in order to produce it, and `wps/pipeline.py` is a six-line
+table of where each service's extract lands on disk.
+
+Even service *precedence* — which source is trusted when two can derive the
+same canonical figure — is `canonical_precedence` in each binding, not an
+ordered list in code. The settlement ledger wins for money because it stores
+native minor units for every currency; that judgement is written where the
+business can read and change it.
 
 ```bash
 .venv/bin/python -c "

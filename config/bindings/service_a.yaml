@@ -9,6 +9,12 @@ schema: wps.binding/v1
 service_id: service_a
 service_name: OCIO Quarterly Reporting Extract
 binds_contract: quarterly_performance
+# Precedence when more than one service can derive the SAME canonical
+# figure. LOWER WINS. Declared here rather than ordered in pipeline code,
+# so that onboarding a service or changing which source is trusted for a
+# metric stays a configuration decision the business can audit.
+# OCIO is the system of record for agreement coverage and reports every contract, so it is preferred over the two-decimal merchant platform but not over the settlement ledger.
+canonical_precedence: 20
 binds_contract_version: "1.0.0"
 dictionary_version: "1.0.0"
 

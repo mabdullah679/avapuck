@@ -16,6 +16,12 @@ schema: wps.binding/v1
 service_id: service_d
 service_name: Settlement Ledger Extract (LEGACY-SETL)
 binds_contract: quarterly_performance
+# Precedence when more than one service can derive the SAME canonical
+# figure. LOWER WINS. Declared here rather than ordered in pipeline code,
+# so that onboarding a service or changing which source is trusted for a
+# metric stays a configuration decision the business can audit.
+# The settlement ledger stores native minor units for every currency, so it is the most faithful monetary source and is preferred first.
+canonical_precedence: 10
 binds_contract_version: "1.0.0"
 dictionary_version: "1.0.0"
 

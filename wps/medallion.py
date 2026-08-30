@@ -29,9 +29,30 @@ from wps.pipeline import ROOT, SOURCE_PATHS
 LAKE = ROOT / "lake"
 AS_OF = date(2026, 8, 30)
 
-SERVICE_PRIORITY = ["service_a", "service_b", "service_c", "service_d"]
-CONTESTED = ["active_accounts", "gross_volume_minor", "net_revenue_minor"]
-UNCONTESTED = ["settled_txn_count", "refund_count", "chargeback_count"]
+def service_order(bundle: Bundle) -> list[str]:
+    """Service processing and precedence order, DERIVED FROM CONFIG.
+
+    A hardcoded list here would mean onboarding a fifth service required a code
+    edit -- the thesis failing quietly in the one file nobody re-reads. Each
+    binding declares its own `canonical_precedence`; lower wins.
+    """
+    return sorted(bundle.bindings,
+                  key=lambda s: (bundle.bindings[s].get("canonical_precedence", 999), s))
+
+
+def metric_names(bundle: Bundle) -> tuple[list[str], list[str]]:
+    """Contested and uncontested metrics, read from the DICTIONARY.
+
+    The dictionary is where a metric is declared contested. Restating that list
+    in code would let the two drift, and the drift would be invisible.
+    """
+    metrics = bundle.dictionary["facts"]["quarterly_performance"]["metrics"]
+    contested, uncontested = [], []
+    for name, spec in metrics.items():
+        if spec.get("derived"):
+            continue
+        (contested if spec.get("contested") else uncontested).append(name)
+    return contested, uncontested
 
 
 class ClassificationViolation(Exception):
@@ -60,7 +81,7 @@ def land_bronze(bundle: Bundle) -> dict[str, int]:
     service sent it, with ingest lineage attached and nothing else changed."""
     from wps.parse import parse
     counts = {}
-    for svc in SERVICE_PRIORITY:
+    for svc in service_order(bundle):
         binding = bundle.bindings[svc]
         recs = []
         for i, rec in enumerate(parse(binding, SOURCE_PATHS[svc])):
@@ -106,8 +127,9 @@ def land_silver(bundle: Bundle) -> tuple[dict[str, int], list[dict], list[dict]]
     """Conformed to the canonical dictionary, quality-enforced, PII/PCI
     tokenized. Returns per-service counts, the conformed rows, and any
     mapping failures made legible for the grading harness."""
+    contested, uncontested = metric_names(bundle)
     counts, all_rows, failures = {}, [], []
-    for svc in SERVICE_PRIORITY:
+    for svc in service_order(bundle):
         mapped: list[MappedRecord] = map_service(svc, SOURCE_PATHS[svc], bundle)
         rows = []
         for m in mapped:
@@ -148,7 +170,7 @@ def land_silver(bundle: Bundle) -> tuple[dict[str, int], list[dict], list[dict]]
                 "_binding_hash": bundle.binding_hashes[svc],
                 "_conformed_at": _now(),
             }
-            for metric in CONTESTED + UNCONTESTED:
+            for metric in contested + uncontested:
                 p = f"quarterly_performance.{metric}"
                 row[metric] = _as_int(v.get(p))
                 row[f"{metric}__canonical"] = _as_int(v.get(p + "__canonical"))
@@ -207,13 +229,15 @@ def build_gold(bundle: Bundle, silver_rows: list[dict]) -> tuple[list[dict], lis
     every service's own figure, names the rule behind each, and states the
     spread. A team that cannot find its own number stops trusting the platform.
     """
+    order = service_order(bundle)
+    contested, uncontested = metric_names(bundle)
     by_key: dict[tuple, list[dict]] = {}
     for r in silver_rows:
         by_key.setdefault((r["merchant_id"], r["contract_id"], r["period_id"]), []).append(r)
 
     gold, flags = [], []
     for (mid, cid, pid), rows in sorted(by_key.items()):
-        rows.sort(key=lambda r: SERVICE_PRIORITY.index(r["service_id"]))
+        rows.sort(key=lambda r: order.index(r["service_id"]))
         ccy = next((r["settlement_currency"] for r in rows if r["settlement_currency"]), None)
         period = Period.parse(pid)
         out = {
@@ -232,7 +256,7 @@ def build_gold(bundle: Bundle, silver_rows: list[dict]) -> tuple[list[dict], lis
             "source_services": ",".join(r["service_id"] for r in rows),
         }
 
-        for metric in CONTESTED:
+        for metric in contested:
             variants, canon_candidates = {}, []
             for r in rows:
                 val, rule, canon = r.get(metric), r.get(f"{metric}__rule"), r.get(f"{metric}__canonical")
@@ -274,7 +298,7 @@ def build_gold(bundle: Bundle, silver_rows: list[dict]) -> tuple[list[dict], lis
                               "detail": json.dumps({s: c for s, c in canon_candidates}),
                               "assertion": "canonical_disagreement"})
 
-        for metric in UNCONTESTED:
+        for metric in uncontested:
             vals = [r[metric] for r in rows if r.get(metric) is not None]
             out[metric] = vals[0] if vals else None
 

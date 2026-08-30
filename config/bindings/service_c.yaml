@@ -7,6 +7,12 @@ schema: wps.binding/v1
 service_id: service_c
 service_name: Risk & Identity Quarterly Workbook Export
 binds_contract: quarterly_performance
+# Precedence when more than one service can derive the SAME canonical
+# figure. LOWER WINS. Declared here rather than ordered in pipeline code,
+# so that onboarding a service or changing which source is trusted for a
+# metric stays a configuration decision the business can audit.
+# Risk & Identity carries full precision but the narrowest coverage and the most aggressive netting, so it is the last resort for canonical money.
+canonical_precedence: 40
 binds_contract_version: "1.0.0"
 dictionary_version: "1.0.0"
 

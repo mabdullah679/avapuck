@@ -3,6 +3,12 @@ schema: wps.binding/v1
 service_id: service_b
 service_name: Merchant Platform Quarterly Export
 binds_contract: quarterly_performance
+# Precedence when more than one service can derive the SAME canonical
+# figure. LOWER WINS. Declared here rather than ordered in pipeline code,
+# so that onboarding a service or changing which source is trusted for a
+# metric stays a configuration decision the business can audit.
+# The merchant platform reports most contracts but nets refunds out of gross and carries a two-decimal ceiling.
+canonical_precedence: 30
 binds_contract_version: "1.0.0"
 dictionary_version: "1.0.0"
 
