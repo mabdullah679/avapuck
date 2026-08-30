@@ -16,7 +16,7 @@ dictionary_version: "1.0.0"
 # quarter labels resolve. Money precision comes from each contract's
 # settlement currency, not from this.
 reporting_calendar_jurisdiction: US
-auth_profile: auth/profiles.yaml#/service_a_oauth2
+auth_profile: auth/profiles.yaml#/profiles/service_a_oauth2
 
 source:
   format: fixed_width

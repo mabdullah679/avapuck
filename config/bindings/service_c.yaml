@@ -14,7 +14,7 @@ dictionary_version: "1.0.0"
 # quarter labels resolve. Money precision comes from each contract's
 # settlement currency, not from this.
 reporting_calendar_jurisdiction: JP
-auth_profile: auth/profiles.yaml#/service_c_hmac
+auth_profile: auth/profiles.yaml#/profiles/service_c_hmac
 
 source:
   format: csv_multiheader

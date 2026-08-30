@@ -37,6 +37,7 @@ with the honest answer to each.
 | 2.3 | SSOT "write-only to creator, read-only to everyone else" | **ASSUMED / partially modelled** | Modelled as git CODEOWNERS + branch protection + a signed compiled bundle. The POC verifies the bundle hash; it does **not** enforce write access — that is a repository-platform control, not application code. |
 | 2.4 | PCI/PII field classification and per-layer handling | **UNVERIFIED** | Classification and masking/tokenization rules are declared in config and enforced by the pipeline. They have **not** been reviewed by a compliance function and constitute no claim of PCI-DSS compliance. This infrastructure is throwaway and was deliberately kept out of PCI scope. |
 | 2.5 | Tokenization | **STUB** | Deterministic local hashing, not a vault-backed tokenization service. |
+| 2.6 | Decryption provider cannot recover plaintext | **STUB, stated** | The synthetic corpus produces one-way blobs, so `SyntheticDemoProvider` returns a stable derived surrogate rather than pretending to recover the original. Every decrypted value is tokenized immediately anyway. PCI key aliases are deliberately absent from the provider, so the PCI path is not merely policy-blocked — it is incapable. |
 
 ## 3. Platform and serving
 
@@ -60,6 +61,9 @@ with the honest answer to each.
 | 4.7 | Service C's suppressed zeros | **UNRESOLVED AMBIGUITY** — Service C writes `0` both for a true zero and for counts suppressed under a small-count disclosure rule, and the extract does not distinguish them. Flagged rather than guessed at; resolving it requires a conversation with that team, not a heuristic. |
 | 4.8 | Merchant identity cross-reference | **SYNTHETIC** — `config/lookups/merchant_xref.yaml` is written by the corpus generator. In production this is a governed reference dataset, not a generated file. |
 | 4.9 | Contract replay under a prior version | **UNVERIFIED** — every Gold row stamps `contract_version`, `binding_hash` and `dictionary_version`, which makes replay possible in principle. It has not been exercised. Design property, not tested feature. |
+| 4.10 | **Gold is assembled by a shared DAG, not per-service** | **DELIBERATE DEPARTURE** from the brief's per-service "through to Gold" sketch. Reconciling across services is Gold's entire job, so no single service's pipeline can build it. Each service DAG runs through Silver and signals completion. |
+| 4.11 | Aggregate projection band | **CONSERVATIVE ASSUMPTION** — the dashboard's aggregate range is the sum of per-contract ranges, which assumes contracts move together. The true correlated band would be narrower. Deliberately wide rather than falsely precise, and stated on the chart. |
+| 4.12 | Jurisdiction is derived from settlement currency | **ASSUMED** — services A, B and C do not report jurisdiction, so Gold derives it from the contract's currency via the declared 1:1 mapping in `jurisdictions.yaml`. Real merchants can settle in a non-default currency, which would break this. Service D reports jurisdiction explicitly and does not rely on the derivation. |
 
 ## 5. The honest limit of "config over code"
 
@@ -67,7 +71,23 @@ with the honest answer to each.
 |---|---|---|
 | 5.1 | The transform vocabulary is a **closed set of named operators** (`config/canonical/operators.yaml`) | **STATED LIMIT** | Bindings compose declared operators; there is no arbitrary expression language and no `eval`. A service needing a transform the vocabulary cannot express requires **adding a new named, documented, tested operator** — a governed code change, visible in review. This is the real boundary of the "no hardcoded mappings" claim, and it is a deliberate line, not an oversight. Mappings are config; the *primitives* mappings are built from are code. |
 
-## 6. Not built
+## 6. Source fidelity limits found during the build
+
+These are not pipeline defects. They are limits of what the sources can
+express, discovered by running the corpus through the mappings, and they would
+have silently corrupted figures had the pipeline assumed its way past them.
+
+| # | Limit | Consequence |
+|---|---|---|
+| 6.1 | **Services A and B carry two decimal places; BHD has three.** | Every Bahraini amount from those sources loses its third decimal *before the platform sees it*. Declared as `max_decimal_places` in both bindings, marked per row as `precision_degraded`, and Gold prefers a source that can represent the currency where one exists. 435 rows affected. No downstream cleverness recovers the lost digit. |
+| 6.2 | Service A's copybook carried no currency field. | Added to the layout rather than defaulting to USD. A default would have silently mispriced every non-US agreement OCIO reports — and OCIO reports all of them. |
+| 6.3 | Service D's binding originally hardcoded a 3-decimal assumption. | It reports agreements in all four jurisdictions, so that would have misstated JPY, USD and GBP amounts by up to 1000x. Fixed; the ledger stores native minor units and is now asserted as such. |
+
+Each was caught because the grading harness compares against an independent
+ground truth. A pipeline graded against its own output would have passed all
+three.
+
+## 7. Not built
 
 - Key management, HSM, key rotation, envelope encryption
 - Real identity providers, certificate authorities, credential vaults
@@ -79,7 +99,7 @@ with the honest answer to each.
 
 ---
 
-## 7. Canonical `active_accounts` is not derivable from any source
+## 8. Canonical `active_accounts` is not derivable from any source
 
 The seeded semantic conflict resolves only partially, on purpose, and this is
 the most important honest limit in the build. Each service applies its own
@@ -100,7 +120,7 @@ This gap is also the platform's most actionable output: it states exactly what
 each service team would need to start exporting for the canonical figure to
 become computable.
 
-## 8. What the grading harness does and does not prove
+## 9. What the grading harness does and does not prove
 
 The corpus generator builds a ground truth first and derives four
 deliberately disagreeing service views from it. The harness grades pipeline

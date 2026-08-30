@@ -22,6 +22,7 @@ MIN_HISTORY = 2
 BAND_MIN_PCT = 8.0     # floor on the variability band, even for steady series
 
 PROJECTED_METRICS = ["gross_volume_minor", "net_revenue_minor",
+                     "gross_volume_reporting_usd_minor", "net_revenue_reporting_usd_minor",
                      "settled_txn_count", "refund_count", "chargeback_count"]
 
 
@@ -87,7 +88,7 @@ def project(gold_rows: list[dict], as_of: date) -> list[dict]:
                 band = max(BAND_MIN_PCT, _volatility_pct(hist)) / 100.0
                 band *= (1.0 + 0.6 * horizon)      # further out, wider
                 row[metric] = int(point)
-                row[f"{metric}_low"] = int(point * (1 - band))
+                row[f"{metric}_low"] = max(0, int(point * (1 - band)))
                 row[f"{metric}_high"] = int(point * (1 + band))
 
             row["dispute_ratio"] = (

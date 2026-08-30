@@ -142,10 +142,21 @@ column carries four different scales at once — thousandths of a dinar,
 cents, pence, and whole yen — distinguishable only by the currency code three
 fields away. Any uniform divisor silently corrupts three of four jurisdictions.
 
-**This defect was actually present and was caught during the build.** The
-Service D binding originally hardcoded a 3-decimal assumption. It is fixed and
-covered by the `minor_units_native` assertion. Mentioning that it happened is
-better than implying it could not.
+**Two real defects of exactly this kind were caught during the build**, and
+saying so is stronger than implying they could not happen:
+
+1. Service D's binding hardcoded a 3-decimal assumption while reporting
+   agreements in all four jurisdictions — up to 1000x error on JPY, USD and GBP.
+   Fixed; the ledger stores native minor units and is asserted as such.
+2. Services A and B carry **two** decimal places and BHD has **three**, so
+   Bahraini amounts lose their third decimal *at the source*. This one is not
+   fixable downstream. It is declared as a precision ceiling in both bindings,
+   marked per row as `precision_degraded`, counted separately by the grading
+   harness (435 rows), and Gold prefers a source that can represent the
+   currency where one exists.
+
+The second is the more useful story: the platform cannot recover the lost
+digit, and it says so instead of rounding and moving on.
 
 ---
 
@@ -236,7 +247,21 @@ step to propose.
 
 ---
 
-## F12 — "Who can change the SSOT?"
+## F12 — "Why doesn't each service's DAG build Gold, as the brief says?"
+
+**Likelihood: medium, from anyone who read the original brief closely.**
+
+**The honest answer.** Because Gold's entire job is to reconcile *across*
+services, and no single service's pipeline can do that. Each service DAG runs
+authenticate → pull → parse → map → Bronze → Silver and then signals
+completion; a shared assembly DAG builds Gold and grades it.
+
+This is a deliberate departure from the brief's sketch, recorded in
+TRUST-BOUNDARY.md §4.10. Volunteer it rather than let it be discovered.
+
+---
+
+## F13 — "Who can change the SSOT?"
 
 **Likelihood: low, but it is the governance question.**
 

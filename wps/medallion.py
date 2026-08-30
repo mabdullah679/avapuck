@@ -278,6 +278,15 @@ def build_gold(bundle: Bundle, silver_rows: list[dict]) -> tuple[list[dict], lis
             vals = [r[metric] for r in rows if r.get(metric) is not None]
             out[metric] = vals[0] if vals else None
 
+        # Reporting-currency companion for cross-jurisdiction aggregation.
+        # It NEVER replaces the native figure -- a merchant's settlement
+        # currency is a contractual fact, and the USD number is a convenience
+        # for adding four jurisdictions together on one axis.
+        out["gross_volume_reporting_usd_minor"] = _to_usd_minor(
+            bundle, out.get("gross_volume_minor"), ccy, pid)
+        out["net_revenue_reporting_usd_minor"] = _to_usd_minor(
+            bundle, out.get("net_revenue_minor"), ccy, pid)
+
         st, cb = out.get("settled_txn_count"), out.get("chargeback_count")
         out["dispute_ratio"] = round(cb / st, 6) if st and cb is not None else None
 
@@ -289,6 +298,18 @@ def build_gold(bundle: Bundle, silver_rows: list[dict]) -> tuple[list[dict], lis
 
     _assert_contract(bundle, gold)
     return gold, flags
+
+
+def _to_usd_minor(bundle: Bundle, minor_value, currency: str | None, period_id: str):
+    """Apply the declared, dated FX table. Synthetic rates -- TRUST-BOUNDARY 1.3."""
+    if minor_value is None or not currency:
+        return None
+    rates = bundle.lookups["fx_rates.yaml"]["rates_by_period"].get(period_id)
+    if not rates or currency not in rates:
+        return None
+    major = Decimal(minor_value) / (Decimal(10) ** bundle.minor_units(currency))
+    usd = major / Decimal(str(rates[currency])) * Decimal(str(rates["USD"]))
+    return int((usd * 100).to_integral_value())
 
 
 def _degraded_of(rows: list[dict], service_id: str) -> int:

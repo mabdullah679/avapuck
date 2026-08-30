@@ -23,7 +23,7 @@ dictionary_version: "1.0.0"
 # agreement is Bahraini -- Service D reports agreements in all four
 # jurisdictions, and each agreement's currency comes from agr_ccy_cd below.
 reporting_calendar_jurisdiction: BH        # -> fiscal year == calendar year
-auth_profile: auth/profiles.yaml#/service_d_jwt
+auth_profile: auth/profiles.yaml#/profiles/service_d_jwt
 
 source:
   format: delimited_hierarchical
