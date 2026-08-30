@@ -47,13 +47,15 @@ class FixtureExtractor:
     def extract(self, logical_date: date, out_dir: Path) -> ExtractResult:
         # Seeded by date, so a re-run of the same logical date produces
         # byte-identical output. Idempotency is testable offline.
-        seed = int(hashlib.sha256(logical_date.isoformat().encode()).hexdigest()[:8], 16)
+        seed = int(hashlib.sha256(str(logical_date).encode()).hexdigest()[:8], 16)
         rng = random.Random(seed)
 
         out_dir.mkdir(parents=True, exist_ok=True)
-        csv_path = out_dir / f"trips_{logical_date.isoformat()}.csv"
+        _d = logical_date.date() if hasattr(logical_date, "date") else logical_date
+        csv_path = out_dir / f"trips_{_d.isoformat()}.csv"
 
-        base = datetime.combine(logical_date, datetime.min.time()) + timedelta(hours=5)
+        _base_d = logical_date.date() if hasattr(logical_date, "date") else logical_date
+        base = datetime.combine(_base_d, datetime.min.time()) + timedelta(hours=5)
         rows = []
         for i in range(self.row_limit):
             start_id, start_name = rng.choice(STATIONS)
@@ -85,6 +87,7 @@ class FixtureExtractor:
             # The fixture has no archive to map onto -- it synthesises rows for
             # whatever date it is given, so the window IS the logical date.
             window_date=logical_date.isoformat(),
+            window_end=logical_date.isoformat(),
             row_count=len(rows),
             bytes_processed=0,
             bytes_billed=0,

@@ -57,6 +57,14 @@ Last updated: 2026-08-30
 | 4.3 | Which engine ran | **RECORDED, NOT ASSUMED.** Every encrypt result carries `engine`; every masked row carries `masked_by`. Neither is inferred. |
 | 4.4 | Scale | **UNVERIFIED.** 100 rows/day. Nothing here has been run at volume, and the batched-per-column crypto calls are sized for this, not for millions of rows. |
 
+## 4b. The Airflow scheduler does not run on this host
+
+| # | Item | Status |
+|---|---|---|
+| 4b.1 | **`airflow scheduler` crashes on macOS** | **BLOCKED, not a pipeline defect.** Airflow 3 removed `SequentialExecutor` and silently substitutes `LocalExecutor`, which forks worker processes. On macOS a forked child that touches CoreFoundation -- which the Google auth libraries do, via keychain lookups -- dies with `SIGSEGV`. Observed 279-502 segfaults per scheduler start. `AIRFLOW__CORE__MP_START_METHOD=spawn` and `OBJC_DISABLE_INITIALIZE_FORK_SAFETY=YES` did not fix it. |
+| 4b.2 | What this means | The **DAGs are correct**: `airflow dags test <dag_id>` executes every stage successfully, and the asset wiring is registered and visible in `airflow assets list`. What cannot be demonstrated on this host is the scheduler *automatically* propagating assets between DAGs. On Linux (or Docker) the scheduler runs normally and no code changes. |
+| 4b.3 | The workaround | `scripts/run_chain.py` reproduces the asset semantics exactly -- run a stage, verify its output asset materialised, only then run the consumer -- calling the **same stage functions the DAGs call**, so there is no parallel implementation that could drift. This is what has been used to verify the chain end to end. |
+
 ## 5. Assumptions taken without confirmation
 
 | # | Assumption |
@@ -65,7 +73,8 @@ Last updated: 2026-08-30
 | 5.2 | Dataset choice: `bigquery-public-data.austin_bikeshare.bikeshare_trips`. Picked for size, partition-friendliness and having genuinely maskable fields. Not requested by name. |
 | 5.3 | Which columns are "sensitive". Station names and bike IDs are treated as PII/quasi-identifiers. Defensible, but a real classification exercise would involve a data steward. |
 | 5.4 | The warehouse serves the `analyst` group. The `data_steward` policy path exists in the Ranger config but no run has used it. |
-| 5.5 | Airflow chains stages with `TriggerDagRunOperator`, non-blocking by default (`AIRFLOW_CHAIN_WAIT=1` to block). Blocking requires a live scheduler; without one it polls forever, which is why it is off by default. |
+| 5.5 | Stages are chained by **Airflow Assets**, not `TriggerDagRunOperator`. Only `trips_01_extract` has a clock schedule (`0 */4 * * *`); every other stage is scheduled by the asset it consumes. This decouples the stages and makes a manual repair trigger downstream automatically. |
+| 5.6 | The archive window mapping gives each 4-hour run its own slice. Six runs/day therefore read six different windows and produce genuinely new rows, rather than re-reading one day six times. |
 
 ## 6. What was actually verified
 

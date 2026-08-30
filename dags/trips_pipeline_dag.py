@@ -1,17 +1,48 @@
-"""Airflow DAGs for the trips pipeline.
+"""Trips pipeline — asset-driven, every 4 hours.
 
-FIVE DAGS, CHAINED, RATHER THAN ONE MONOLITH. Each stage is independently
-re-runnable: if the Hive mask fails at 3am, you re-run that stage alone rather
-than re-querying BigQuery and paying for it again. A single DAG would be
-simpler to read and materially worse to operate.
+SCHEDULING MODEL
+================
 
-Chaining is by TriggerDagRunOperator with wait_for_completion, so the chain is
-observable stage by stage in the UI and a failure stops the chain rather than
-letting later stages run on missing data.
+Only the first DAG has a clock schedule. Every other stage is scheduled by
+**data availability**: it declares the Airflow Asset it consumes, and Airflow
+runs it when that asset is updated. No stage names the stage after it.
 
-IDEMPOTENT BY LOGICAL DATE: every stage keys off {{ ds }}, writes to a
-date-partitioned path, and the Postgres load upserts on the trip_id primary
-key. Re-running any date replaces that date's data and never double-loads.
+    schedule="0 */4 * * *"          ┌──────────────┐
+    ───────────────────────────────▶│ 01 extract   │──▶ CSV_READY
+                                    └──────────────┘
+    CSV_READY ─────────────────────▶│ 02 encrypt   │──▶ PARQUET_READY
+                                    └──────────────┘
+    PARQUET_READY ─────────────────▶│ 03 mask      │──▶ HIVE_READY
+                                    └──────────────┘
+    HIVE_READY ────────────────────▶│ 04 load      │──▶ WAREHOUSE_READY
+                                    └──────────────┘
+    WAREHOUSE_READY ───────────────▶│ 05 report    │──▶ REPORT_READY
+                                    └──────────────┘
+
+WHY ASSETS RATHER THAN TriggerDagRunOperator
+--------------------------------------------
+The previous version chained stages on *task success*, which is a weaker and
+subtly different claim than *the data is there*. Three concrete consequences:
+
+  1. **Repair triggers downstream.** Re-run the mask stage by hand, or fix a
+     Parquet file, and the load stage runs on its own. With explicit triggers
+     nothing happens until you also remember to trigger the next one.
+  2. **No coupling.** A stage does not know what comes after it. Adding a
+     second consumer of WAREHOUSE_READY -- a data-quality check, an export --
+     needs no edit to any existing DAG.
+  3. **The lineage is real.** Airflow's asset graph shows what produced what,
+     rather than a chain of triggers that only implies it.
+
+Each stage still *verifies* its input exists before working. Asset scheduling
+says "something updated this"; the check says "and it is actually usable".
+Those are different guarantees and the pipeline wants both.
+
+IDEMPOTENCY
+-----------
+Every stage keys off the run's logical timestamp. The extractor maps that
+timestamp to a fixed 4-hour archive window, so re-running the 08:00 slice
+always reads the same rows; the Postgres load upserts on trip_id. Re-running
+any run replaces its data rather than duplicating it.
 """
 from __future__ import annotations
 
@@ -27,8 +58,7 @@ if str(ROOT) not in sys.path:
 # Airflow runs tasks in a subprocess that does not inherit the shell's
 # environment reliably, and GOOGLE_APPLICATION_CREDENTIALS in .env.local is a
 # RELATIVE path -- which resolves against the worker's cwd, not the repo. Both
-# problems are fixed here, once, at parse time: load .env.local explicitly and
-# make the credential path absolute. Without this the extract task hangs in
+# are fixed here, once, at parse time. Without this the extract task hangs in
 # credential discovery instead of failing cleanly.
 try:
     from dotenv import dotenv_values
@@ -41,31 +71,26 @@ try:
 except ImportError:
     pass
 
-try:                                     # Airflow 3.x
-    from airflow.sdk import DAG, task
-except ImportError:                      # Airflow 2.x
-    from airflow import DAG
-    from airflow.decorators import task
+from airflow.sdk import DAG, Asset, task
 
-from airflow.operators.trigger_dagrun import TriggerDagRunOperator
-
-# wait_for_completion requires a running scheduler to advance the triggered DAG.
-# Under `airflow dags test` (no scheduler) it would poll forever, which makes
-# the chain impossible to verify stage by stage. Default to fire-and-forget and
-# let the deployment opt into blocking; the chain is still ordered because each
-# stage triggers the next only after its own work succeeds.
-WAIT_FOR_DOWNSTREAM = os.environ.get("AIRFLOW_CHAIN_WAIT", "0") == "1"
+from pipeline.common.trace import stage_event, trace_from_context
 
 DATA = ROOT / "data"
+
+# ── The assets. These ARE the schedule. ───────────────────────────────────
+CSV_READY = Asset(name="trips_csv", uri="file://data/csv")
+PARQUET_READY = Asset(name="trips_parquet_encrypted", uri="file://data/parquet")
+HIVE_READY = Asset(name="trips_hive_masked", uri="file://data/hive")
+WAREHOUSE_READY = Asset(name="trips_warehouse", uri="postgres://warehouse/trips")
+REPORT_READY = Asset(name="trips_report_pdf", uri="file://data/reports")
 
 DEFAULT_ARGS = {
     "owner": "data-platform",
     "retries": 2,
-    "retry_delay": timedelta(minutes=5),
+    "retry_delay": timedelta(minutes=2),
     "retry_exponential_backoff": True,
-    "max_retry_delay": timedelta(minutes=30),
+    "max_retry_delay": timedelta(minutes=20),
     "depends_on_past": False,
-    # Alert on failure, not on every run.
     "email_on_failure": False,
 }
 
@@ -74,163 +99,184 @@ COMMON = dict(
     start_date=datetime(2026, 1, 1),
     catchup=False,
     max_active_runs=1,
-    tags=["trips", "pii", "daily"],
+    tags=["trips", "pii", "4-hourly"],
 )
 
 
 def _crypto(client_id: str, secret_env: str):
+    """A crypto client authenticated as a specific job identity.
+
+    Each stage uses its OWN identity, so the encrypt stage's token cannot be
+    replayed to decrypt: spark-job holds crypto.encrypt, hive-job holds
+    crypto.decrypt, and the IdP refuses to mint either for the wrong client.
+    """
     from pipeline.common.auth import TokenClient
     from pipeline.transform.spark_encrypt import CryptoClient
     tokens = TokenClient(
-        idp_url=os.environ.get("IDP_URL", "http://idp:8443"),
+        idp_url=os.environ.get("IDP_URL", "http://localhost:8443"),
         client_id=client_id,
         client_secret=os.environ.get(secret_env, f"dev-{client_id}-secret"),
         verify_tls=False,
     )
-    return CryptoClient(os.environ.get("CRYPTO_URL", "http://crypto:8444"),
+    return CryptoClient(os.environ.get("CRYPTO_URL", "http://localhost:8444"),
                         tokens, verify_tls=False)
 
 
-# ── 1. Extract ────────────────────────────────────────────────────────────
+def _require(path: Path, stage: str) -> Path:
+    """Assert the input actually exists before doing work.
+
+    Asset scheduling says something updated upstream; this says the file is
+    really there. Failing here names the missing path, which beats a
+    FileNotFoundError from three frames deeper.
+    """
+    if not path.exists():
+        raise FileNotFoundError(
+            f"{stage}: required input {path} does not exist. The upstream "
+            f"asset fired but its output is missing -- check the upstream run.")
+    return path
+
+
+# ── 1. Extract — the only clock-scheduled DAG ─────────────────────────────
 with DAG(
     dag_id="trips_01_extract",
-    description="Pull 100 rows/day from the BigQuery public dataset to local CSV",
-    schedule="0 6 * * *",          # daily, 06:00 local
+    description="Every 4h: pull 100 rows from BigQuery into a local CSV",
+    schedule="0 */4 * * *",
     **COMMON,
 ) as dag_extract:
 
-    @task(task_id="extract_to_csv", execution_timeout=timedelta(minutes=10))
-    def extract(ds=None):
-        """Bounded, cost-capped BigQuery read.
+    @task(task_id="extract_to_csv", outlets=[CSV_READY],
+          execution_timeout=timedelta(minutes=10))
+    def extract(**ctx):
+        """Bounded, cost-capped read of one 4-hour archive window.
 
-        The row cap is in the SQL and asserted after; maximum_bytes_billed is
-        set on the job so BigQuery REJECTS an over-budget query rather than
-        running it. See pipeline/extract/bigquery_extract.py.
+        Emits CSV_READY on success, which is what starts stage 2. A failure
+        emits nothing, so the chain stops here rather than running later
+        stages on absent or stale data.
         """
-        from datetime import date
         from pipeline.extract.fixture import get_extractor
+        trace = trace_from_context(ctx)
+        ts = ctx["logical_date"]
         ex = get_extractor()
-        r = ex.extract(date.fromisoformat(ds), DATA / "csv")
-        return {**r.as_dict(), "mode": type(ex).__name__}
+        r = ex.extract(ts, DATA / "csv")
+        return stage_event(
+            "extract", trace,
+            mode=type(ex).__name__,
+            rows=r.row_count,
+            archive_window=f"{r.window_date}..{r.window_end}",
+            bytes_billed=r.bytes_billed,
+            bq_job_id=r.query_id,
+            csv=r.csv_path,
+        )
 
-    TriggerDagRunOperator(
-        task_id="trigger_encrypt",
-        trigger_dag_id="trips_02_encrypt",
-        logical_date="{{ logical_date }}",
-        wait_for_completion=WAIT_FOR_DOWNSTREAM,
-        poke_interval=15,
-        reset_dag_run=True,           # makes a re-run of the same date safe
-        skip_when_already_exists=False,
-    ).set_upstream(extract())
+    extract()
 
 
-# ── 2. Encrypt (Spark) ────────────────────────────────────────────────────
+# ── 2. Encrypt — runs when CSV_READY updates ──────────────────────────────
 with DAG(
     dag_id="trips_02_encrypt",
-    description="AES-256-GCM encrypt sensitive fields via the HTTPS crypto service; write Parquet",
-    schedule=None,                 # triggered by stage 1
+    description="AES-256-GCM encrypt sensitive fields; write Parquet",
+    schedule=[CSV_READY],
     **COMMON,
 ) as dag_encrypt:
 
-    @task(task_id="encrypt_to_parquet")
-    def encrypt(ds=None):
-        from datetime import date
+    @task(task_id="encrypt_to_parquet", outlets=[PARQUET_READY])
+    def encrypt(**ctx):
         from pipeline.transform.spark_encrypt import run
-        d = date.fromisoformat(ds)
-        return run(d, DATA / "csv" / f"trips_{ds}.csv", DATA / "parquet",
-                   _crypto("spark-job", "CLIENT_SECRET_SPARK_JOB"))
+        trace = trace_from_context(ctx)
+        ts = ctx["logical_date"]
+        d = ts.date() if hasattr(ts, "date") else ts
+        csv_path = _require(DATA / "csv" / f"trips_{d.isoformat()}.csv", "encrypt")
+        r = run(d, csv_path, DATA / "parquet",
+                _crypto("spark-job", "CLIENT_SECRET_SPARK_JOB"))
+        return stage_event("encrypt", trace, rows=r["rows"], engine=r["engine"],
+                           parquet=r["parquet_path"], algorithm="AES-256-GCM",
+                           identity="spark-job")
 
-    TriggerDagRunOperator(
-        task_id="trigger_mask",
-        trigger_dag_id="trips_03_mask",
-        logical_date="{{ logical_date }}",
-        wait_for_completion=WAIT_FOR_DOWNSTREAM,
-        poke_interval=15,
-        reset_dag_run=True,
-    ).set_upstream(encrypt())
+    encrypt()
 
 
-# ── 3. Hive + Ranger mask ─────────────────────────────────────────────────
+# ── 3. Mask — runs when PARQUET_READY updates ─────────────────────────────
 with DAG(
     dag_id="trips_03_mask",
-    description="Decrypt in Hive, apply Apache Ranger masking policy, write the Hive table",
-    schedule=None,
+    description="Decrypt, apply Apache Ranger masking policy, write Hive table",
+    schedule=[PARQUET_READY],
     **COMMON,
 ) as dag_mask:
 
     @task(task_id="decrypt_and_mask")
-    def mask(ds=None):
+    def mask(**ctx):
         """Decrypt, mask, then write. The Hive table stores MASKED values, so
-        plaintext exists only in this task's memory."""
-        from datetime import date
+        plaintext exists only inside this task's memory."""
         from pipeline.transform.hive_mask import run
-        d = date.fromisoformat(ds)
-        return run(d, DATA / "parquet" / f"dt={ds}" / "trips.parquet",
-                   DATA / "hive" / "trips",
-                   _crypto("hive-job", "CLIENT_SECRET_HIVE_JOB"))
+        trace = trace_from_context(ctx)
+        ts = ctx["logical_date"]
+        d = ts.date() if hasattr(ts, "date") else ts
+        pq = _require(DATA / "parquet" / f"dt={d.isoformat()}" / "trips.parquet", "mask")
+        r = run(d, pq, DATA / "hive" / "trips",
+                _crypto("hive-job", "CLIENT_SECRET_HIVE_JOB"))
+        return stage_event("mask", trace, rows=r["rows"], masked_by=r["masked_by"],
+                           policies=len(r["masks_applied"]), hive=r["hive_path"],
+                           identity="hive-job")
 
-    _masked = mask()
+    @task(task_id="register_hive_table", outlets=[HIVE_READY])
+    def register(**ctx):
+        """Expose the masked Parquet as a Hive table.
 
-    @task(task_id="register_hive_table")
-    def register(ds=None):
-        """Expose the masked Parquet as a Hive table. Non-fatal if Hive is down:
-        the data is already written, and failing the chain because a metadata
-        service is unavailable would be a false alarm."""
-        from datetime import date
+        Non-fatal when Hive is down: the Parquet is already written and
+        correct, and failing the chain because a metadata service is
+        unavailable would be a false alarm about the data. HIVE_READY is
+        emitted either way, because the DATA is ready even if the table is not.
+        """
         from pipeline.transform.hive_register import run
-        return run(date.fromisoformat(ds))
+        trace = trace_from_context(ctx)
+        ts = ctx["logical_date"]
+        d = ts.date() if hasattr(ts, "date") else ts
+        r = run(d)
+        return stage_event("hive_register", trace, registered=r.get("registered"),
+                           partition=r.get("partition"), reason=r.get("reason"))
 
-    _registered = register()
-    _masked >> _registered
-
-
-    TriggerDagRunOperator(
-        task_id="trigger_load",
-        trigger_dag_id="trips_04_load",
-        logical_date="{{ logical_date }}",
-        wait_for_completion=WAIT_FOR_DOWNSTREAM,
-        poke_interval=15,
-        reset_dag_run=True,
-    ).set_upstream(_registered)
+    mask() >> register()
 
 
-# ── 4. Postgres load ──────────────────────────────────────────────────────
+# ── 4. Load — runs when HIVE_READY updates ────────────────────────────────
 with DAG(
     dag_id="trips_04_load",
     description="Upsert masked rows into the Postgres warehouse",
-    schedule=None,
+    schedule=[HIVE_READY],
     **COMMON,
 ) as dag_load:
 
-    @task(task_id="load_postgres")
-    def load(ds=None):
-        from datetime import date
+    @task(task_id="load_postgres", outlets=[WAREHOUSE_READY])
+    def load(**ctx):
         from pipeline.load.postgres_load import run
-        d = date.fromisoformat(ds)
-        return run(d, DATA / "hive" / "trips" / f"dt={ds}" / "trips_masked.parquet")
+        trace = trace_from_context(ctx)
+        ts = ctx["logical_date"]
+        d = ts.date() if hasattr(ts, "date") else ts
+        pq = _require(
+            DATA / "hive" / "trips" / f"dt={d.isoformat()}" / "trips_masked.parquet",
+            "load")
+        r = run(d, pq)
+        return stage_event("load", trace, inserted=r["inserted"],
+                           updated=r["updated"], run_id=r["run_id"])
 
-    TriggerDagRunOperator(
-        task_id="trigger_report",
-        trigger_dag_id="trips_05_report",
-        logical_date="{{ logical_date }}",
-        wait_for_completion=WAIT_FOR_DOWNSTREAM,
-        poke_interval=15,
-        reset_dag_run=True,
-    ).set_upstream(load())
+    load()
 
 
-# ── 5. PDF report ─────────────────────────────────────────────────────────
+# ── 5. Report — runs when WAREHOUSE_READY updates ─────────────────────────
 with DAG(
     dag_id="trips_05_report",
-    description="Build the daily PDF report with charts from the masked warehouse",
-    schedule=None,
+    description="Build the PDF report with charts from the masked warehouse",
+    schedule=[WAREHOUSE_READY],
     **COMMON,
 ) as dag_report:
 
-    @task(task_id="build_pdf")
-    def report(ds=None):
-        from datetime import date
+    @task(task_id="build_pdf", outlets=[REPORT_READY])
+    def report(**ctx):
         from pipeline.report.pdf_report import run
-        return run(date.fromisoformat(ds), DATA / "reports")
+        trace = trace_from_context(ctx)
+        ts = ctx["logical_date"]
+        d = ts.date() if hasattr(ts, "date") else ts
+        r = run(d, DATA / "reports")
+        return stage_event("report", trace, rows=r["rows"], pdf=r["pdf_path"])
 
     report()

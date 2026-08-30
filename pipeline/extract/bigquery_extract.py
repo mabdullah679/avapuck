@@ -90,6 +90,7 @@ DATA_END = date(2024, 6, 30)
 class ExtractResult:
     logical_date: str
     window_date: str
+    window_end: str
     row_count: int
     bytes_processed: int
     bytes_billed: int
@@ -112,7 +113,7 @@ class BigQueryExtractor:
 
     def __init__(self, project_id: str, dataset: str, table: str,
                  row_limit: int = 100, max_bytes_billed: int = 300 * 1024 * 1024,
-                 location: str = "US"):
+                 location: str = "US", window_hours: int = 4):
         if row_limit > 1000:
             raise ValueError(
                 f"row_limit {row_limit} exceeds the pipeline's 1000-row sanity "
@@ -123,24 +124,49 @@ class BigQueryExtractor:
         self.row_limit = row_limit
         self.max_bytes_billed = max_bytes_billed
         self.location = location
+        self.window_hours = window_hours
 
     @property
     def fqtn(self) -> str:
         return f"`{self.dataset}.{self.table}`"
 
-    def window_for(self, logical_date: date) -> date:
-        """Map a logical date onto a day that exists in the archive.
+    def window_for(self, logical_ts: datetime | date) -> tuple[datetime, datetime]:
+        """Map a logical timestamp onto a concrete window inside the archive.
 
-        Dates already inside the archive are used as-is, so a backfill of a
-        real historical date does what you would expect. Dates beyond the
-        archive wrap deterministically onto its span, so a daily schedule keeps
-        producing distinct, reproducible slices instead of empty ones.
+        The pipeline runs every 4 hours, so each run needs its OWN slice --
+        six runs a day reading the same rows would be five wasted runs and
+        five no-op upserts.
+
+        The mapping is a pure function of the logical timestamp, which is what
+        keeps runs idempotent: re-running the 10:00 slice for a given day
+        always reads exactly the same archive window, so the upsert replaces
+        rather than duplicates.
+
+        Timestamps already inside the archive are used as-is (so a genuine
+        historical backfill does the obvious thing). Timestamps beyond it wrap
+        deterministically onto the archive span.
         """
-        if DATA_START <= logical_date <= DATA_END:
-            return logical_date
-        span = (DATA_END - DATA_START).days
-        offset = (logical_date - DATA_END).days % span
-        return DATA_START + timedelta(days=offset)
+        if isinstance(logical_ts, datetime):
+            ts = logical_ts.replace(tzinfo=None)
+        else:
+            ts = datetime.combine(logical_ts, datetime.min.time())
+
+        archive_start = datetime.combine(DATA_START, datetime.min.time())
+        archive_end = datetime.combine(DATA_END, datetime.max.time())
+
+        if archive_start <= ts <= archive_end:
+            start = ts
+        else:
+            # Total 4-hour slots in the archive, indexed by how many slots have
+            # elapsed since the archive ended. Deterministic and reversible.
+            slots = int((archive_end - archive_start).total_seconds() // 3600 // self.window_hours)
+            elapsed = int((ts - archive_end).total_seconds() // 3600 // self.window_hours)
+            start = archive_start + timedelta(hours=self.window_hours * (elapsed % slots))
+
+        # Snap to the window grid so slices tile the archive without gaps.
+        floor_h = (start.hour // self.window_hours) * self.window_hours
+        start = start.replace(hour=floor_h, minute=0, second=0, microsecond=0)
+        return start, start + timedelta(hours=self.window_hours)
 
     def build_query(self, logical_date: date) -> tuple[str, list]:
         """Parameterised query: named columns, date predicate, LIMIT.
@@ -161,12 +187,10 @@ class BigQueryExtractor:
             ORDER BY start_time
             LIMIT @row_limit
         """
-        window_start = datetime.combine(self.window_for(logical_date),
-                                        datetime.min.time())
+        window_start, window_end = self.window_for(logical_date)
         params = [
             bigquery.ScalarQueryParameter("window_start", "TIMESTAMP", window_start),
-            bigquery.ScalarQueryParameter("window_end", "TIMESTAMP",
-                                          window_start + timedelta(days=1)),
+            bigquery.ScalarQueryParameter("window_end", "TIMESTAMP", window_end),
             bigquery.ScalarQueryParameter("row_limit", "INT64", self.row_limit),
         ]
         return sql, params
@@ -192,11 +216,9 @@ class BigQueryExtractor:
                 f"{self.max_bytes_billed / 1_048_576:.1f} MiB cap. Refusing to run. "
                 f"Narrow the partition predicate or drop columns.")
 
-        window = self.window_for(logical_date)
-        if window != logical_date:
-            log.info("logical date %s is outside the archive (%s..%s); "
-                     "reading archive day %s", logical_date, DATA_START,
-                     DATA_END, window)
+        window_start, window_end = self.window_for(logical_date)
+        log.info("logical %s -> archive window %s .. %s (%dh)",
+                 logical_date, window_start, window_end, self.window_hours)
 
         client = bigquery.Client(project=self.project_id, location=self.location)
         sql, params = self.build_query(logical_date)
@@ -220,14 +242,18 @@ class BigQueryExtractor:
         # weeks later.
         if not rows:
             raise RuntimeError(
-                f"query returned 0 rows for window {window.isoformat()} "
+                f"query returned 0 rows for window {window_start} .. {window_end} "
                 f"(logical date {logical_date.isoformat()}) while scanning "
                 f"{int(job.total_bytes_billed or 0) / 1048576:.1f} MiB. The "
                 f"dataset spans {DATA_START} to {DATA_END}; check the window "
                 f"mapping rather than accepting an empty extract.")
 
         out_dir.mkdir(parents=True, exist_ok=True)
-        csv_path = out_dir / f"trips_{logical_date.isoformat()}.csv"
+        # Name by DATE and slot hour, never by the full timestamp: downstream
+        # stages resolve inputs by date, and an ISO timestamp in a filename
+        # also carries colons, which are hostile in paths.
+        _d = logical_date.date() if hasattr(logical_date, "date") else logical_date
+        csv_path = out_dir / f"trips_{_d.isoformat()}.csv"
         with csv_path.open("w", newline="", encoding="utf-8") as fh:
             w = csv.writer(fh)
             w.writerow(COLUMNS)
@@ -236,7 +262,8 @@ class BigQueryExtractor:
 
         result = ExtractResult(
             logical_date=logical_date.isoformat(),
-            window_date=window.isoformat(),
+            window_date=window_start.isoformat(),
+            window_end=window_end.isoformat(),
             row_count=len(rows),
             bytes_processed=int(job.total_bytes_processed or 0),
             bytes_billed=int(job.total_bytes_billed or 0),
@@ -270,4 +297,5 @@ def extractor_from_env() -> BigQueryExtractor:
         row_limit=int(os.environ.get("BQ_ROW_LIMIT", "100")),
         max_bytes_billed=int(os.environ.get("BQ_MAX_BYTES_BILLED", str(300 * 1024 * 1024))),
         location=os.environ.get("BQ_LOCATION", "US"),
+        window_hours=int(os.environ.get("BQ_WINDOW_HOURS", "4")),
     )
