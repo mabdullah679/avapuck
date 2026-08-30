@@ -61,7 +61,7 @@ class FixtureExtractor:
             start = base + timedelta(minutes=rng.randint(0, 1020))
             rows.append({
                 "trip_id": f"{seed:08x}{i:04d}",
-                "bikeid": str(rng.randint(1, 900)),
+                "bike_id": str(rng.randint(1, 900)),
                 "subscriber_type": rng.choice(SUBSCRIBER_TYPES),
                 "start_station_id": start_id,
                 "start_station_name": start_name,
@@ -82,6 +82,9 @@ class FixtureExtractor:
 
         return ExtractResult(
             logical_date=logical_date.isoformat(),
+            # The fixture has no archive to map onto -- it synthesises rows for
+            # whatever date it is given, so the window IS the logical date.
+            window_date=logical_date.isoformat(),
             row_count=len(rows),
             bytes_processed=0,
             bytes_billed=0,

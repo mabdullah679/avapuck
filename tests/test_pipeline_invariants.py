@@ -61,7 +61,7 @@ def test_mask_preserves_null():
 def test_plaintext_guard_catches_unencrypted_column():
     src = [{c: "Barton Springs & Riverside" for c in SENSITIVE_COLUMNS}]
     out = [{f"{c}_encrypted": "enc:v1:AAAA" for c in SENSITIVE_COLUMNS}]
-    out[0]["bikeid"] = "Barton Springs & Riverside"      # survived in the clear
+    out[0]["bike_id"] = "Barton Springs & Riverside"      # survived in the clear
     with pytest.raises(RuntimeError, match="REFUSING TO WRITE"):
         assert_no_plaintext(out, src)
 
@@ -69,7 +69,7 @@ def test_plaintext_guard_catches_unencrypted_column():
 def test_plaintext_guard_catches_missing_ciphertext():
     src = [{c: "value-here" for c in SENSITIVE_COLUMNS}]
     out = [{f"{c}_encrypted": "enc:v1:AAAA" for c in SENSITIVE_COLUMNS}]
-    out[0]["bikeid_encrypted"] = None
+    out[0]["bike_id_encrypted"] = None
     with pytest.raises(RuntimeError, match="REFUSING TO WRITE"):
         assert_no_plaintext(out, src)
 

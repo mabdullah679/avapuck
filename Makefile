@@ -1,11 +1,15 @@
-.PHONY: help secrets-bootstrap secrets-sync secrets-verify secrets-drift test
+.PHONY: help check-auth secrets-bootstrap secrets-sync secrets-verify secrets-drift test
 
 help:
+	@echo "check-auth         verify GCP credentials work before running anything"
 	@echo "secrets-bootstrap  create the pipeline's secrets in GCP Secret Manager (once)"
 	@echo "secrets-sync       resolve .env.local's SM_* refs -> .env.local.resolved"
 	@echo "secrets-verify     check every declared secret exists in Secret Manager"
 	@echo "secrets-drift      compare literal *_VALUE entries against Secret Manager"
 	@echo "test               run the test suite (includes secret hygiene)"
+
+check-auth:
+	@.venv/bin/python scripts/check_gcp_auth.py
 
 secrets-bootstrap:
 	@set -a; [ -f .env.local ] && . ./.env.local; set +a; ./scripts/secrets_bootstrap.sh

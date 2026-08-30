@@ -17,21 +17,21 @@ log = logging.getLogger(__name__)
 
 UPSERT = """
 INSERT INTO warehouse.trips (
-    trip_id, logical_date, bikeid_masked, subscriber_type_masked,
+    trip_id, logical_date, bike_id_masked, subscriber_type_masked,
     start_station_masked, end_station_masked,
-    bikeid_blind_index, start_station_blind_index,
+    bike_id_blind_index, start_station_blind_index,
     start_time, duration_minutes, masked_by
-) VALUES (%(trip_id)s, %(logical_date)s, %(bikeid_masked)s, %(subscriber_type_masked)s,
+) VALUES (%(trip_id)s, %(logical_date)s, %(bike_id_masked)s, %(subscriber_type_masked)s,
           %(start_station_masked)s, %(end_station_masked)s,
-          %(bikeid_blind_index)s, %(start_station_blind_index)s,
+          %(bike_id_blind_index)s, %(start_station_blind_index)s,
           %(start_time)s, %(duration_minutes)s, %(masked_by)s)
 ON CONFLICT (trip_id) DO UPDATE SET
     logical_date              = EXCLUDED.logical_date,
-    bikeid_masked             = EXCLUDED.bikeid_masked,
+    bike_id_masked             = EXCLUDED.bike_id_masked,
     subscriber_type_masked    = EXCLUDED.subscriber_type_masked,
     start_station_masked      = EXCLUDED.start_station_masked,
     end_station_masked        = EXCLUDED.end_station_masked,
-    bikeid_blind_index        = EXCLUDED.bikeid_blind_index,
+    bike_id_blind_index        = EXCLUDED.bike_id_blind_index,
     start_station_blind_index = EXCLUDED.start_station_blind_index,
     start_time                = EXCLUDED.start_time,
     duration_minutes          = EXCLUDED.duration_minutes,
@@ -71,11 +71,11 @@ def run(logical_date: date, hive_parquet: Path, extract_meta: dict | None = None
                 cur.execute(UPSERT, {
                     "trip_id": r["trip_id"],
                     "logical_date": logical_date,
-                    "bikeid_masked": r.get("bikeid_masked"),
+                    "bike_id_masked": r.get("bike_id_masked"),
                     "subscriber_type_masked": r.get("subscriber_type_masked"),
                     "start_station_masked": r.get("start_station_masked"),
                     "end_station_masked": r.get("end_station_masked"),
-                    "bikeid_blind_index": r.get("bikeid_blind_index"),
+                    "bike_id_blind_index": r.get("bike_id_blind_index"),
                     "start_station_blind_index": r.get("start_station_blind_index"),
                     "start_time": r["start_time"],
                     "duration_minutes": int(r["duration_minutes"]),

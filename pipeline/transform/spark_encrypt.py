@@ -22,7 +22,7 @@ CIPHER_PREFIX = "enc"
 
 # Columns encrypted before landing. Everything else is non-sensitive and clear.
 SENSITIVE_COLUMNS = [
-    "bikeid",
+    "bike_id",
     "subscriber_type",
     "start_station_name",
     "end_station_name",
@@ -31,7 +31,7 @@ SENSITIVE_COLUMNS = [
 ]
 
 # Fields that also get a deterministic blind index, so Hive can still join.
-BLIND_INDEXED = ["bikeid", "start_station_name"]
+BLIND_INDEXED = ["bike_id", "start_station_name"]
 
 
 class CryptoClient:

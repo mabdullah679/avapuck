@@ -24,10 +24,10 @@ DDL = f"""
 CREATE DATABASE IF NOT EXISTS {DATABASE};
 CREATE EXTERNAL TABLE IF NOT EXISTS {DATABASE}.{TABLE} (
     trip_id STRING, logical_date STRING, start_time STRING, duration_minutes BIGINT,
-    bikeid_masked STRING, subscriber_type_masked STRING,
+    bike_id_masked STRING, subscriber_type_masked STRING,
     start_station_masked STRING, end_station_masked STRING,
     start_station_id_masked STRING, end_station_id_masked STRING,
-    bikeid_blind_index STRING, start_station_blind_index STRING, masked_by STRING)
+    bike_id_blind_index STRING, start_station_blind_index STRING, masked_by STRING)
 PARTITIONED BY (dt STRING) STORED AS PARQUET
 LOCATION '{WAREHOUSE}';
 MSCK REPAIR TABLE {DATABASE}.{TABLE};

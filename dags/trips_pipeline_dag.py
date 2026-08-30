@@ -24,6 +24,23 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
+# Airflow runs tasks in a subprocess that does not inherit the shell's
+# environment reliably, and GOOGLE_APPLICATION_CREDENTIALS in .env.local is a
+# RELATIVE path -- which resolves against the worker's cwd, not the repo. Both
+# problems are fixed here, once, at parse time: load .env.local explicitly and
+# make the credential path absolute. Without this the extract task hangs in
+# credential discovery instead of failing cleanly.
+try:
+    from dotenv import dotenv_values
+    for _k, _v in dotenv_values(ROOT / ".env.local").items():
+        if _v and _k not in os.environ:
+            os.environ[_k] = _v
+    _cred = os.environ.get("GOOGLE_APPLICATION_CREDENTIALS")
+    if _cred and not os.path.isabs(_cred):
+        os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = str(ROOT / _cred)
+except ImportError:
+    pass
+
 try:                                     # Airflow 3.x
     from airflow.sdk import DAG, task
 except ImportError:                      # Airflow 2.x
@@ -82,7 +99,7 @@ with DAG(
     **COMMON,
 ) as dag_extract:
 
-    @task(task_id="extract_to_csv")
+    @task(task_id="extract_to_csv", execution_timeout=timedelta(minutes=10))
     def extract(ds=None):
         """Bounded, cost-capped BigQuery read.
 

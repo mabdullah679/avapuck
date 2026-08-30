@@ -14,13 +14,13 @@ CREATE TABLE IF NOT EXISTS warehouse.trips (
     logical_date         DATE NOT NULL,
 
     -- masked, per Ranger policy
-    bikeid_masked        TEXT,
+    bike_id_masked        TEXT,
     subscriber_type_masked TEXT,
     start_station_masked TEXT,
     end_station_masked   TEXT,
 
     -- deterministic handles for joins on unreadable values
-    bikeid_blind_index   TEXT,
+    bike_id_blind_index   TEXT,
     start_station_blind_index TEXT,
 
     -- non-sensitive, clear
@@ -34,7 +34,7 @@ CREATE TABLE IF NOT EXISTS warehouse.trips (
 
 CREATE INDEX IF NOT EXISTS idx_trips_logical_date ON warehouse.trips (logical_date);
 CREATE INDEX IF NOT EXISTS idx_trips_start_time   ON warehouse.trips (start_time);
-CREATE INDEX IF NOT EXISTS idx_trips_bikeid_bi    ON warehouse.trips (bikeid_blind_index);
+CREATE INDEX IF NOT EXISTS idx_trips_bike_id_bi    ON warehouse.trips (bike_id_blind_index);
 
 -- Per-run audit. Every load records what it did, so a re-run is traceable.
 CREATE TABLE IF NOT EXISTS warehouse.load_audit (

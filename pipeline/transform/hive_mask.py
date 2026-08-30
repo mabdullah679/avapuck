@@ -24,7 +24,7 @@ TABLE = "trips"
 
 # Encrypted column -> the masked output column it becomes.
 COLUMN_MAP = {
-    "bikeid": "bikeid_masked",
+    "bike_id": "bike_id_masked",
     "subscriber_type": "subscriber_type_masked",
     "start_station_name": "start_station_masked",
     "end_station_name": "end_station_masked",
@@ -95,7 +95,7 @@ def run(logical_date: date, parquet_path: Path, out_dir: Path, crypto) -> dict:
             "logical_date": r["logical_date"],
             "start_time": r["start_time"],
             "duration_minutes": r["duration_minutes"],
-            "bikeid_blind_index": r.get("bikeid_blind_index"),
+            "bikeid_blind_index": r.get("bike_id_blind_index"),
             "start_station_blind_index": r.get("start_station_name_blind_index"),
             "masked_by": provider.name,
         }

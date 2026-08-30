@@ -6,14 +6,39 @@ the bill at all -- a `SELECT * ... LIMIT 100` on a large table scans every byte
 of every referenced column and bills for all of it. The LIMIT only truncates
 the result set.
 
-Three controls actually reduce cost, and this module uses all three:
+IMPORTANT, VERIFIED AGAINST THE LIVE TABLE: austin_bikeshare.bikeshare_trips
+is **not partitioned and not clustered**. An earlier version of this module
+assumed a date predicate would prune partitions; it does not, because there
+are none. A WHERE clause on `start_time` filters rows AFTER scanning them, so
+it reduces the result set and not the bill.
+
+What actually controls cost here:
 
   1. Named columns, never SELECT *. BigQuery is columnar, so unreferenced
-     columns are never scanned. Biggest lever by far.
-  2. A predicate on the partitioning column, so partition pruning applies.
-  3. maximum_bytes_billed on the job. This is the HARD STOP: BigQuery refuses
-     to run a query that would exceed it, rather than running it and billing
-     you. LIMIT is not a safety mechanism; this is.
+     columns are never scanned. On this table that is the ONLY structural
+     lever, and it is why COLUMNS is explicit and minimal.
+  2. maximum_bytes_billed on the job -- the HARD STOP. BigQuery refuses to run
+     a query that would exceed it rather than running it and billing you.
+     LIMIT is not a safety mechanism; this is.
+  3. Query cache. A repeated identical query inside 24h is free. Idempotent
+     re-runs of the same logical date therefore cost nothing after the first.
+
+MEASURED on 2026-08-30 (dry runs, which are free):
+
+    SELECT *                          252.06 MiB
+    9 named columns                   231.68 MiB
+    9 named columns + date predicate  231.68 MiB   <- predicate does NOTHING
+    7 columns (no station ids)        201.58 MiB
+
+One run scans ~232 MiB: a FULL SCAN of the selected columns, every time. At
+one run per day that is ~6.8 GiB/month against a 1 TiB/month free tier, about
+0.7%. Comfortably free, but not the near-zero incremental read that partition
+pruning would give -- and that difference is stated rather than implied.
+
+The default cap is therefore 300 MiB, not the 50 MiB this module originally
+carried. A cap below the only achievable cost is not a safety control, it is a
+permanent outage; 300 MiB leaves headroom for dataset growth while still
+catching a SELECT * regression on a larger table.
 
 A dry run happens first, so the estimate is known and asserted BEFORE any
 billable query executes.
@@ -30,9 +55,14 @@ from pathlib import Path
 log = logging.getLogger(__name__)
 
 # Only these columns are read. Adding one here increases bytes scanned.
+#
+# Verified against the live schema on 2026-08-30. Note `bike_id`, not
+# `bikeid` -- the column names were guessed when this was first written and
+# BigQuery rejected the query. Do not edit this list from memory; confirm
+# against `client.get_table(...).schema`.
 COLUMNS = [
     "trip_id",
-    "bikeid",
+    "bike_id",
     "subscriber_type",
     "start_station_id",
     "start_station_name",
@@ -43,9 +73,23 @@ COLUMNS = [
 ]
 
 
+# The public dataset is a HISTORICAL ARCHIVE, not a live feed: it ends
+# 2024-06-30 (verified 2026-08-30). A daily pipeline pointed at "yesterday"
+# would therefore return zero rows every single run, forever, while still
+# being billed for the scan -- a silent failure that looks like success.
+#
+# So the logical date is mapped onto the archive's own timeline: the pipeline
+# advances one archive-day per run, deterministically derived from the logical
+# date. That keeps runs idempotent (same logical date -> same window -> same
+# rows) and keeps a daily schedule meaningful against frozen data.
+DATA_START = date(2013, 12, 12)
+DATA_END = date(2024, 6, 30)
+
+
 @dataclass(frozen=True)
 class ExtractResult:
     logical_date: str
+    window_date: str
     row_count: int
     bytes_processed: int
     bytes_billed: int
@@ -67,7 +111,7 @@ class BigQueryExtractor:
     """Reads a bounded slice of a public dataset."""
 
     def __init__(self, project_id: str, dataset: str, table: str,
-                 row_limit: int = 100, max_bytes_billed: int = 50 * 1024 * 1024,
+                 row_limit: int = 100, max_bytes_billed: int = 300 * 1024 * 1024,
                  location: str = "US"):
         if row_limit > 1000:
             raise ValueError(
@@ -84,8 +128,22 @@ class BigQueryExtractor:
     def fqtn(self) -> str:
         return f"`{self.dataset}.{self.table}`"
 
+    def window_for(self, logical_date: date) -> date:
+        """Map a logical date onto a day that exists in the archive.
+
+        Dates already inside the archive are used as-is, so a backfill of a
+        real historical date does what you would expect. Dates beyond the
+        archive wrap deterministically onto its span, so a daily schedule keeps
+        producing distinct, reproducible slices instead of empty ones.
+        """
+        if DATA_START <= logical_date <= DATA_END:
+            return logical_date
+        span = (DATA_END - DATA_START).days
+        offset = (logical_date - DATA_END).days % span
+        return DATA_START + timedelta(days=offset)
+
     def build_query(self, logical_date: date) -> tuple[str, list]:
-        """Parameterised query. Named columns, partition predicate, LIMIT.
+        """Parameterised query: named columns, date predicate, LIMIT.
 
         Parameters rather than f-string interpolation: even against a public
         dataset with a date, string-building a query is a habit that becomes an
@@ -103,7 +161,8 @@ class BigQueryExtractor:
             ORDER BY start_time
             LIMIT @row_limit
         """
-        window_start = datetime.combine(logical_date, datetime.min.time())
+        window_start = datetime.combine(self.window_for(logical_date),
+                                        datetime.min.time())
         params = [
             bigquery.ScalarQueryParameter("window_start", "TIMESTAMP", window_start),
             bigquery.ScalarQueryParameter("window_end", "TIMESTAMP",
@@ -133,6 +192,12 @@ class BigQueryExtractor:
                 f"{self.max_bytes_billed / 1_048_576:.1f} MiB cap. Refusing to run. "
                 f"Narrow the partition predicate or drop columns.")
 
+        window = self.window_for(logical_date)
+        if window != logical_date:
+            log.info("logical date %s is outside the archive (%s..%s); "
+                     "reading archive day %s", logical_date, DATA_START,
+                     DATA_END, window)
+
         client = bigquery.Client(project=self.project_id, location=self.location)
         sql, params = self.build_query(logical_date)
         cfg = bigquery.QueryJobConfig(
@@ -149,6 +214,18 @@ class BigQueryExtractor:
             raise RuntimeError(
                 f"row cap breached: got {len(rows)}, limit {self.row_limit}")
 
+        # An empty result is a failure, not a quiet success. Being billed for a
+        # scan that yields nothing is the worst of both outcomes, and a daily
+        # job that silently writes empty CSVs is the kind of thing discovered
+        # weeks later.
+        if not rows:
+            raise RuntimeError(
+                f"query returned 0 rows for window {window.isoformat()} "
+                f"(logical date {logical_date.isoformat()}) while scanning "
+                f"{int(job.total_bytes_billed or 0) / 1048576:.1f} MiB. The "
+                f"dataset spans {DATA_START} to {DATA_END}; check the window "
+                f"mapping rather than accepting an empty extract.")
+
         out_dir.mkdir(parents=True, exist_ok=True)
         csv_path = out_dir / f"trips_{logical_date.isoformat()}.csv"
         with csv_path.open("w", newline="", encoding="utf-8") as fh:
@@ -159,6 +236,7 @@ class BigQueryExtractor:
 
         result = ExtractResult(
             logical_date=logical_date.isoformat(),
+            window_date=window.isoformat(),
             row_count=len(rows),
             bytes_processed=int(job.total_bytes_processed or 0),
             bytes_billed=int(job.total_bytes_billed or 0),
@@ -190,6 +268,6 @@ def extractor_from_env() -> BigQueryExtractor:
         dataset=os.environ.get("BQ_DATASET", "bigquery-public-data.austin_bikeshare"),
         table=os.environ.get("BQ_TABLE", "bikeshare_trips"),
         row_limit=int(os.environ.get("BQ_ROW_LIMIT", "100")),
-        max_bytes_billed=int(os.environ.get("BQ_MAX_BYTES_BILLED", str(50 * 1024 * 1024))),
+        max_bytes_billed=int(os.environ.get("BQ_MAX_BYTES_BILLED", str(300 * 1024 * 1024))),
         location=os.environ.get("BQ_LOCATION", "US"),
     )

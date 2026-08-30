@@ -15,14 +15,14 @@
   "policies": [
     {
       "service": "hive_pipeline",
-      "name": "mask-bikeid",
+      "name": "mask-bike-id",
       "policyType": 1,
-      "description": "bikeid is a quasi-identifier: it links trips into a rider history. Show last 4 only.",
+      "description": "bike_id is a quasi-identifier: it links trips into a rider history. Show last 4 only.",
       "isEnabled": true,
       "resources": {
         "database": {"values": ["trips_warehouse"], "isExcludes": false, "isRecursive": false},
         "table":    {"values": ["trips"], "isExcludes": false, "isRecursive": false},
-        "column":   {"values": ["bikeid"], "isExcludes": false, "isRecursive": false}
+        "column":   {"values": ["bike_id"], "isExcludes": false, "isRecursive": false}
       },
       "dataMaskPolicyItems": [
         {
