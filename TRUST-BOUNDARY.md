@@ -14,6 +14,9 @@
 
 Last updated: 2026-08-30
 
+See also `docs/FLAGGABLES.md` — the questions this work will be challenged on,
+with the honest answer to each.
+
 ---
 
 ## 1. Data
@@ -53,7 +56,10 @@ Last updated: 2026-08-30
 | 4.3 | "Next 2 quarters" is a **reporting horizon**, not a delivery deadline | **ASSUMED** — the brief states there is no deadline. |
 | 4.4 | Four jurisdictions (US, UK, JP, BH) with differing fiscal calendars and currency precision | **ASSUMED** — chosen to make the international-contract dimension load-bearing rather than cosmetic. Real jurisdiction mix is unknown. |
 | 4.5 | Projection method for forward quarters | **ASSUMED** — a declared, simple statistical method with an explicit variability range. Not a validated forecasting model. Every projected figure is marked. |
-| 4.6 | Service A cannot supply canonical `active_accounts` | **STATED GAP** — its extract carries no per-account transaction recency, so `canon_v1` is not recomputable from that source. Gold records Service A's native figure under its own named rule and marks the canonical variant not-derivable **rather than guessing**. A reconciled number that was quietly imputed would be worse than an honest gap. |
+| 4.6 | **No service can supply canonical `active_accounts`** | **STATED GAP** — see the table in §7. The pipeline records each service's native figure under its own named rule and marks the canonical variant not-derivable **rather than imputing**. A reconciled number that was quietly guessed is worse than a visible gap, because it looks like evidence. |
+| 4.7 | Service C's suppressed zeros | **UNRESOLVED AMBIGUITY** — Service C writes `0` both for a true zero and for counts suppressed under a small-count disclosure rule, and the extract does not distinguish them. Flagged rather than guessed at; resolving it requires a conversation with that team, not a heuristic. |
+| 4.8 | Merchant identity cross-reference | **SYNTHETIC** — `config/lookups/merchant_xref.yaml` is written by the corpus generator. In production this is a governed reference dataset, not a generated file. |
+| 4.9 | Contract replay under a prior version | **UNVERIFIED** — every Gold row stamps `contract_version`, `binding_hash` and `dictionary_version`, which makes replay possible in principle. It has not been exercised. Design property, not tested feature. |
 
 ## 5. The honest limit of "config over code"
 
@@ -70,3 +76,37 @@ Last updated: 2026-08-30
 - Access control on the dashboard
 - Backfill/replay tooling beyond what contract versioning makes possible in principle
 - Anything downstream of the Gold handoff
+
+---
+
+## 7. Canonical `active_accounts` is not derivable from any source
+
+The seeded semantic conflict resolves only partially, on purpose, and this is
+the most important honest limit in the build. Each service applies its own
+inclusion rule and none of the four exports the account-level detail that
+canonical `canon_v1` requires.
+
+| Service | Rule applied | Why canon is not derivable from it | Direction |
+|---|---|---|---|
+| A | `incl_any_open` | No per-account transaction recency in the extract at all. | Overcounts |
+| B | `incl_30d_txn` | Reports a 30-day window; canon needs 90. Account detail not exported. | Undercounts |
+| C | `incl_verified_only` | Excludes pending-KYC accounts without reporting how many were excluded. | Undercounts, magnitude unknown |
+| D | `incl_nonzero_balance` | Measures balance, not activity — a different quantity under the same name. | Not comparable |
+
+Gold therefore carries every service's native figure with its rule named, and
+marks the canonical variant not-derivable where it is. **Nothing is imputed.**
+
+This gap is also the platform's most actionable output: it states exactly what
+each service team would need to start exporting for the canonical figure to
+become computable.
+
+## 8. What the grading harness does and does not prove
+
+The corpus generator builds a ground truth first and derives four
+deliberately disagreeing service views from it. The harness grades pipeline
+output against that ground truth, which was never derived from the pipeline —
+so agreement is evidence, not tautology.
+
+**It proves** the pipeline correctly reverses the conflicts we seeded.
+**It does not prove** the pipeline handles a conflict nobody anticipated.
+Only a real-data pilot does that, and that is the honest next step.

@@ -1,0 +1,16 @@
+schema: wps.lookup.status/v1
+service_b:
+  ACTIVE: active
+  SUSPENDED: suspended
+  CLOSED: terminated
+  PENDING: prospective
+tier_service_b:
+  STD: standard
+  PREF: preferred
+  STRAT: strategic
+  CUSTOM: bespoke
+tier_service_c:
+  "Tier 1": standard
+  "Tier 2": preferred
+  "Tier 3": strategic
+  "Bespoke": bespoke

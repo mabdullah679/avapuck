@@ -12,7 +12,10 @@ binds_contract: quarterly_performance
 binds_contract_version: "1.0.0"
 dictionary_version: "1.0.0"
 
-jurisdiction: US            # -> calendar fiscal year, USD, 2 minor units
+# The service's own REPORTING CALENDAR, which governs how its fiscal
+# quarter labels resolve. Money precision comes from each contract's
+# settlement currency, not from this.
+reporting_calendar_jurisdiction: US
 auth_profile: auth/profiles.yaml#/service_a_oauth2
 
 source:
@@ -86,7 +89,7 @@ mappings:
   # string and means Oct-Dec. Neither is wrong; the jurisdiction decides.
   period.period_id:
     from: RPT-FY-QTR
-    ops: [ { fiscal_to_calendar_quarter: { jurisdiction: "$.jurisdiction", label_format: "FY%yQ%q" } },
+    ops: [ { fiscal_to_calendar_quarter: { jurisdiction: "$.reporting_calendar_jurisdiction", label_format: "FY%yQ%q" } },
            { period_id: {} } ]
 
   # Contested metric. Service A applies incl_any_open — it counts every open

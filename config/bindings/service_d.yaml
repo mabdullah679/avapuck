@@ -1,0 +1,219 @@
+# SERVICE D BINDING — legacy settlement system, proprietary pipe/caret format
+#
+# Two things make this service the architecturally interesting one:
+#
+#  1. It is entirely lookup-dependent. Nothing in the file is readable without
+#     config/lookups/service_d_codes.yaml. This is institutional knowledge that
+#     lived in one person's head; the binding is where it stops doing that.
+#
+#  2. It sends PCI-scoped fields as OPAQUE ENCRYPTED BLOBS. The platform knows
+#     the field exists, knows its classification, knows which key alias governs
+#     it and what type it becomes after decryption — WITHOUT this repo ever
+#     holding key material or a plaintext value. Decryption is a NAMED
+#     INTERFACE that is deliberately not implemented here.
+#     See TRUST-BOUNDARY.md §2.1. This is designed-for, not built.
+schema: wps.binding/v1
+service_id: service_d
+service_name: Settlement Ledger Extract (LEGACY-SETL)
+binds_contract: quarterly_performance
+binds_contract_version: "1.0.0"
+dictionary_version: "1.0.0"
+
+# The service's own REPORTING CALENDAR. It is not a claim that every
+# agreement is Bahraini -- Service D reports agreements in all four
+# jurisdictions, and each agreement's currency comes from agr_ccy_cd below.
+reporting_calendar_jurisdiction: BH        # -> fiscal year == calendar year
+auth_profile: auth/profiles.yaml#/service_d_jwt
+
+source:
+  format: delimited_hierarchical
+  encoding: ascii
+  record_delimiter: "\n"
+  field_delimiter: "|"
+  subfield_delimiter: "^"
+  record_type_field: 0
+  record_types:
+    HDR: file_header
+    MER: merchant_record
+    AGR: agreement_record      # 0..n per MER, caret-subdivided
+    MET: metric_record         # 0..n per AGR, one per metric code
+    TRL: file_trailer
+  parent_linkage: positional   # AGR belongs to the preceding MER; MET to the preceding AGR
+
+null_convention:
+  tokens: ["", "~", "\\N"]
+  zero_is_null: false
+  sentinel_negatives: [-1, -9]
+  sentinel_note: >
+    -1 means "not collected" and -9 means "suppressed". Both are ABSENT, not
+    negative quantities. A pipeline that summed these would silently subtract
+    from a revenue total.
+
+layout:
+  MER:
+    1: { name: mer_code }
+    2: { name: mer_name }
+    3: { name: mer_status_cd,  lookup: lookups/service_d_codes.yaml#/status }
+    4: { name: mer_onboard,    format: "%Y%j", note: "Julian date. Yes, really." }
+    5: { name: mer_taxref_enc, encrypted: true, key_alias: legacy-setl-pii-v2,  plaintext_type: string, classification: pii }
+  AGR:
+    1: { name: agr_code }
+    2: { name: agr_juris_cd,   lookup: lookups/service_d_codes.yaml#/jurisdiction }
+    3: { name: agr_ccy_cd,     lookup: lookups/service_d_codes.yaml#/currency }
+    4: { name: agr_tier_cd,    lookup: lookups/service_d_codes.yaml#/pricing_tier }
+    5: { name: agr_term,       subfields: [from, to], format: "%Y%j" }
+    6: { name: agr_setl_acct_enc, encrypted: true, key_alias: legacy-setl-pci-v1, plaintext_type: string, classification: pci }
+  MET:
+    1: { name: met_period,     note: "e.g. 26Q3 — BH calendar fiscal, Jul-Sep 2026" }
+    2: { name: met_code,       lookup: lookups/service_d_codes.yaml#/metric_code }
+    3: { name: met_value }
+    4: { name: met_basis_cd,   note: "the rule the legacy system applied" }
+
+classification_declarations:
+  mer_name:          pii
+  mer_taxref_enc:    pii
+  agr_setl_acct_enc: pci
+
+# --------------------------------------------------------------------------
+# ENCRYPTED FIELD HANDLING
+# The pipeline routes blobs through the named interface. It never decrypts.
+# --------------------------------------------------------------------------
+encryption:
+  provider_interface: "wps.io.decryption:DecryptionProvider"
+  poc_implementation: "wps.io.decryption:SyntheticDemoProvider"
+  poc_implementation_warning: >
+    DEMO ONLY. Reversible synthetic transform, not cryptography. No key
+    management, no HSM, no rotation. TRUST-BOUNDARY.md §2.1.
+  per_layer_behaviour:
+    bronze: land_ciphertext_only
+    silver: tokenize_without_decrypting
+    gold:   deny
+  pci_note: >
+    agr_setl_acct_enc is PCI-scoped and is NEVER decrypted by this pipeline in
+    any layer. classification/policy.yaml forbids the decrypt_ref operator on
+    pci fields outright. The interface exists for a downstream consumer that
+    holds the keys and the PCI scope. Keeping plaintext out entirely is what
+    keeps throwaway POC infrastructure out of PCI-DSS scope.
+
+mappings:
+
+  merchant.merchant_id:
+    from: MER.mer_code
+    ops: [ { trim: {} }, { lookup: { table: lookups/merchant_xref.yaml#/service_d, on_missing: fail } } ]
+
+  merchant.legal_name:
+    from: MER.mer_name
+    ops: [ { trim: {} }, { tokenize: { scheme: classification/policy.yaml#/classifications/pii } } ]
+
+  merchant.status:
+    from: MER.mer_status_cd
+    ops: [ { lookup: { table: lookups/service_d_codes.yaml#/status, on_missing: fail } } ]
+
+  merchant.onboarded_on:
+    from: MER.mer_onboard
+    ops: [ { coalesce_null_convention: { tokens: ["~", "0000000"], zero_is_null: true } },
+           { date_parse: { format: "%Y%j" } } ]
+
+  # PII blob: decrypt through the interface, then immediately tokenize.
+  # Plaintext exists only inside the operator, never in a landed layer.
+  merchant.tax_ref:
+    from: MER.mer_taxref_enc
+    ops: [ { decrypt_ref: { key_alias: legacy-setl-pii-v2, plaintext_type: string } },
+           { tokenize: { scheme: classification/policy.yaml#/classifications/pii } } ]
+
+  contract.contract_id:
+    from: AGR.agr_code
+    ops: [ { trim: {} } ]
+
+  contract.jurisdiction:
+    from: AGR.agr_juris_cd
+    ops: [ { lookup: { table: lookups/service_d_codes.yaml#/jurisdiction, on_missing: fail } } ]
+
+  contract.settlement_currency:
+    from: AGR.agr_ccy_cd
+    ops: [ { lookup: { table: lookups/service_d_codes.yaml#/currency, on_missing: fail } } ]
+
+  contract.pricing_tier:
+    from: AGR.agr_tier_cd
+    ops: [ { lookup: { table: lookups/service_d_codes.yaml#/pricing_tier, on_missing: fail } } ]
+
+  contract.effective_from:
+    from: AGR.agr_term^from
+    ops: [ { date_parse: { format: "%Y%j" } } ]
+
+  contract.effective_to:
+    from: AGR.agr_term^to
+    ops: [ { coalesce_null_convention: { tokens: ["~", "9999365"], zero_is_null: false } },
+           { date_parse: { format: "%Y%j" } } ]
+
+  # PCI blob. Tokenized WITHOUT decryption — note the absence of decrypt_ref.
+  # Silver holds a token; Gold holds nothing.
+  contract.settlement_account_ref:
+    from: AGR.agr_setl_acct_enc
+    ops: [ { tokenize: { scheme: classification/policy.yaml#/classifications/pci } } ]
+    never_decrypt: true
+
+  period.period_id:
+    from: MET.met_period
+    ops: [ { fiscal_to_calendar_quarter: { jurisdiction: "$.reporting_calendar_jurisdiction", label_format: "%yQ%q" } },
+           { period_id: {} } ]
+
+  # Service D is metric-narrow: metrics arrive as rows keyed by code, not as
+  # columns. The binding pivots them to the canonical wide grain.
+  quarterly_performance:
+    pivot:
+      from_record: MET
+      key_field: met_code
+      value_field: met_value
+      key_lookup: lookups/service_d_codes.yaml#/metric_code
+    metrics:
+      active_accounts:
+        applies_rule: rules.yaml#/active_account/incl_nonzero_balance
+        ops: [ { coalesce_null_convention: { tokens: ["~", "-1", "-9"], zero_is_null: false } },
+               { cast: { to: int } } ]
+        canonical_recomputable: false
+        canonical_gap_reason: >
+          The legacy system counts accounts with a non-zero closing balance.
+          That is a BALANCE measure, not an activity measure — it is not a
+          stricter or looser version of canon_v1, it is a different quantity
+          wearing the same name. The dictionary's job here is to make that
+          visible, not to reconcile it away.
+      # THE PRECISION TRAP IN ITS PUREST FORM.
+      #
+      # The legacy settlement ledger stores every amount in the NATIVE MINOR
+      # UNITS of that agreement's currency. Service D reports agreements in
+      # all four jurisdictions, so a single column in a single file carries
+      # four different scales at once:
+      #
+      #   BHD agreement -> value is thousandths of a dinar  (x1000)
+      #   USD/GBP       -> value is cents/pence             (x100)
+      #   JPY           -> value is whole yen               (x1)
+      #
+      # Nothing in the field distinguishes them. Only agr_ccy_cd does. Any
+      # uniform divisor -- including the obvious and wrong "divide by 100" --
+      # silently misstates three of the four by up to 1000x. There is
+      # therefore NO implied_decimal here: the value is already canonical
+      # minor units, and the assertion below is what proves it.
+      gross_volume_minor:
+        applies_rule: rules.yaml#/gross_volume/canon_v1
+        value_is_already: minor_units_of_contract_currency
+        ops: [ { coalesce_null_convention: { tokens: ["~", "-1", "-9"], zero_is_null: false } },
+               { cast: { to: bigint } } ]
+      net_revenue_minor:
+        applies_rule: rules.yaml#/net_revenue/canon_v1
+        value_is_already: minor_units_of_contract_currency
+        ops: [ { coalesce_null_convention: { tokens: ["~", "-1", "-9"], zero_is_null: false } },
+               { cast: { to: bigint } } ]
+      settled_txn_count:
+        ops: [ { coalesce_null_convention: { tokens: ["~", "-1", "-9"], zero_is_null: false } }, { cast: { to: bigint } } ]
+      refund_count:
+        ops: [ { coalesce_null_convention: { tokens: ["~", "-1", "-9"], zero_is_null: false } }, { cast: { to: bigint } } ]
+      chargeback_count:
+        ops: [ { coalesce_null_convention: { tokens: ["~", "-1", "-9"], zero_is_null: false } }, { cast: { to: bigint } } ]
+
+quality:
+  - { id: trailer_record_count, rule: "TRL record count equals the number of MER records.", on_fail: fail_batch }
+  - { id: orphan_records,       rule: "No AGR without a preceding MER; no MET without a preceding AGR.", on_fail: fail_batch }
+  - { id: unknown_codes,        rule: "Every coded value resolves in its declared lookup table.", on_fail: quarantine_row }
+  - { id: no_pci_plaintext,     rule: "No pci-classified field is decrypted in any layer.", on_fail: fail_batch }
+  - { id: minor_units_native,   rule: "Monetary MET values are integers with no fractional part; they are native minor units and must never be rescaled by a uniform divisor.", on_fail: fail_batch }

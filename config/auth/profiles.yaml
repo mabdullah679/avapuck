@@ -1,0 +1,67 @@
+# AUTH PROFILES — configurable per service, same stance as mappings.
+#
+# Four services, four protocols, deliberately. The pipelines match the vibe of
+# each service and still standardize the output. No DAG contains a credential
+# or a protocol branch; each DAG reads its profile by reference.
+#
+# ALL FOUR ARE SIMULATED LOCALLY. See TRUST-BOUNDARY.md §2.2 — no identity
+# provider, no CA, no live token exchange, no credential store. What is proven
+# is that auth is CONFIGURABLE per service, not that these protocols are
+# correctly implemented.
+schema: wps.auth.profiles/v1
+dictionary_version: "1.0.0"
+
+secret_resolution:
+  # Config never holds a secret. It holds a REFERENCE to one.
+  provider: env
+  prefix: WPS_SECRET_
+  on_missing: fail_closed
+  note: >
+    fail_closed is deliberate. A pipeline that silently proceeds unauthenticated
+    is worse than one that stops.
+
+profiles:
+
+  service_a_oauth2:
+    protocol: oauth2_client_credentials
+    token_endpoint: https://localhost:9443/oauth2/token   # simulated
+    client_id_ref:     secret://service_a_client_id
+    client_secret_ref: secret://service_a_client_secret
+    scopes: [quarterly.read]
+    token_cache_ttl_s: 3300
+    refresh_skew_s: 300
+    retry: { attempts: 3, backoff: exponential, base_s: 2 }
+
+  service_b_mtls:
+    protocol: mutual_tls
+    endpoint: https://localhost:9444/exports/quarterly    # simulated
+    client_cert_ref: secret://service_b_client_cert_pem
+    client_key_ref:  secret://service_b_client_key_pem
+    ca_bundle_ref:   secret://service_b_ca_bundle_pem
+    verify_hostname: true
+    min_tls_version: "1.3"
+    retry: { attempts: 3, backoff: exponential, base_s: 2 }
+
+  service_c_hmac:
+    protocol: api_key_hmac
+    endpoint: https://localhost:9445/api/v2/quarterly     # simulated
+    api_key_ref:     secret://service_c_api_key
+    signing_key_ref: secret://service_c_signing_key
+    signature:
+      algorithm: HMAC-SHA256
+      canonical_string: "{method}\n{path}\n{date}\n{body_sha256}"
+      header: X-WPS-Signature
+      timestamp_header: X-WPS-Date
+      clock_skew_tolerance_s: 300
+    retry: { attempts: 2, backoff: linear, base_s: 5 }
+
+  service_d_jwt:
+    protocol: service_account_jwt
+    endpoint: https://localhost:9446/v1/extract           # simulated
+    issuer: wps-platform
+    audience: service-d-legacy
+    subject: svc-wps-ingest
+    signing_key_ref: secret://service_d_sa_private_key
+    algorithm: RS256
+    assertion_ttl_s: 600
+    retry: { attempts: 3, backoff: exponential, base_s: 3 }
