@@ -41,7 +41,10 @@ spec:
           securityContext:
             runAsNonRoot: true
             runAsUser: 10001
-            fsGroup: 10001
+            # Must match the Spark pods' fsGroup: both images write the same
+            # volume as different users, and the shared group is what makes
+            # that work without world-writable directories.
+            fsGroup: 2000
           # The chain needs its dependencies up. Failing fast here beats a
           # confusing auth error from stage 2.
           initContainers:

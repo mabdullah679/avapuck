@@ -27,6 +27,8 @@ spec:
       labels: {app: spark-encrypt, role: pipeline-job}
     spec:
       restartPolicy: Never
+      securityContext:
+        fsGroup: 2000
       containers:
         - name: spark-submit
           image: trips/spark:latest
@@ -47,17 +49,31 @@ spec:
             - spark.cores.max=1
             - --conf
             - spark.sql.shuffle.partitions=2
-            # The driver runs in THIS pod; executors must be able to reach it.
-            # Without spark.driver.host they resolve the pod's hostname, which
-            # is not routable, and every task fails to report back.
+            # The driver runs in THIS pod and executors dial back to it.
+            # Two separate settings, and both are required:
+            #   bindAddress  what the driver listens on  -> 0.0.0.0
+            #   host         what it ADVERTISES          -> the pod IP
+            # Advertising the pod hostname instead fails: cluster DNS does not
+            # resolve a bare Job pod name, so executors launch, fail to reach
+            # the driver, and are relaunched forever while the job reports
+            # "Initial job has not accepted any resources".
             - --conf
             - spark.driver.bindAddress=0.0.0.0
+            - --conf
+            - spark.driver.host=$(POD_IP)
+            - --conf
+            - spark.driver.port=7079
+            - --conf
+            - spark.blockManager.port=7080
             - /opt/pipeline/pipeline/transform/spark_job.py
             - "$(LOGICAL_DATE)"
           envFrom:
             - configMapRef: {name: trips-config}
             - secretRef: {name: pipeline-clients}
           env:
+            - name: POD_IP
+              valueFrom:
+                fieldRef: {fieldPath: status.podIP}
             - {name: LOGICAL_DATE, value: "REPLACED_AT_SUBMIT"}
             - {name: PIPELINE_DATA_ROOT, value: /data}
             - {name: PYTHONPATH, value: /opt/pipeline}

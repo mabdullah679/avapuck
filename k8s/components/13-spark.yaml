@@ -18,6 +18,12 @@ spec:
     metadata:
       labels: {app: spark-master, tier: compute}
     spec:
+      # Shared with the pipeline image (uid 10001) and the Spark image
+      # (uid 185) so both can write the shared data volume. Without this the
+      # executors fail with "Mkdirs failed to create file:/data/..." because
+      # the directory was created by the other image's user.
+      securityContext:
+        fsGroup: 2000
       containers:
         - name: spark-master
           image: trips/spark:latest
@@ -31,7 +37,20 @@ spec:
           # obvious from the stack trace.
           env:
             - {name: SPARK_NO_DAEMONIZE, value: "true"}
-            - {name: SPARK_MASTER_HOST, value: "0.0.0.0"}
+            # SPARK_MASTER_HOST is BOTH the bind and the advertised address in
+            # standalone mode, so it must be an address this pod actually owns.
+            #
+            #   "0.0.0.0"  binds fine, but workers then register with
+            #              spark://0.0.0.0:7077 and executors cannot call home
+            #              -> "Initial job has not accepted any resources"
+            #   Service DNS  is routable but the pod cannot bind to it
+            #              -> BindException on startup
+            #
+            # The pod IP is the only value that is both bindable and routable.
+            # The downstream API gives it to us without hardcoding anything.
+            - name: SPARK_MASTER_HOST
+              valueFrom:
+                fieldRef: {fieldPath: status.podIP}
             - {name: SPARK_MASTER_PORT, value: "7077"}
             - {name: SPARK_MASTER_WEBUI_PORT, value: "8080"}
             - {name: PYTHONPATH, value: /opt/pipeline}
@@ -77,6 +96,8 @@ spec:
     metadata:
       labels: {app: spark-worker, tier: compute}
     spec:
+      securityContext:
+        fsGroup: 2000
       containers:
         - name: spark-worker
           image: trips/spark:latest
@@ -90,6 +111,11 @@ spec:
             - {name: SPARK_WORKER_CORES, value: "1"}
             - {name: SPARK_WORKER_MEMORY, value: "1g"}
             - {name: SPARK_WORKER_PORT, value: "7078"}
+            # Same reasoning as the master: the worker must advertise an
+            # address the driver can reach.
+            - name: SPARK_LOCAL_IP
+              valueFrom:
+                fieldRef: {fieldPath: status.podIP}
             - {name: SPARK_WORKER_WEBUI_PORT, value: "8081"}
             - {name: PYTHONPATH, value: /opt/pipeline}
           resources:

@@ -69,7 +69,8 @@ Last updated: 2026-08-30
 
 | # | Item | Status |
 |---|---|---|
-| 4c.1 | **The full chain runs in Kubernetes** | **VERIFIED 2026-08-31.** 9/9 pods Running on minikube; a Job executed all five stages against live BigQuery and produced a PDF. Trace `trips-20260831T1200-bcee78`. 10/10 checks in `scripts/verify_cluster.sh` pass. |
+| 4c.1 | **The full chain runs in Kubernetes** | **VERIFIED 2026-08-31.** 9/9 pods Running on minikube; a Job executed all five stages against live BigQuery and produced a PDF. Trace `trips-20260831T1200-bcee78`. 10/10 checks in `scripts/verify_cluster.sh` pass; a second run reported `0 inserted / 100 updated`, confirming idempotency in-cluster. |
+| 4c.1b | **The encrypt stage runs on the real Spark cluster** | **VERIFIED.** `k8s/jobs/21-spark-encrypt-job.yaml` submits via `spark-submit` from the Spark image and reports `ENCRYPT 100 rows via spark`. Note the default CronJob path uses the pipeline image, which has no JVM and therefore falls back to pyarrow — reported as `engine=pyarrow`, never silently. Run the Spark Job explicitly when you want the cluster path. |
 | 4c.2 | Orchestration in-cluster is a **CronJob**, not Airflow | **DELIBERATE.** The CronJob runs `scripts/run_chain.py`, which enforces the same asset semantics the DAGs do. Airflow's scheduler is unreliable on macOS (§4b) and adds a scheduler database for no gain here. The DAGs remain in `dags/` and are the reference for lineage; the CronJob is what actually runs. |
 | 4c.3 | Shared data volume is `ReadWriteMany` on **hostPath** | **WORKS ON MINIKUBE ONLY.** Stages hand work to each other through files, so RWX is required. minikube's `standard` StorageClass is hostPath and supports RWX because every pod lands on the same node. **On a multi-node cluster this breaks** — you need a real RWX backend (NFS, CephFS, EFS) or object storage. |
 | 4c.4 | **NetworkPolicy is declared but NOT enforced** | **DOCUMENTATION, not a control, on default minikube.** The default CNI ignores NetworkPolicy. Start with `--cni=calico` to make the policies real. Declared so the intent is reviewable and so they work unchanged on a real cluster. |
@@ -88,6 +89,8 @@ Each of these was a real failure, not a hypothetical:
 | `Read-only file system: '/opt/pipeline/data'` | code hardcoded `ROOT/data`, ignoring the mounted volume. Now honours `PIPELINE_DATA_ROOT`. |
 | `FileNotFoundError: 'docker'` | Spark and Hive stages shelled out to `docker exec`; no docker binary in a pod. Native cluster path now preferred in-cluster. |
 | `JAVA_GATEWAY_EXITED` | pyspark needs a **local JVM** even to reach a remote cluster. The Spark stage therefore runs from the Spark image, not the pipeline image. |
+| `Initial job has not accepted any resources` (forever) | `SPARK_MASTER_HOST=0.0.0.0` binds fine but is advertised verbatim, so workers register with `spark://0.0.0.0:7077` and executors cannot call home. Setting it to the Service DNS name instead causes a `BindException`, because a pod cannot bind an address it does not own. **The pod IP is the only value that is both bindable and routable**, injected via `fieldRef: status.podIP`. The same split applies to the driver: `spark.driver.bindAddress=0.0.0.0` plus `spark.driver.host=$(POD_IP)`. This one cost three deploy cycles. |
+| `Mkdirs failed to create file:/data/parquet/...` | The pipeline image runs as uid 10001 and the Spark image as uid 185 (upstream's choice). Directories created by one were not writable by the other on the shared volume. Fixed with a **shared `fsGroup: 2000`** across every pod that touches the volume — not by making it world-writable. Pre-existing directories need a one-off `chgrp` from a root pod; `make -f Makefile.k8s fix-volume-perms`. |
 
 ## 5. Assumptions taken without confirmation
 

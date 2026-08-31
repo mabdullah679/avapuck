@@ -155,6 +155,7 @@ Not hypothetical — every row here cost us time.
 | `Read-only file system: '/opt/pipeline/data'` | code wrote next to the source instead of the mounted volume | set `PIPELINE_DATA_ROOT`; already wired |
 | `JAVA_GATEWAY_EXITED` | pyspark needs a local JVM even for a *remote* cluster | run the Spark stage from `trips/spark` (has JDK 17) via `k8s/jobs/21-spark-encrypt-job.yaml` |
 | `FileNotFoundError: 'docker'` | stage shelled out to `docker exec`; no docker inside a pod | native cluster path preferred in-cluster; docker path kept for laptops |
+| Spark tasks hang on `Initial job has not accepted any resources` | master advertised `0.0.0.0`, so executors cannot call back | already fixed — `SPARK_MASTER_HOST` comes from `fieldRef: status.podIP`. Do not replace it with a DNS name; the pod cannot bind that. |
 | `image can't be pulled` | image built on the host daemon, not minikube's | `eval $(minikube -p trips docker-env)` before building |
 | `0 rows` from BigQuery | the dataset is a frozen archive ending 2024-06-30 | `window_for()` maps logical dates onto the archive; see `docs/AGENTS.md` |
 | Pods `Pending`, `Insufficient memory` | Docker Desktop below 20 GB | raise it in Settings → Resources |

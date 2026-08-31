@@ -14,7 +14,8 @@ K8S_VER  ?= v1.33.4
 KUBECTL  := kubectl --context $(CTX)
 
 .PHONY: help preflight cluster images deploy secrets up down destroy \
-        status logs run-now verify cost shell-pg shell-hive ui-spark ui-airflow
+        status logs run-now verify cost shell-pg shell-hive ui-spark ui-airflow \
+        spark-encrypt fix-volume-perms
 
 help:
 	@echo "Trips pipeline — Kubernetes targets"
@@ -96,6 +97,23 @@ verify:
 cost:
 	@$(KUBECTL) -n $(NS) run bq-cost --rm -i --restart=Never \
 	  --image=trips/pipeline:latest --overrides='{"spec":{"containers":[{"name":"bq-cost","image":"trips/pipeline:latest","imagePullPolicy":"IfNotPresent","command":["python","-c","import os,datetime;from pipeline.extract.bigquery_extract import extractor_from_env;e=extractor_from_env();b=e.dry_run_bytes(datetime.date.today());print(f\"{b/1048576:.2f} MiB would be scanned (cap {e.max_bytes_billed/1048576:.0f} MiB)\")"],"envFrom":[{"configMapRef":{"name":"trips-config"}}],"env":[{"name":"GOOGLE_APPLICATION_CREDENTIALS","value":"/var/secrets/gcp/gcp-sa.json"}],"volumeMounts":[{"name":"gcp","mountPath":"/var/secrets/gcp","readOnly":true}]}],"volumes":[{"name":"gcp","secret":{"secretName":"gcp-sa"}}]}}' 2>/dev/null
+
+# Run the encrypt stage on the real Spark cluster. The default CronJob path
+# uses the pipeline image, which has no JVM and falls back to pyarrow.
+spark-encrypt:
+	@test -n "$(SLOT)" || (echo "usage: make -f Makefile.k8s spark-encrypt SLOT=2026-08-31"; exit 1)
+	@$(KUBECTL) -n $(NS) delete job spark-encrypt --ignore-not-found >/dev/null 2>&1 || true
+	@sed 's/REPLACED_AT_SUBMIT/$(SLOT)/' k8s/jobs/21-spark-encrypt-job.yaml | $(KUBECTL) apply -f -
+	@echo "submitted. follow with: kubectl -n $(NS) logs -f -l app=spark-encrypt"
+
+# The pipeline image (uid 10001) and the Spark image (uid 185) share one
+# volume. New pods get fsGroup 2000, but directories created BEFORE that was
+# set keep their old group. This fixes them in place.
+fix-volume-perms:
+	@$(KUBECTL) -n $(NS) delete pod fixperm --ignore-not-found >/dev/null 2>&1 || true
+	@$(KUBECTL) -n $(NS) run fixperm --restart=Never --image=busybox:1.36 \
+	  --overrides='{"spec":{"containers":[{"name":"fixperm","image":"busybox:1.36","imagePullPolicy":"IfNotPresent","command":["sh","-c","chgrp -R 2000 /data && chmod -R g+rwX /data && echo done"],"securityContext":{"runAsUser":0},"volumeMounts":[{"name":"data","mountPath":"/data"}]}],"restartPolicy":"Never","volumes":[{"name":"data","persistentVolumeClaim":{"claimName":"pipeline-data"}}]}}' >/dev/null
+	@sleep 8; $(KUBECTL) -n $(NS) logs fixperm 2>/dev/null; $(KUBECTL) -n $(NS) delete pod fixperm >/dev/null 2>&1 || true
 
 shell-pg:
 	@$(KUBECTL) -n $(NS) exec -it statefulset/postgres -- \
