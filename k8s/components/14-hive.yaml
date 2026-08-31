@@ -1,0 +1,157 @@
+# Hive metastore (Postgres-backed) + HiveServer2.
+#
+# The metastore gets its OWN database rather than sharing the warehouse: they
+# have different lifecycles, different backup needs, and a metastore schema
+# migration should never be able to touch analytical data.
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: hive-metastore-db
+  namespace: trips
+  labels: {app: hive-metastore-db, tier: metadata}
+spec:
+  serviceName: hive-metastore-db
+  replicas: 1
+  selector:
+    matchLabels: {app: hive-metastore-db}
+  template:
+    metadata:
+      labels: {app: hive-metastore-db, tier: metadata}
+    spec:
+      containers:
+        - name: postgres
+          image: postgres:16-alpine
+          ports: [{containerPort: 5432}]
+          env:
+            - {name: POSTGRES_DB, value: metastore}
+            - {name: POSTGRES_USER, value: hive}
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef: {name: pipeline-datastores, key: HIVE_METASTORE_PASSWORD}
+            - {name: PGDATA, value: /var/lib/postgresql/data/pgdata}
+          resources:
+            requests: {cpu: 100m, memory: 256Mi}
+            limits:   {cpu: 500m, memory: 512Mi}
+          volumeMounts:
+            - {name: data, mountPath: /var/lib/postgresql/data}
+          readinessProbe:
+            exec: {command: ["pg_isready", "-U", "hive", "-d", "metastore"]}
+            initialDelaySeconds: 5
+            periodSeconds: 5
+      volumes:
+        - name: data
+          persistentVolumeClaim: {claimName: hive-metastore-data}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: hive-metastore-db
+  namespace: trips
+spec:
+  selector: {app: hive-metastore-db}
+  ports: [{port: 5432, targetPort: 5432}]
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: hive-metastore
+  namespace: trips
+  labels: {app: hive-metastore, tier: metadata}
+spec:
+  replicas: 1
+  selector:
+    matchLabels: {app: hive-metastore}
+  template:
+    metadata:
+      labels: {app: hive-metastore, tier: metadata}
+    spec:
+      # The metastore schema tool must finish before the service starts, or
+      # HiveServer2 comes up against an empty database and fails in a way that
+      # looks like a connection problem.
+      initContainers:
+        - name: wait-for-db
+          image: postgres:16-alpine
+          command: ["sh", "-c", "until pg_isready -h hive-metastore-db -U hive -d metastore; do sleep 2; done"]
+          resources:
+            requests: {cpu: 50m, memory: 64Mi}
+            limits:   {cpu: 200m, memory: 128Mi}
+      containers:
+        - name: metastore
+          image: trips/hive:latest
+          imagePullPolicy: IfNotPresent
+          ports: [{containerPort: 9083, name: thrift}]
+          env:
+            - {name: SERVICE_NAME, value: metastore}
+            - {name: DB_DRIVER, value: postgres}
+            - name: HIVE_PW
+              valueFrom:
+                secretKeyRef: {name: pipeline-datastores, key: HIVE_METASTORE_PASSWORD}
+            - name: SERVICE_OPTS
+              value: >-
+                -Djavax.jdo.option.ConnectionDriverName=org.postgresql.Driver
+                -Djavax.jdo.option.ConnectionURL=jdbc:postgresql://hive-metastore-db:5432/metastore
+                -Djavax.jdo.option.ConnectionUserName=hive
+                -Djavax.jdo.option.ConnectionPassword=$(HIVE_PW)
+          resources:
+            requests: {cpu: 250m, memory: 1Gi}
+            limits:   {cpu: 1, memory: 2Gi}
+          volumeMounts:
+            - {name: data, mountPath: /data}
+      volumes:
+        - name: data
+          persistentVolumeClaim: {claimName: pipeline-data}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: hive-metastore
+  namespace: trips
+spec:
+  selector: {app: hive-metastore}
+  ports: [{port: 9083, targetPort: 9083, name: thrift}]
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: hiveserver2
+  namespace: trips
+  labels: {app: hiveserver2, tier: metadata}
+spec:
+  replicas: 1
+  selector:
+    matchLabels: {app: hiveserver2}
+  template:
+    metadata:
+      labels: {app: hiveserver2, tier: metadata}
+    spec:
+      containers:
+        - name: hiveserver2
+          image: trips/hive:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - {containerPort: 10000, name: thrift}
+            - {containerPort: 10002, name: ui}
+          env:
+            - {name: SERVICE_NAME, value: hiveserver2}
+            - {name: IS_RESUME, value: "true"}
+            - name: SERVICE_OPTS
+              value: -Dhive.metastore.uris=thrift://hive-metastore:9083
+          resources:
+            requests: {cpu: 250m, memory: 1Gi}
+            limits:   {cpu: 1, memory: 2Gi}
+          volumeMounts:
+            - {name: data, mountPath: /data}
+      volumes:
+        - name: data
+          persistentVolumeClaim: {claimName: pipeline-data}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: hiveserver2
+  namespace: trips
+spec:
+  selector: {app: hiveserver2}
+  ports:
+    - {port: 10000, targetPort: 10000, name: thrift}
+    - {port: 10002, targetPort: 10002, name: ui}

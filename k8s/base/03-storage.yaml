@@ -1,0 +1,59 @@
+# Shared pipeline data volume.
+#
+# WHY ReadWriteMany MATTERS: the stages hand work to each other through files
+# -- extract writes CSV, encrypt reads it and writes Parquet, mask reads that.
+# With ReadWriteOnce only one pod could mount it at a time and the chain would
+# deadlock the moment two stages overlapped.
+#
+# On minikube the default `standard` StorageClass is hostPath, which supports
+# RWX because every pod lands on the same single node. That is exactly why this
+# works here and would NOT work unchanged on a multi-node cluster -- there you
+# need a real RWX backend (NFS, CephFS, EFS) or object storage instead of a
+# shared filesystem. Recorded in TRUST-BOUNDARY.md.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: pipeline-data
+  namespace: trips
+spec:
+  accessModes: [ReadWriteMany]
+  resources:
+    requests:
+      storage: 10Gi
+  storageClassName: standard
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: postgres-data
+  namespace: trips
+spec:
+  accessModes: [ReadWriteOnce]
+  resources:
+    requests:
+      storage: 4Gi
+  storageClassName: standard
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: hive-metastore-data
+  namespace: trips
+spec:
+  accessModes: [ReadWriteOnce]
+  resources:
+    requests:
+      storage: 2Gi
+  storageClassName: standard
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: airflow-data
+  namespace: trips
+spec:
+  accessModes: [ReadWriteOnce]
+  resources:
+    requests:
+      storage: 2Gi
+  storageClassName: standard

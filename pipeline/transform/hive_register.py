@@ -41,9 +41,15 @@ def run(logical_date: date) -> dict:
     masked Parquet is already written and correct, and failing the DAG because
     a metadata service is down would be a false alarm about the data.
     """
+    # In Kubernetes there is no docker binary inside the pod, and beeline lives
+    # in a different pod entirely. Registration is a METADATA convenience -- the
+    # masked Parquet is already written and correct -- so a missing beeline is
+    # reported, never fatal. See the non-fatal contract in the docstring.
     if not shutil.which("docker"):
-        log.warning("docker not available; skipping Hive registration")
-        return {"registered": False, "reason": "docker not available"}
+        log.info("docker not available (in-cluster); skipping Hive registration. "
+                 "Register with: kubectl -n trips exec deploy/hiveserver2 -- "
+                 "/opt/hive/bin/beeline -u jdbc:hive2://localhost:10000 -f /data/hive/trips_table.hql")
+        return {"registered": False, "reason": "no beeline in this container"}
 
     proc = subprocess.run(
         ["docker", "exec", CONTAINER, "/opt/hive/bin/beeline",

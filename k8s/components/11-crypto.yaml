@@ -1,0 +1,67 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: crypto
+  namespace: trips
+  labels: {app: crypto, tier: security}
+spec:
+  replicas: 1
+  selector:
+    matchLabels: {app: crypto}
+  template:
+    metadata:
+      labels: {app: crypto, tier: security}
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        fsGroup: 10001
+      containers:
+        - name: crypto
+          image: trips/service:latest
+          imagePullPolicy: IfNotPresent
+          command: ["uvicorn", "services.crypto.app:app", "--host", "0.0.0.0", "--port", "8444"]
+          ports: [{containerPort: 8444, name: http}]
+          envFrom:
+            - configMapRef: {name: trips-config}
+          env:
+            # The AES-256 master key and the HMAC blind-index key. This pod is
+            # the ONLY place either exists -- that is the entire reason the
+            # crypto service is a service rather than a library.
+            - name: CRYPTO_MASTER_KEY
+              valueFrom:
+                secretKeyRef: {name: pipeline-crypto, key: CRYPTO_MASTER_KEY}
+            - name: BLIND_INDEX_KEY
+              valueFrom:
+                secretKeyRef: {name: pipeline-crypto, key: BLIND_INDEX_KEY}
+            - name: CRYPTO_KEY_VERSION
+              value: "v1"
+          resources:
+            requests: {cpu: 150m, memory: 256Mi}
+            limits:   {cpu: 750m, memory: 512Mi}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: {drop: [ALL]}
+          volumeMounts:
+            - {name: tmp, mountPath: /tmp}
+          readinessProbe:
+            httpGet: {path: /health, port: 8444}
+            initialDelaySeconds: 3
+            periodSeconds: 5
+          livenessProbe:
+            httpGet: {path: /health, port: 8444}
+            initialDelaySeconds: 15
+            periodSeconds: 20
+      volumes:
+        - {name: tmp, emptyDir: {}}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: crypto
+  namespace: trips
+  labels: {app: crypto}
+spec:
+  selector: {app: crypto}
+  ports: [{port: 8444, targetPort: 8444, name: http}]

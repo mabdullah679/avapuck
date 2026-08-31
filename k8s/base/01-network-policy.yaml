@@ -1,0 +1,72 @@
+# Default-deny, then allow only what the pipeline actually needs.
+#
+# WHY THIS MATTERS HERE MORE THAN USUAL: the crypto service holds the AES-256
+# master key and will decrypt for anything holding a valid JWT. Network policy
+# is the second lock -- even a stolen token is useless from a pod that cannot
+# reach the service. Defence in depth, not belt-and-braces.
+#
+# NOTE: minikube's default CNI does NOT enforce NetworkPolicy. These are
+# declared so the intent is reviewable and so they work on a real cluster, but
+# on a default minikube they are documentation, not enforcement. Start with
+# `--cni=calico` to make them real. Recorded in TRUST-BOUNDARY.md.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: default-deny-ingress
+  namespace: trips
+spec:
+  podSelector: {}
+  policyTypes: [Ingress]
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: crypto-allow-pipeline-only
+  namespace: trips
+spec:
+  podSelector:
+    matchLabels: {app: crypto}
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        # Only pipeline jobs may ask the crypto service to do anything.
+        - podSelector:
+            matchLabels: {role: pipeline-job}
+      ports:
+        - protocol: TCP
+          port: 8444
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: idp-allow-namespace
+  namespace: trips
+spec:
+  podSelector:
+    matchLabels: {app: idp}
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - podSelector: {}
+      ports:
+        - protocol: TCP
+          port: 8443
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: postgres-allow-pipeline-only
+  namespace: trips
+spec:
+  podSelector:
+    matchLabels: {app: postgres}
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels: {role: pipeline-job}
+        - podSelector:
+            matchLabels: {app: airflow}
+      ports:
+        - protocol: TCP
+          port: 5432

@@ -1,0 +1,46 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: trips
+  labels:
+    name: trips
+    app.kubernetes.io/part-of: trips-pipeline
+---
+# Resource ceiling for the whole namespace.
+#
+# Without this, one runaway pod can starve the node and take the cluster with
+# it -- and on a 16GB minikube that is a real possibility, not a theoretical
+# one. The quota is deliberately a little below the node's capacity so the
+# kubelet keeps room to breathe.
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: trips-quota
+  namespace: trips
+spec:
+  hard:
+    requests.cpu: "5"
+    requests.memory: 12Gi
+    limits.cpu: "10"
+    limits.memory: 20Gi
+    persistentvolumeclaims: "8"
+    count/jobs.batch: "20"
+---
+# Every container gets a request/limit even if its manifest forgets one.
+# A pod with no request is scheduled as best-effort and is the first thing
+# the kubelet evicts under pressure -- which is how a pipeline mysteriously
+# loses its crypto service at 3am.
+apiVersion: v1
+kind: LimitRange
+metadata:
+  name: trips-defaults
+  namespace: trips
+spec:
+  limits:
+    - type: Container
+      default:
+        cpu: 500m
+        memory: 512Mi
+      defaultRequest:
+        cpu: 100m
+        memory: 256Mi

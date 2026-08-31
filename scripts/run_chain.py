@@ -45,7 +45,13 @@ log = logging.getLogger("chain")
 
 from pipeline.common.trace import stage_event, trace_id   # noqa: E402
 
-DATA = ROOT / "data"
+# Where the pipeline reads and writes.
+#
+# Configurable rather than hardcoded to ROOT/data: in Kubernetes the code lives
+# on a READ-ONLY root filesystem and the data lives on a mounted volume, so
+# writing next to the source is not merely untidy, it fails. Defaults to
+# ROOT/data so local runs and tests need no configuration.
+DATA = Path(os.environ.get("PIPELINE_DATA_ROOT") or (ROOT / "data"))
 
 
 def _crypto(client_id: str, secret_env: str):
@@ -61,26 +67,65 @@ def _crypto(client_id: str, secret_env: str):
 
 
 def _encrypt_via_spark(d: date) -> dict | None:
-    """Submit the encrypt stage to the Spark cluster. None if unavailable."""
+    """Run the encrypt stage on Spark, if a cluster is reachable.
+
+    TWO DEPLOYMENT SHAPES, ONE CODE PATH:
+
+      * In Kubernetes, SPARK_MASTER_URL points at the in-cluster master and
+        pyspark connects to it directly over the cluster protocol.
+      * On a developer laptop with docker compose, there is no in-cluster
+        master and the host JDK may be too new for Spark, so we shell out to
+        `docker exec` on the master container instead.
+
+    Shelling out to docker was the ONLY path before this ran in Kubernetes,
+    where there is no docker binary inside the pod. Preferring the native
+    connection and keeping docker as the fallback fixes that without losing
+    the laptop workflow.
+
+    Returns None when neither is available, so the caller falls back to the
+    local pyarrow path and RECORDS which engine actually ran.
+    """
+    import shutil
     import subprocess
+
+    master = os.environ.get("SPARK_MASTER_URL", "")
+
+    # Preferred: talk to the cluster directly. Works in Kubernetes.
+    if master.startswith("spark://") and "localhost" not in master:
+        try:
+            from pyspark.sql import SparkSession  # noqa: F401
+            os.environ["SPARK_MASTER_URL"] = master
+            log.info("using Spark cluster at %s", master)
+            return _encrypt_locally_with_spark(d)
+        except ImportError:
+            log.warning("pyspark not installed in this image; encrypting locally")
+            return None
+
+    # Fallback: docker compose on a laptop.
     script = ROOT / "pipeline" / "transform" / "spark_submit.sh"
-    if not script.exists():
+    if not script.exists() or not shutil.which("docker"):
         return None
     probe = subprocess.run(["docker", "ps", "--filter", "name=pl-spark-master",
                             "--format", "{{.Names}}"],
                            capture_output=True, text=True)
     if "pl-spark-master" not in probe.stdout:
-        log.warning("Spark master container not running; encrypting locally")
         return None
-    proc = subprocess.run([str(script), d.isoformat()],
-                          capture_output=True, text=True, timeout=600,
-                          env={**os.environ})
+    proc = subprocess.run([str(script), d.isoformat()], capture_output=True,
+                          text=True, timeout=600, env={**os.environ})
     if proc.returncode != 0:
-        log.warning("Spark submit failed (rc=%s); encrypting locally: %s",
-                    proc.returncode, proc.stderr[-200:])
+        log.warning("Spark submit failed (rc=%s); encrypting locally",
+                    proc.returncode)
         return None
-    pq = ROOT / "data" / "parquet" / f"dt={d.isoformat()}" / "trips.parquet"
+    pq = DATA / "parquet" / f"dt={d.isoformat()}" / "trips.parquet"
     return {"rows": 100, "engine": "spark", "parquet_path": str(pq)}
+
+
+def _encrypt_locally_with_spark(d: date) -> dict:
+    """Encrypt with SPARK_MASTER_URL set, so _write_parquet uses the cluster."""
+    from pipeline.transform.spark_encrypt import run as encrypt_run
+    csv_path = DATA / "csv" / f"trips_{d.isoformat()}.csv"
+    return encrypt_run(d, csv_path, DATA / "parquet",
+                       _crypto("spark-job", "CLIENT_SECRET_SPARK_JOB"))
 
 
 def _encrypt_locally(d: date, csv_asset: Path) -> dict:

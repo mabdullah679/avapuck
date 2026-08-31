@@ -19,7 +19,7 @@ logging.basicConfig(level=logging.INFO, format="%(levelname)-7s %(name)s: %(mess
 from pipeline.common.auth import TokenClient          # noqa: E402
 from pipeline.transform.spark_encrypt import CryptoClient, run   # noqa: E402
 
-DATA = Path("/opt/pipeline/data")
+DATA = Path(os.environ.get("PIPELINE_DATA_ROOT") or "/opt/pipeline/data")
 
 
 def main() -> int:

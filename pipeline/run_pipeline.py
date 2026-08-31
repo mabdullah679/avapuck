@@ -20,7 +20,7 @@ sys.path.insert(0, str(ROOT))
 logging.basicConfig(level=logging.INFO, format="%(levelname)-7s %(name)s: %(message)s")
 log = logging.getLogger("pipeline")
 
-DATA = ROOT / "data"
+DATA = Path(os.environ.get("PIPELINE_DATA_ROOT") or (ROOT / "data"))
 
 
 def build_crypto_client():

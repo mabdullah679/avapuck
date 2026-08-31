@@ -1,0 +1,51 @@
+# Non-secret configuration. Everything here is safe to commit and to read.
+#
+# The split is deliberate: identifiers, endpoints and tuning live in a
+# ConfigMap; anything whose disclosure would matter lives in a Secret and is
+# generated at deploy time, never committed.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: trips-config
+  namespace: trips
+data:
+  # ── BigQuery ────────────────────────────────────────────────────────
+  GCP_PROJECT_ID: "avapuck"
+  GCP_SERVICE_ACCOUNT_EMAIL: "jobuserrole@avapuck.iam.gserviceaccount.com"
+  BQ_DATASET: "bigquery-public-data.austin_bikeshare"
+  BQ_TABLE: "bikeshare_trips"
+  BQ_ROW_LIMIT: "100"
+  # MEASURED: one run scans ~232 MiB. The table is not partitioned, so a date
+  # predicate prunes nothing -- column selection is the only lever. A cap below
+  # the achievable cost is a permanent outage, not a safety control.
+  BQ_MAX_BYTES_BILLED: "314572800"
+  BQ_LOCATION: "US"
+  BQ_WINDOW_HOURS: "4"
+  EXTRACT_MODE: "live"
+
+  # ── Service endpoints (in-cluster DNS) ──────────────────────────────
+  IDP_URL: "http://idp.trips.svc.cluster.local:8443"
+  IDP_ISSUER: "http://idp.trips.svc.cluster.local:8443"
+  IDP_JWKS_URL: "http://idp.trips.svc.cluster.local:8443/.well-known/jwks.json"
+  CRYPTO_URL: "http://crypto.trips.svc.cluster.local:8444"
+  RANGER_URL: "http://ranger-admin.trips.svc.cluster.local:6080"
+  RANGER_SERVICE_NAME: "hive_pipeline"
+
+  # ── Warehouse ───────────────────────────────────────────────────────
+  POSTGRES_HOST: "postgres.trips.svc.cluster.local"
+  POSTGRES_PORT: "5432"
+  POSTGRES_DB: "analytics"
+  POSTGRES_USER: "pipeline"
+
+  # ── Hive ────────────────────────────────────────────────────────────
+  HIVE_METASTORE_URI: "thrift://hive-metastore.trips.svc.cluster.local:9083"
+  HIVE_HOST: "hiveserver2.trips.svc.cluster.local"
+  HIVE_PORT: "10000"
+  HIVE_WAREHOUSE_PATH: "/data/hive/trips"
+
+  # ── Spark ───────────────────────────────────────────────────────────
+  SPARK_MASTER_URL: "spark://spark-master.trips.svc.cluster.local:7077"
+
+  # ── Shared data root (the RWX volume every stage mounts) ────────────
+  PIPELINE_DATA_ROOT: "/data"
+  PYTHONUNBUFFERED: "1"

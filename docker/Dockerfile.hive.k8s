@@ -1,0 +1,13 @@
+# Hive image with the Postgres JDBC driver.
+#
+# The stock apache/hive:4.0.0 image does NOT bundle a Postgres driver, so
+# schematool fails with ClassNotFoundException: org.postgresql.Driver and the
+# metastore never initialises. Baking the jar in is the fix; mounting it at
+# runtime would work too but would make the image depend on the manifest
+# getting the mount right.
+FROM apache/hive:4.0.0
+
+USER root
+ADD https://jdbc.postgresql.org/download/postgresql-42.7.4.jar /opt/hive/lib/postgresql.jar
+RUN chmod 644 /opt/hive/lib/postgresql.jar
+USER hive

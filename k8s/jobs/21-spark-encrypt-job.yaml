@@ -1,0 +1,71 @@
+# The encrypt stage as a first-class Spark job.
+#
+# WHY A SEPARATE JOB: pyspark needs a local JVM even to talk to a REMOTE
+# cluster -- it launches a Java gateway process. Putting a JDK into the general
+# pipeline image would add ~300MB to every stage that does not need it, and the
+# pipeline image is deliberately kept lean because it also holds the decrypted
+# PII window.
+#
+# So the Spark stage runs from the Spark image (which already has JDK 17) via
+# spark-submit, and the rest of the chain runs from the pipeline image. Each
+# image carries only what its stage needs.
+#
+# Trigger:
+#   kubectl -n trips create job spark-encrypt-<slot> --from=cronjob/... , or
+#   make -f Makefile.k8s spark-encrypt SLOT=2026-08-31T12:00
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: spark-encrypt
+  namespace: trips
+  labels: {app: spark-encrypt, role: pipeline-job}
+spec:
+  backoffLimit: 1
+  ttlSecondsAfterFinished: 3600
+  template:
+    metadata:
+      labels: {app: spark-encrypt, role: pipeline-job}
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: spark-submit
+          image: trips/spark:latest
+          imagePullPolicy: IfNotPresent
+          command:
+            - /opt/spark/bin/spark-submit
+            - --master
+            - spark://spark-master:7077
+            - --name
+            - trips-encrypt
+            - --conf
+            - spark.driver.memory=768m
+            - --conf
+            - spark.executor.memory=640m
+            - --conf
+            - spark.executor.cores=1
+            - --conf
+            - spark.cores.max=1
+            - --conf
+            - spark.sql.shuffle.partitions=2
+            # The driver runs in THIS pod; executors must be able to reach it.
+            # Without spark.driver.host they resolve the pod's hostname, which
+            # is not routable, and every task fails to report back.
+            - --conf
+            - spark.driver.bindAddress=0.0.0.0
+            - /opt/pipeline/pipeline/transform/spark_job.py
+            - "$(LOGICAL_DATE)"
+          envFrom:
+            - configMapRef: {name: trips-config}
+            - secretRef: {name: pipeline-clients}
+          env:
+            - {name: LOGICAL_DATE, value: "REPLACED_AT_SUBMIT"}
+            - {name: PIPELINE_DATA_ROOT, value: /data}
+            - {name: PYTHONPATH, value: /opt/pipeline}
+          resources:
+            requests: {cpu: 300m, memory: 1Gi}
+            limits:   {cpu: 1500m, memory: 2Gi}
+          volumeMounts:
+            - {name: data, mountPath: /data}
+      volumes:
+        - name: data
+          persistentVolumeClaim: {claimName: pipeline-data}

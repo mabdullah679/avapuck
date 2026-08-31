@@ -1,0 +1,122 @@
+# Kubernetes / minikube lifecycle.
+#
+# Every target is idempotent: run it twice and the second run is a no-op or a
+# harmless re-apply. That matters for a deliverable someone else operates --
+# the safe move should never require knowing whether you already ran something.
+
+PROFILE  ?= trips
+NS       ?= trips
+CTX      ?= $(PROFILE)
+CPUS     ?= 6
+MEMORY   ?= 16384
+DISK     ?= 40g
+K8S_VER  ?= v1.33.4
+KUBECTL  := kubectl --context $(CTX)
+
+.PHONY: help preflight cluster images deploy secrets up down destroy \
+        status logs run-now verify cost shell-pg shell-hive ui-spark ui-airflow
+
+help:
+	@echo "Trips pipeline — Kubernetes targets"
+	@echo
+	@echo "  preflight   check tooling, resources and credentials BEFORE anything else"
+	@echo "  up          cluster + images + secrets + deploy + wait   (the one command)"
+	@echo "  run-now     trigger the pipeline immediately, do not wait for the schedule"
+	@echo "  logs        follow the most recent pipeline run"
+	@echo "  verify      in-cluster security checks (no plaintext, auth enforced)"
+	@echo "  status      pods, cronjob, recent runs"
+	@echo "  cost        BigQuery dry run — what one run would scan. Free."
+	@echo "  down        delete the workloads, KEEP the cluster and data"
+	@echo "  destroy     delete the whole minikube profile and its volumes"
+	@echo
+	@echo "  shell-pg / shell-hive / ui-spark / ui-airflow"
+
+preflight:
+	@bash scripts/preflight.sh
+
+cluster:
+	@minikube status -p $(PROFILE) >/dev/null 2>&1 && echo "cluster '$(PROFILE)' already running" || \
+	  minikube start -p $(PROFILE) --driver=docker --cpus=$(CPUS) --memory=$(MEMORY) \
+	    --disk-size=$(DISK) --kubernetes-version=$(K8S_VER) \
+	    --addons=metrics-server,storage-provisioner
+
+images: cluster
+	@echo "building images inside minikube's docker daemon (no registry needed)"
+	@eval $$(minikube -p $(PROFILE) docker-env) && \
+	  docker build -q -f docker/Dockerfile.service  -t trips/service:latest  . && \
+	  docker build -q -f docker/Dockerfile.pipeline -t trips/pipeline:latest . && \
+	  docker build -q -f docker/Dockerfile.spark.k8s -t trips/spark:latest   . && \
+	  docker build -q -f docker/Dockerfile.hive.k8s  -t trips/hive:latest    . && \
+	  echo "  built: service, pipeline, spark, hive"
+
+secrets:
+	@bash k8s/make-secrets.sh
+
+deploy:
+	@$(KUBECTL) apply -f k8s/base/
+	@$(MAKE) -f Makefile.k8s secrets
+	@$(KUBECTL) apply -f k8s/components/
+	@$(KUBECTL) apply -f k8s/jobs/
+
+up: preflight cluster images deploy
+	@echo "waiting for services to become ready..."
+	@$(KUBECTL) -n $(NS) wait --for=condition=available --timeout=300s \
+	    deploy/idp deploy/crypto deploy/spark-master || true
+	@$(KUBECTL) -n $(NS) rollout status statefulset/postgres --timeout=300s || true
+	@echo
+	@$(MAKE) -f Makefile.k8s status
+	@echo
+	@echo "Ready. Run the pipeline now with:  make -f Makefile.k8s run-now"
+
+status:
+	@echo "── pods ─────────────────────────────────────────────────"
+	@$(KUBECTL) -n $(NS) get pods
+	@echo
+	@echo "── cronjob ──────────────────────────────────────────────"
+	@$(KUBECTL) -n $(NS) get cronjob
+	@echo
+	@echo "── recent runs ──────────────────────────────────────────"
+	@$(KUBECTL) -n $(NS) get jobs --sort-by=.metadata.creationTimestamp 2>/dev/null | tail -5
+
+run-now:
+	@$(KUBECTL) -n $(NS) delete job trips-manual --ignore-not-found >/dev/null 2>&1 || true
+	@$(KUBECTL) -n $(NS) create job trips-manual --from=cronjob/trips-pipeline
+	@echo "triggered. follow with:  make -f Makefile.k8s logs"
+
+logs:
+	@pod=$$($(KUBECTL) -n $(NS) get pods -l job-name=trips-manual \
+	         -o jsonpath='{.items[-1:].metadata.name}' 2>/dev/null); \
+	  [ -n "$$pod" ] || pod=$$($(KUBECTL) -n $(NS) get pods -l app=trips-pipeline \
+	         --sort-by=.metadata.creationTimestamp -o jsonpath='{.items[-1:].metadata.name}'); \
+	  echo "logs for $$pod"; $(KUBECTL) -n $(NS) logs -f "$$pod"
+
+verify:
+	@bash scripts/verify_cluster.sh
+
+cost:
+	@$(KUBECTL) -n $(NS) run bq-cost --rm -i --restart=Never \
+	  --image=trips/pipeline:latest --overrides='{"spec":{"containers":[{"name":"bq-cost","image":"trips/pipeline:latest","imagePullPolicy":"IfNotPresent","command":["python","-c","import os,datetime;from pipeline.extract.bigquery_extract import extractor_from_env;e=extractor_from_env();b=e.dry_run_bytes(datetime.date.today());print(f\"{b/1048576:.2f} MiB would be scanned (cap {e.max_bytes_billed/1048576:.0f} MiB)\")"],"envFrom":[{"configMapRef":{"name":"trips-config"}}],"env":[{"name":"GOOGLE_APPLICATION_CREDENTIALS","value":"/var/secrets/gcp/gcp-sa.json"}],"volumeMounts":[{"name":"gcp","mountPath":"/var/secrets/gcp","readOnly":true}]}],"volumes":[{"name":"gcp","secret":{"secretName":"gcp-sa"}}]}}' 2>/dev/null
+
+shell-pg:
+	@$(KUBECTL) -n $(NS) exec -it statefulset/postgres -- \
+	  psql -U pipeline -d analytics
+
+shell-hive:
+	@$(KUBECTL) -n $(NS) exec -it deploy/hiveserver2 -- \
+	  /opt/hive/bin/beeline -u jdbc:hive2://localhost:10000
+
+ui-spark:
+	@echo "Spark master UI -> http://localhost:8080"
+	@$(KUBECTL) -n $(NS) port-forward svc/spark-master 8080:8080
+
+ui-airflow:
+	@echo "Airflow UI -> http://localhost:8081"
+	@$(KUBECTL) -n $(NS) port-forward svc/airflow 8081:8080
+
+down:
+	@$(KUBECTL) delete -f k8s/jobs/ --ignore-not-found
+	@$(KUBECTL) delete -f k8s/components/ --ignore-not-found
+	@echo "workloads deleted. cluster and PVCs kept — 'make -f Makefile.k8s deploy' restores."
+
+destroy:
+	@minikube delete -p $(PROFILE)

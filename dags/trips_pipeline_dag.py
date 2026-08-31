@@ -75,7 +75,7 @@ from airflow.sdk import DAG, Asset, task
 
 from pipeline.common.trace import stage_event, trace_from_context
 
-DATA = ROOT / "data"
+DATA = Path(os.environ.get("PIPELINE_DATA_ROOT") or (ROOT / "data"))
 
 # ── The assets. These ARE the schedule. ───────────────────────────────────
 CSV_READY = Asset(name="trips_csv", uri="file://data/csv")

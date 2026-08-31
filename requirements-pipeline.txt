@@ -1,0 +1,25 @@
+# Pipeline runtime dependencies, pinned.
+#
+# Pinned exactly so the client's build produces the same bytes ours did.
+# Airflow is NOT here -- it ships in its own image with its own constraint
+# file, because mixing Airflow's pins with the pipeline's is how you get an
+# unresolvable dependency graph.
+google-cloud-bigquery==3.27.0
+google-auth==2.37.0
+pyarrow==18.1.0
+# Needed for the native Spark cluster connection from the job pod. Large, but
+# the alternative is shelling out to `docker exec`, which does not exist in a pod.
+pyspark==4.0.0
+pandas==2.2.3
+psycopg2-binary==2.9.10
+PyJWT[crypto]==2.10.1
+cryptography==44.0.0
+requests==2.32.3
+fastapi==0.115.6
+uvicorn[standard]==0.34.0
+pydantic==2.10.4
+python-multipart==0.0.20
+python-dotenv==1.0.1
+matplotlib==3.10.0
+reportlab==4.2.5
+PyYAML==6.0.2

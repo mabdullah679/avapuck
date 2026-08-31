@@ -1,0 +1,106 @@
+# The 4-hourly pipeline run.
+#
+# A CronJob rather than Airflow-in-cluster is the DEFAULT path deliberately:
+# it is the smallest thing that runs the chain on schedule, it needs no
+# scheduler database, and it works identically on any Kubernetes. Airflow is
+# available as an optional component (k8s/components/15-airflow.yaml) for the
+# DAG-authoring and lineage UI, but the pipeline does not depend on it.
+#
+# Each run executes scripts/run_chain.py, which enforces the same asset
+# semantics the DAGs do: run a stage, verify its output materialised, only
+# then run the consumer.
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: trips-pipeline
+  namespace: trips
+  labels: {app: trips-pipeline, tier: orchestration}
+spec:
+  # 00:00, 04:00, 08:00, 12:00, 16:00, 20:00 UTC
+  schedule: "0 */4 * * *"
+  timeZone: "UTC"
+  # Never run two slices at once: they would race on the shared data volume
+  # and on the warehouse upsert.
+  concurrencyPolicy: Forbid
+  # A missed window is not worth catching up on -- the next slice supersedes it.
+  startingDeadlineSeconds: 600
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      # One retry. More than that on a billed BigQuery query is a way to turn
+      # one bad config into six charges.
+      backoffLimit: 1
+      activeDeadlineSeconds: 1800
+      ttlSecondsAfterFinished: 86400
+      template:
+        metadata:
+          labels: {app: trips-pipeline, role: pipeline-job}
+        spec:
+          restartPolicy: Never
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 10001
+            fsGroup: 10001
+          # The chain needs its dependencies up. Failing fast here beats a
+          # confusing auth error from stage 2.
+          initContainers:
+            - name: wait-for-services
+              image: trips/pipeline:latest
+              imagePullPolicy: IfNotPresent
+              command:
+                - python
+                - -c
+                - |
+                  import sys, time, urllib.request
+                  targets = [("idp", "http://idp:8443/health"),
+                             ("crypto", "http://crypto:8444/health")]
+                  deadline = time.time() + 180
+                  for name, url in targets:
+                      while time.time() < deadline:
+                          try:
+                              urllib.request.urlopen(url, timeout=3)
+                              print(f"{name} ready"); break
+                          except Exception:
+                              time.sleep(3)
+                      else:
+                          sys.exit(f"{name} not ready after 180s")
+              resources:
+                requests: {cpu: 50m, memory: 96Mi}
+                limits:   {cpu: 200m, memory: 192Mi}
+          containers:
+            - name: pipeline
+              image: trips/pipeline:latest
+              imagePullPolicy: IfNotPresent
+              command: ["python", "/opt/pipeline/scripts/run_chain.py"]
+              envFrom:
+                - configMapRef: {name: trips-config}
+                - secretRef: {name: pipeline-clients}
+              env:
+                - name: POSTGRES_PASSWORD
+                  valueFrom:
+                    secretKeyRef: {name: pipeline-datastores, key: POSTGRES_PASSWORD}
+                - name: GOOGLE_APPLICATION_CREDENTIALS
+                  value: /var/secrets/gcp/gcp-sa.json
+                - {name: PIPELINE_DATA_ROOT, value: /data}
+              resources:
+                requests: {cpu: 300m, memory: 768Mi}
+                limits:   {cpu: 1500m, memory: 2Gi}
+              securityContext:
+                allowPrivilegeEscalation: false
+                readOnlyRootFilesystem: true
+                capabilities: {drop: [ALL]}
+              volumeMounts:
+                - {name: data, mountPath: /data}
+                - {name: gcp, mountPath: /var/secrets/gcp, readOnly: true}
+                - {name: tmp, mountPath: /tmp}
+                - {name: mplconfig, mountPath: /home/pipeline/.config/matplotlib}
+          volumes:
+            - name: data
+              persistentVolumeClaim: {claimName: pipeline-data}
+            - name: gcp
+              secret: {secretName: gcp-sa, defaultMode: 0400}
+            - {name: tmp, emptyDir: {}}
+            # matplotlib insists on a writable config dir; with a read-only
+            # root filesystem it needs one provided explicitly.
+            - {name: mplconfig, emptyDir: {}}

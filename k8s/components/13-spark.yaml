@@ -1,0 +1,102 @@
+# Spark standalone cluster.
+#
+# The image carries its own JDK 17. That is not incidental: Spark 4 supports
+# Java 17/21, and a host or image with a newer JDK fails when constructing
+# JavaSparkContext. Containerising the JDK is what makes the Spark stage
+# portable across developer machines.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: spark-master
+  namespace: trips
+  labels: {app: spark-master, tier: compute}
+spec:
+  replicas: 1
+  selector:
+    matchLabels: {app: spark-master}
+  template:
+    metadata:
+      labels: {app: spark-master, tier: compute}
+    spec:
+      containers:
+        - name: spark-master
+          image: trips/spark:latest
+          imagePullPolicy: IfNotPresent
+          command: ["/opt/spark/bin/spark-class", "org.apache.spark.deploy.master.Master"]
+          # Kubernetes injects SPARK_MASTER_PORT="tcp://10.x.x.x:7077" for the
+          # Service named spark-master, and Spark's MasterArguments does
+          # Integer.parseInt on it -- NumberFormatException, CrashLoopBackOff.
+          # Setting them explicitly overrides the injected values. This is the
+          # single most common Spark-on-Kubernetes failure and it is not
+          # obvious from the stack trace.
+          env:
+            - {name: SPARK_NO_DAEMONIZE, value: "true"}
+            - {name: SPARK_MASTER_HOST, value: "0.0.0.0"}
+            - {name: SPARK_MASTER_PORT, value: "7077"}
+            - {name: SPARK_MASTER_WEBUI_PORT, value: "8080"}
+            - {name: PYTHONPATH, value: /opt/pipeline}
+          ports:
+            - {containerPort: 7077, name: cluster}
+            - {containerPort: 8080, name: ui}
+          resources:
+            requests: {cpu: 250m, memory: 640Mi}
+            limits:   {cpu: 1, memory: 1536Mi}
+          volumeMounts:
+            - {name: data, mountPath: /data}
+          readinessProbe:
+            httpGet: {path: /, port: 8080}
+            initialDelaySeconds: 10
+            periodSeconds: 5
+      volumes:
+        - name: data
+          persistentVolumeClaim: {claimName: pipeline-data}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: spark-master
+  namespace: trips
+  labels: {app: spark-master}
+spec:
+  selector: {app: spark-master}
+  ports:
+    - {port: 7077, targetPort: 7077, name: cluster}
+    - {port: 8080, targetPort: 8080, name: ui}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: spark-worker
+  namespace: trips
+  labels: {app: spark-worker, tier: compute}
+spec:
+  replicas: 2
+  selector:
+    matchLabels: {app: spark-worker}
+  template:
+    metadata:
+      labels: {app: spark-worker, tier: compute}
+    spec:
+      containers:
+        - name: spark-worker
+          image: trips/spark:latest
+          imagePullPolicy: IfNotPresent
+          command:
+            - /opt/spark/bin/spark-class
+            - org.apache.spark.deploy.worker.Worker
+            - spark://spark-master:7077
+          env:
+            - {name: SPARK_NO_DAEMONIZE, value: "true"}
+            - {name: SPARK_WORKER_CORES, value: "1"}
+            - {name: SPARK_WORKER_MEMORY, value: "1g"}
+            - {name: SPARK_WORKER_PORT, value: "7078"}
+            - {name: SPARK_WORKER_WEBUI_PORT, value: "8081"}
+            - {name: PYTHONPATH, value: /opt/pipeline}
+          resources:
+            requests: {cpu: 250m, memory: 768Mi}
+            limits:   {cpu: 1, memory: 1536Mi}
+          volumeMounts:
+            - {name: data, mountPath: /data}
+      volumes:
+        - name: data
+          persistentVolumeClaim: {claimName: pipeline-data}

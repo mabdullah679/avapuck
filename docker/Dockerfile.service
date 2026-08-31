@@ -2,6 +2,10 @@
 FROM python:3.12-slim
 
 WORKDIR /opt/pipeline
+# Only what the two HTTP services need. Deliberately NOT the full pipeline
+# requirements: the IdP and crypto service should not carry BigQuery, pandas
+# or matplotlib, because every library in this image is a library that can
+# reach the AES master key.
 RUN pip install --no-cache-dir \
       "fastapi==0.115.6" "uvicorn[standard]==0.34.0" \
       "PyJWT[crypto]==2.10.1" "cryptography==44.0.0" \

@@ -65,6 +65,30 @@ Last updated: 2026-08-30
 | 4b.2 | What this means | The **DAGs are correct**: `airflow dags test <dag_id>` executes every stage successfully, and the asset wiring is registered and visible in `airflow assets list`. What cannot be demonstrated on this host is the scheduler *automatically* propagating assets between DAGs. On Linux (or Docker) the scheduler runs normally and no code changes. |
 | 4b.3 | The workaround | `scripts/run_chain.py` reproduces the asset semantics exactly -- run a stage, verify its output asset materialised, only then run the consumer -- calling the **same stage functions the DAGs call**, so there is no parallel implementation that could drift. This is what has been used to verify the chain end to end. |
 
+## 4c. Kubernetes deployment
+
+| # | Item | Status |
+|---|---|---|
+| 4c.1 | **The full chain runs in Kubernetes** | **VERIFIED 2026-08-31.** 9/9 pods Running on minikube; a Job executed all five stages against live BigQuery and produced a PDF. Trace `trips-20260831T1200-bcee78`. 10/10 checks in `scripts/verify_cluster.sh` pass. |
+| 4c.2 | Orchestration in-cluster is a **CronJob**, not Airflow | **DELIBERATE.** The CronJob runs `scripts/run_chain.py`, which enforces the same asset semantics the DAGs do. Airflow's scheduler is unreliable on macOS (§4b) and adds a scheduler database for no gain here. The DAGs remain in `dags/` and are the reference for lineage; the CronJob is what actually runs. |
+| 4c.3 | Shared data volume is `ReadWriteMany` on **hostPath** | **WORKS ON MINIKUBE ONLY.** Stages hand work to each other through files, so RWX is required. minikube's `standard` StorageClass is hostPath and supports RWX because every pod lands on the same node. **On a multi-node cluster this breaks** — you need a real RWX backend (NFS, CephFS, EFS) or object storage. |
+| 4c.4 | **NetworkPolicy is declared but NOT enforced** | **DOCUMENTATION, not a control, on default minikube.** The default CNI ignores NetworkPolicy. Start with `--cni=calico` to make the policies real. Declared so the intent is reviewable and so they work unchanged on a real cluster. |
+| 4c.5 | **TLS is still not enabled** | In-cluster traffic is plain HTTP, including calls carrying AES keys' plaintext inputs to the crypto service. The requirement says "HTTPS service"; this is HTTP. Unchanged from the Compose deployment. |
+| 4c.6 | Secrets are Kubernetes Secrets | **base64, not encrypted at rest** unless the cluster has encryption-at-rest configured (minikube does not). Generated at deploy time by `k8s/make-secrets.sh` and never written to a file in the repo, which is a real improvement over a committed manifest — but a cluster-admin can read them. |
+| 4c.7 | Single replica for every stateful service | Postgres, Hive metastore and the crypto service each run one pod. No HA, no failover. A node restart is an outage. |
+
+### Containerization defects found and fixed
+
+Each of these was a real failure, not a hypothetical:
+
+| Symptom | Cause |
+|---|---|
+| `spark-master` CrashLoopBackOff, `NumberFormatException` | Kubernetes injects `SPARK_MASTER_PORT=tcp://…` from the same-named Service; Spark parses it as an int. Fixed by setting the port explicitly. |
+| `ClassNotFoundException: org.postgresql.Driver` | stock `apache/hive:4.0.0` ships no Postgres JDBC driver. Baked into `docker/Dockerfile.hive.k8s`. |
+| `Read-only file system: '/opt/pipeline/data'` | code hardcoded `ROOT/data`, ignoring the mounted volume. Now honours `PIPELINE_DATA_ROOT`. |
+| `FileNotFoundError: 'docker'` | Spark and Hive stages shelled out to `docker exec`; no docker binary in a pod. Native cluster path now preferred in-cluster. |
+| `JAVA_GATEWAY_EXITED` | pyspark needs a **local JVM** even to reach a remote cluster. The Spark stage therefore runs from the Spark image, not the pipeline image. |
+
 ## 5. Assumptions taken without confirmation
 
 | # | Assumption |

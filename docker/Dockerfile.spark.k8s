@@ -1,0 +1,20 @@
+# Spark image with the pipeline code and its Python deps.
+#
+# The deps must exist on EVERY worker, not just the driver -- the encrypt
+# stage's transform runs inside executors. Baking them in is the only way that
+# is actually true of the whole cluster; a pip install on the driver is not.
+FROM apache/spark:4.0.0-python3
+
+USER root
+RUN pip install --no-cache-dir \
+      "requests==2.32.3" "PyJWT[crypto]==2.10.1" "cryptography==44.0.0" \
+      "pyarrow==18.1.0" "PyYAML==6.0.2" "python-dotenv==1.0.1" \
+    && mkdir -p /tmp/.ivy2 && chmod 777 /tmp/.ivy2
+
+COPY pipeline/ /opt/pipeline/pipeline/
+COPY config/   /opt/pipeline/config/
+COPY scripts/  /opt/pipeline/scripts/
+RUN chown -R spark /opt/pipeline 2>/dev/null || true
+
+ENV PYTHONPATH=/opt/pipeline PYTHONUNBUFFERED=1
+USER spark

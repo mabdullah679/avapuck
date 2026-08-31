@@ -1,0 +1,45 @@
+# Pipeline image: the stage code plus everything the jobs need.
+#
+# Multi-stage so the runtime layer carries no build toolchain -- smaller image,
+# smaller attack surface, and nothing in it that could compile an exploit.
+#
+# Pinned base by MINOR version (3.12-slim) rather than a digest: a digest would
+# be reproducible but would silently stop receiving security patches, and this
+# is a client deliverable that will outlive our attention.
+FROM python:3.12-slim AS builder
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        build-essential && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /build
+COPY requirements-pipeline.txt .
+RUN pip install --no-cache-dir --prefix=/install -r requirements-pipeline.txt
+
+
+FROM python:3.12-slim AS runtime
+
+# curl only, for container-level health checks.
+RUN apt-get update && apt-get install -y --no-install-recommends curl \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY --from=builder /install /usr/local
+
+WORKDIR /opt/pipeline
+COPY pipeline/   /opt/pipeline/pipeline/
+COPY services/   /opt/pipeline/services/
+COPY config/     /opt/pipeline/config/
+COPY scripts/    /opt/pipeline/scripts/
+COPY dags/       /opt/pipeline/dags/
+
+ENV PYTHONPATH=/opt/pipeline \
+    PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1
+
+# Non-root. These processes hold key material and decrypted PII in memory;
+# running them as root would mean a container escape starts with everything.
+RUN useradd -r -u 10001 -m -d /home/pipeline pipeline \
+    && mkdir -p /data && chown -R 10001:10001 /opt/pipeline /data
+USER 10001
+
+ENTRYPOINT ["python", "-m"]
+CMD ["pipeline.run_pipeline", "--help"]

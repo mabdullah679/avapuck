@@ -1,0 +1,68 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: idp
+  namespace: trips
+  labels: {app: idp, tier: identity}
+spec:
+  replicas: 1
+  selector:
+    matchLabels: {app: idp}
+  template:
+    metadata:
+      labels: {app: idp, tier: identity}
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        fsGroup: 10001
+      containers:
+        - name: idp
+          image: trips/service:latest
+          imagePullPolicy: IfNotPresent
+          command: ["uvicorn", "services.idp.app:app", "--host", "0.0.0.0", "--port", "8443"]
+          ports: [{containerPort: 8443, name: http}]
+          envFrom:
+            - configMapRef: {name: trips-config}
+            - secretRef: {name: pipeline-clients}
+          env:
+            # The RSA signing key. Injected, never generated in-pod: a
+            # generated key would change on every restart and silently
+            # invalidate every token already in flight.
+            - name: IDP_SIGNING_KEY
+              valueFrom:
+                secretKeyRef: {name: pipeline-crypto, key: IDP_SIGNING_KEY}
+          resources:
+            requests: {cpu: 100m, memory: 192Mi}
+            limits:   {cpu: 500m, memory: 384Mi}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: {drop: [ALL]}
+          volumeMounts:
+            - {name: tmp, mountPath: /tmp}
+          # Readiness gates traffic; liveness restarts a wedged process. Both
+          # are needed: without readiness, dependent pods get connection
+          # refused during rollout.
+          readinessProbe:
+            httpGet: {path: /health, port: 8443}
+            initialDelaySeconds: 3
+            periodSeconds: 5
+            failureThreshold: 3
+          livenessProbe:
+            httpGet: {path: /health, port: 8443}
+            initialDelaySeconds: 15
+            periodSeconds: 20
+            failureThreshold: 3
+      volumes:
+        - {name: tmp, emptyDir: {}}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: idp
+  namespace: trips
+  labels: {app: idp}
+spec:
+  selector: {app: idp}
+  ports: [{port: 8443, targetPort: 8443, name: http}]
