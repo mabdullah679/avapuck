@@ -42,7 +42,20 @@ grep "trips-20260830T1600-b7edae" airflow_home/logs -r
   ╚═══════════════════════════════════╤═══════════════════════════════╝
                     asset trips_csv updated
                                       ▼
-  ╔═══ trips_02_encrypt ══════════════════════════════════════════════╗
+  ╔═══ trips_02_card_split ═══════════════════════════════════════════╗
+  ║  identity : spark-job  (scope crypto.encrypt — CANNOT decrypt)    ║
+  ║  driven by: manifest treatment=card_split — NEVER a column name   ║
+  ║  splits   : PAN → first-6 · middle · last-4                       ║
+  ║  crypto   : middle ONLY, AES-256-GCM. Prefix/suffix stay CLEAR    ║
+  ║  guard    : asserts no Luhn-valid full PAN in any clear column    ║
+  ║  writes   : data/cards/<dataset>_card_info_<date>.csv             ║
+  ║  emits    : trips_cards_split  (even when 0 cards — no stall)     ║
+  ║  TRACE    : rows, cards, columns, dataset                         ║
+  ║  CAVEAT   : only ~6 digits encrypted — see TRUST-BOUNDARY.md §2.8 ║
+  ╚═══════════════════════════════════╤═══════════════════════════════╝
+                  asset trips_cards_split updated
+                                      ▼
+  ╔═══ trips_03_encrypt ══════════════════════════════════════════════╗
   ║  identity : spark-job  (scope crypto.encrypt — CANNOT decrypt)    ║
   ║  runs on  : Spark 4.0.0 cluster, 2 workers                        ║
   ║  calls    : crypto service /encrypt, batched per column           ║
@@ -54,7 +67,7 @@ grep "trips-20260830T1600-b7edae" airflow_home/logs -r
   ╚═══════════════════════════════════╤═══════════════════════════════╝
                 asset trips_parquet_encrypted updated
                                       ▼
-  ╔═══ trips_03_mask ═════════════════════════════════════════════════╗
+  ╔═══ trips_04_mask ═════════════════════════════════════════════════╗
   ║  identity : hive-job  (scope crypto.decrypt — CANNOT encrypt)     ║
   ║  calls    : crypto service /decrypt                               ║
   ║  policy   : config/ranger/hive_masking_policies.json              ║
@@ -67,7 +80,7 @@ grep "trips-20260830T1600-b7edae" airflow_home/logs -r
   ╚═══════════════════════════════════╤═══════════════════════════════╝
                   asset trips_hive_masked updated
                                       ▼
-  ╔═══ trips_04_load ═════════════════════════════════════════════════╗
+  ╔═══ trips_05_load ═════════════════════════════════════════════════╗
   ║  writes   : warehouse.trips  (UPSERT on trip_id → idempotent)     ║
   ║  audit    : warehouse.load_audit — one row per run                ║
   ║  emits    : trips_warehouse                                       ║
@@ -75,7 +88,7 @@ grep "trips-20260830T1600-b7edae" airflow_home/logs -r
   ╚═══════════════════════════════════╤═══════════════════════════════╝
                    asset trips_warehouse updated
                                       ▼
-  ╔═══ trips_05_report ═══════════════════════════════════════════════╗
+  ╔═══ trips_06_report ═══════════════════════════════════════════════╗
   ║  reads    : warehouse.trips (masked only — no privileged path)    ║
   ║  writes   : data/reports/trips_report_<date>.pdf                  ║
   ║  emits    : trips_report_pdf                                      ║

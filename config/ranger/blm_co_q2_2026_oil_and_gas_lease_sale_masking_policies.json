@@ -1,0 +1,215 @@
+{
+  "_comment": [
+    "GENERATED Ranger masking policies for dataset 'blm_co_q2_2026_oil_and_gas_lease_sale'.",
+    "",
+    "Written once by pipeline/metadata/policy_gen.py when this dataset was",
+    "first ingested, from the sensitivity inferred for each column. It is",
+    "NOT regenerated on later runs -- edit the mask types here and your",
+    "edits survive, which is what authoring policy in a file is for.",
+    "",
+    "Each policy records why the classifier thought the column was",
+    "sensitive. Review those reasons: a guess that reads wrong is a",
+    "signal to fix the mask type here, or the sensitivity itself in",
+    "config/datasets/blm_co_q2_2026_oil_and_gas_lease_sale.json."
+  ],
+  "policies": [
+    {
+      "service": "hive_pipeline",
+      "name": "mask-blm-co-q2-2026-oil-and-gas-lease-sale-globalid",
+      "policyType": 1,
+      "description": "globalid classified quasi_identifier by schema inference: column is a globally unique handle for one record.",
+      "isEnabled": true,
+      "_generated": true,
+      "_sensitivity": "quasi_identifier",
+      "resources": {
+        "database": {
+          "values": [
+            "trips_warehouse"
+          ],
+          "isExcludes": false,
+          "isRecursive": false
+        },
+        "table": {
+          "values": [
+            "blm_co_q2_2026_oil_and_gas_lease_sale"
+          ],
+          "isExcludes": false,
+          "isRecursive": false
+        },
+        "column": {
+          "values": [
+            "globalid"
+          ],
+          "isExcludes": false,
+          "isRecursive": false
+        }
+      },
+      "dataMaskPolicyItems": [
+        {
+          "accesses": [
+            {
+              "type": "select",
+              "isAllowed": true
+            }
+          ],
+          "users": [],
+          "groups": [
+            "analyst"
+          ],
+          "roles": [],
+          "dataMaskInfo": {
+            "dataMaskType": "MASK_SHOW_LAST_4"
+          }
+        },
+        {
+          "accesses": [
+            {
+              "type": "select",
+              "isAllowed": true
+            }
+          ],
+          "users": [],
+          "groups": [
+            "data_steward"
+          ],
+          "roles": [],
+          "dataMaskInfo": {
+            "dataMaskType": "MASK_NONE"
+          }
+        }
+      ]
+    },
+    {
+      "service": "hive_pipeline",
+      "name": "mask-blm-co-q2-2026-oil-and-gas-lease-sale-parcel-id",
+      "policyType": 1,
+      "description": "parcel_id classified quasi_identifier by schema inference: column carries a narrowing geography.",
+      "isEnabled": true,
+      "_generated": true,
+      "_sensitivity": "quasi_identifier",
+      "resources": {
+        "database": {
+          "values": [
+            "trips_warehouse"
+          ],
+          "isExcludes": false,
+          "isRecursive": false
+        },
+        "table": {
+          "values": [
+            "blm_co_q2_2026_oil_and_gas_lease_sale"
+          ],
+          "isExcludes": false,
+          "isRecursive": false
+        },
+        "column": {
+          "values": [
+            "parcel_id"
+          ],
+          "isExcludes": false,
+          "isRecursive": false
+        }
+      },
+      "dataMaskPolicyItems": [
+        {
+          "accesses": [
+            {
+              "type": "select",
+              "isAllowed": true
+            }
+          ],
+          "users": [],
+          "groups": [
+            "analyst"
+          ],
+          "roles": [],
+          "dataMaskInfo": {
+            "dataMaskType": "MASK_SHOW_LAST_4"
+          }
+        },
+        {
+          "accesses": [
+            {
+              "type": "select",
+              "isAllowed": true
+            }
+          ],
+          "users": [],
+          "groups": [
+            "data_steward"
+          ],
+          "roles": [],
+          "dataMaskInfo": {
+            "dataMaskType": "MASK_NONE"
+          }
+        }
+      ]
+    },
+    {
+      "service": "hive_pipeline",
+      "name": "mask-blm-co-q2-2026-oil-and-gas-lease-sale-card-info",
+      "policyType": 1,
+      "description": "card_info classified direct_identifier by schema inference: column name denotes a payment card.",
+      "isEnabled": true,
+      "_generated": true,
+      "_sensitivity": "direct_identifier",
+      "resources": {
+        "database": {
+          "values": [
+            "trips_warehouse"
+          ],
+          "isExcludes": false,
+          "isRecursive": false
+        },
+        "table": {
+          "values": [
+            "blm_co_q2_2026_oil_and_gas_lease_sale"
+          ],
+          "isExcludes": false,
+          "isRecursive": false
+        },
+        "column": {
+          "values": [
+            "card_info"
+          ],
+          "isExcludes": false,
+          "isRecursive": false
+        }
+      },
+      "dataMaskPolicyItems": [
+        {
+          "accesses": [
+            {
+              "type": "select",
+              "isAllowed": true
+            }
+          ],
+          "users": [],
+          "groups": [
+            "analyst"
+          ],
+          "roles": [],
+          "dataMaskInfo": {
+            "dataMaskType": "MASK_HASH"
+          }
+        },
+        {
+          "accesses": [
+            {
+              "type": "select",
+              "isAllowed": true
+            }
+          ],
+          "users": [],
+          "groups": [
+            "data_steward"
+          ],
+          "roles": [],
+          "dataMaskInfo": {
+            "dataMaskType": "MASK_NONE"
+          }
+        }
+      ]
+    }
+  ]
+}

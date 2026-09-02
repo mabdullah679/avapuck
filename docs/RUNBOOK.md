@@ -31,6 +31,53 @@ the metadata DB, and `dags test` alone does not register siblings.
 For the scheduler-driven chain, set `AIRFLOW_CHAIN_WAIT=1` so each stage blocks
 on the next. Without a running scheduler leave it unset, or stages poll forever.
 
+## Ingesting a different CSV
+
+Any CSV works; the pipeline infers its schema, sensitivity and key.
+
+```bash
+.venv/bin/python -m pipeline.run_pipeline --date 2026-09-02 --csv path/to/export.csv
+```
+
+Or set `CSV_SOURCE_PATH` (the Airflow path uses this too — it takes precedence
+over `EXTRACT_MODE=live`, so a named file is never silently replaced by a
+billable BigQuery query):
+
+```bash
+export CSV_SOURCE_PATH=$PWD/data/incoming/export.csv
+```
+
+**Check what it inferred before trusting the run.** The manifest is written
+beside the landed CSV and records a reason for every column:
+
+```bash
+.venv/bin/python -c "
+from pathlib import Path
+from pipeline.metadata.schema import load_manifest
+m = load_manifest(Path('data/csv/<dataset>_2026-09-02.csv'))
+print('key:', m.primary_key, '(synthetic)' if m.key_is_synthetic else '')
+for c in m.columns:
+    print(f'  {\"SENSITIVE\" if c.sensitive else \"public   \"} {c.name:28} {c.reason}')"
+```
+
+Correct a wrong guess in `config/datasets/<dataset>.json` — this is a config
+edit, not a code change:
+
+```json
+{
+  "primary_key": "objectid",
+  "columns": {
+    "operator_name": {"sensitivity": "direct_identifier", "mask": "MASK_HASH"},
+    "county_des":    {"sensitivity": "public"}
+  }
+}
+```
+
+Then re-run. A dataset's Ranger policy is generated once into
+`config/ranger/<dataset>_masking_policies.json` and never regenerated, so
+**delete that file** after changing sensitivity, or edit its mask types
+directly — whichever you edit is what enforces.
+
 ## Common failures
 
 | Symptom | Cause | Fix |

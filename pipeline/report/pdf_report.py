@@ -25,126 +25,152 @@ BLUE, ORANGE, AQUA, YELLOW = "#2a78d6", "#eb6834", "#1baf7a", "#eda100"
 INK, MUTED, GRID = "#0b0b0b", "#6f6e6a", "#e6e5e1"
 
 
-def _fetch(conn, logical_date: date) -> dict:
+def _fetch(conn, logical_date: date, dataset: str, primary_key: str) -> dict:
+    """Collect the numbers for the page, for whatever columns this table has.
+
+    The queries are built from the chart specs the profiler chose rather than
+    written out per column, so a dataset the pipeline has never seen still
+    produces a populated page.
+    """
+    from pipeline.report import profile
+
     with conn.cursor() as cur:
-        cur.execute("""
-            SELECT count(*), coalesce(sum(duration_minutes),0),
-                   coalesce(round(avg(duration_minutes)::numeric,1),0),
-                   coalesce(max(duration_minutes),0)
-            FROM warehouse.trips WHERE logical_date = %s""", (logical_date,))
-        n, total, avg, longest = cur.fetchone()
+        types = profile._column_types(cur, dataset)
+        if not types:
+            raise RuntimeError(
+                f"warehouse.{dataset} does not exist; run the load stage for "
+                f"{logical_date} first.")
 
-        cur.execute("""
-            SELECT extract(hour from start_time)::int AS hr, count(*)
-            FROM warehouse.trips WHERE logical_date = %s
-            GROUP BY hr ORDER BY hr""", (logical_date,))
-        by_hour = cur.fetchall()
+        tiles = profile.headline_metrics(cur, dataset, logical_date,
+                                         primary_key, types)
+        specs = profile.choose_charts(cur, dataset, logical_date, primary_key)
 
-        cur.execute("""
-            SELECT start_station_masked, count(*) AS c
-            FROM warehouse.trips WHERE logical_date = %s
-              AND start_station_masked IS NOT NULL
-            GROUP BY 1 ORDER BY c DESC LIMIT 6""", (logical_date,))
-        top_stations = cur.fetchall()
+        cur.execute(f"SELECT count(*) FROM warehouse.{dataset} "
+                    f"WHERE logical_date = %s", (logical_date,))
+        count = cur.fetchone()[0]
 
-        cur.execute("""
-            SELECT width_bucket(duration_minutes, 0, 60, 6) AS b, count(*)
-            FROM warehouse.trips WHERE logical_date = %s
-            GROUP BY b ORDER BY b""", (logical_date,))
-        durations = cur.fetchall()
+        charts = []
+        for spec in specs:
+            col = spec["column"]
+            if spec["kind"] == "by_hour":
+                cur.execute(
+                    f"SELECT extract(hour from {col})::int AS hr, count(*) "
+                    f"FROM warehouse.{dataset} WHERE logical_date = %s "
+                    f"AND {col} IS NOT NULL GROUP BY hr ORDER BY hr",
+                    (logical_date,))
+                spec["rows"] = cur.fetchall()
+            elif spec["kind"] == "histogram":
+                lo, hi = spec["min"], spec["max"]
+                cur.execute(
+                    f"SELECT width_bucket({col}, %s, %s, 6) AS b, count(*) "
+                    f"FROM warehouse.{dataset} WHERE logical_date = %s "
+                    f"AND {col} IS NOT NULL GROUP BY b ORDER BY b",
+                    (lo, hi, logical_date))
+                spec["rows"] = cur.fetchall()
+            else:  # categories
+                cur.execute(
+                    f"SELECT {col}, count(*) AS c FROM warehouse.{dataset} "
+                    f"WHERE logical_date = %s AND {col} IS NOT NULL "
+                    f"GROUP BY 1 ORDER BY c DESC LIMIT 6", (logical_date,))
+                spec["rows"] = cur.fetchall()
+            charts.append(spec)
 
-        cur.execute("""
-            SELECT masked_by, count(*) FROM warehouse.trips
-            WHERE logical_date = %s GROUP BY 1""", (logical_date,))
+        cur.execute(f"SELECT masked_by, count(*) FROM warehouse.{dataset} "
+                    f"WHERE logical_date = %s GROUP BY 1", (logical_date,))
         provenance = cur.fetchall()
 
-    return {"count": n, "total_minutes": total, "avg_minutes": float(avg),
-            "longest": longest, "by_hour": by_hour, "top_stations": top_stations,
-            "durations": durations, "provenance": provenance}
+    return {"count": count, "tiles": tiles, "charts": charts,
+            "provenance": provenance}
 
 
-def _chart_trips_by_hour(data) -> BytesIO:
+def _new_axes(height: float):
     import matplotlib
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
+    return plt, plt.subplots(figsize=(7.2, height), dpi=150)
 
-    hours = [h for h, _ in data["by_hour"]]
-    counts = [c for _, c in data["by_hour"]]
-    fig, ax = plt.subplots(figsize=(7.2, 2.9), dpi=150)
+
+def _finish(plt, fig, ax, xlabel: str, ylabel: str = "records",
+            grid_axis: str = "y") -> BytesIO:
+    """Shared chart furniture: grid behind, no top/right spines, muted ticks."""
+    ax.set_xlabel(xlabel, fontsize=8.5, color=MUTED)
+    if ylabel:
+        ax.set_ylabel(ylabel, fontsize=8.5, color=MUTED)
+    ax.grid(axis=grid_axis, color=GRID, lw=0.8, zorder=0)
+    ax.set_axisbelow(True)
+    for s in ("top", "right"):
+        ax.spines[s].set_visible(False)
+    ax.tick_params(labelsize=8, colors=MUTED)
+    fig.tight_layout()
+    buf = BytesIO(); fig.savefig(buf, format="png"); plt.close(fig); buf.seek(0)
+    return buf
+
+
+def _chart_by_hour(spec) -> BytesIO:
+    plt, (fig, ax) = _new_axes(2.9)
+    hours = [h for h, _ in spec["rows"]]
+    counts = [c for _, c in spec["rows"]]
     ax.bar(hours, counts, color=BLUE, width=0.72, zorder=3)
     for h, c in zip(hours, counts):
         if c:
             ax.text(h, c, str(c), ha="center", va="bottom", fontsize=7.5, color=INK)
-    ax.set_xlabel("hour of day", fontsize=8.5, color=MUTED)
-    ax.set_ylabel("trips", fontsize=8.5, color=MUTED)
-    ax.grid(axis="y", color=GRID, lw=0.8, zorder=0)
-    ax.set_axisbelow(True)
-    for s in ("top", "right"):
-        ax.spines[s].set_visible(False)
-    ax.tick_params(labelsize=8, colors=MUTED)
-    fig.tight_layout()
-    buf = BytesIO(); fig.savefig(buf, format="png"); plt.close(fig); buf.seek(0)
-    return buf
+    return _finish(plt, fig, ax, "hour of day")
 
 
-def _chart_duration_hist(data) -> BytesIO:
-    import matplotlib
-    matplotlib.use("Agg")
-    import matplotlib.pyplot as plt
+def _chart_histogram(spec) -> BytesIO:
+    """Six equal buckets across the column's observed range, plus an overflow.
 
-    labels = ["0-10", "10-20", "20-30", "30-40", "40-50", "50-60", "60+"]
+    Labels are computed from the real min/max rather than assuming a 0-60
+    minute scale, so the same renderer serves trip durations and lease acreage.
+    """
+    plt, (fig, ax) = _new_axes(2.6)
+    lo, hi = spec["min"], spec["max"]
+    step = (hi - lo) / 6 if hi > lo else 1.0
+
+    def _fmt(v: float) -> str:
+        return f"{v:,.0f}" if abs(v) >= 100 or v == int(v) else f"{v:,.1f}"
+
+    labels = [f"{_fmt(lo + i * step)}–{_fmt(lo + (i + 1) * step)}" for i in range(6)]
+    labels.append(f"{_fmt(hi)}+")
     counts = [0] * 7
-    for b, c in data["durations"]:
-        # width_bucket(v, 0, 60, 6) returns 1..6 for values inside the range
-        # and 7 at or above the upper bound. Index 0 is the 0-10 bucket, so
-        # bucket b maps to index b-1.
+    for b, c in spec["rows"]:
         if b is None:
             continue
+        # width_bucket returns 1..6 inside the range and 7 at/above the top.
         counts[min(max(int(b) - 1, 0), 6)] += c
-    fig, ax = plt.subplots(figsize=(7.2, 2.6), dpi=150)
     ax.bar(labels, counts, color=ORANGE, width=0.68, zorder=3)
     for i, c in enumerate(counts):
         if c:
             ax.text(i, c, str(c), ha="center", va="bottom", fontsize=7.5, color=INK)
-    ax.set_xlabel("trip duration (minutes)", fontsize=8.5, color=MUTED)
-    ax.set_ylabel("trips", fontsize=8.5, color=MUTED)
-    ax.grid(axis="y", color=GRID, lw=0.8, zorder=0)
-    ax.set_axisbelow(True)
-    for s in ("top", "right"):
-        ax.spines[s].set_visible(False)
-    ax.tick_params(labelsize=8, colors=MUTED)
-    fig.tight_layout()
-    buf = BytesIO(); fig.savefig(buf, format="png"); plt.close(fig); buf.seek(0)
-    return buf
+    ax.tick_params(axis="x", labelrotation=20)
+    return _finish(plt, fig, ax, spec["column"].replace("_", " "))
 
 
-def _chart_top_stations(data) -> BytesIO:
-    import matplotlib
-    matplotlib.use("Agg")
-    import matplotlib.pyplot as plt
-
-    rows = list(reversed(data["top_stations"]))
-    names = [r[0] for r in rows]
+def _chart_categories(spec) -> BytesIO:
+    plt, (fig, ax) = _new_axes(2.05)
+    rows = list(reversed(spec["rows"]))
+    names = [("(blank)" if r[0] in (None, "") else str(r[0]))[:38] for r in rows]
     counts = [r[1] for r in rows]
-    fig, ax = plt.subplots(figsize=(7.2, 2.05), dpi=150)
     ax.barh(range(len(rows)), counts, color=AQUA, height=0.62, zorder=3)
     ax.set_yticks(range(len(rows)))
     ax.set_yticklabels(names, fontsize=7.5)
     for i, c in enumerate(counts):
         ax.text(c, i, f" {c}", va="center", fontsize=7.5, color=INK)
-    ax.set_xlabel("trips started (station name is masked per Ranger policy)",
-                  fontsize=8, color=MUTED)
-    ax.grid(axis="x", color=GRID, lw=0.8, zorder=0)
-    ax.set_axisbelow(True)
-    for s in ("top", "right"):
-        ax.spines[s].set_visible(False)
-    ax.tick_params(labelsize=8, colors=MUTED)
-    fig.tight_layout()
-    buf = BytesIO(); fig.savefig(buf, format="png"); plt.close(fig); buf.seek(0)
-    return buf
+    note = (" (value is masked per Ranger policy)"
+            if spec["column"].endswith("_masked") else "")
+    return _finish(plt, fig, ax, f"records{note}", ylabel="", grid_axis="x")
 
 
-def run(logical_date: date, out_dir: Path, conn=None) -> dict:
+_RENDERERS = {
+    "by_hour": (_chart_by_hour, 68.0),
+    "histogram": (_chart_histogram, 61.0),
+    "categories": (_chart_categories, 170.0 * (2.05 / 7.2)),
+}
+
+
+def run(logical_date: date, out_dir: Path, conn=None,
+        dataset: str = "trips", primary_key: str = "trip_id",
+        title: str | None = None) -> dict:
     from reportlab.lib import colors
     from reportlab.lib.pagesizes import A4
     from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
@@ -157,18 +183,19 @@ def run(logical_date: date, out_dir: Path, conn=None) -> dict:
         from pipeline.load.postgres_load import connection_from_env
         conn = connection_from_env()
     try:
-        data = _fetch(conn, logical_date)
+        data = _fetch(conn, logical_date, dataset, primary_key)
     finally:
         if owns:
             conn.close()
 
     if data["count"] == 0:
         raise RuntimeError(
-            f"no rows in the warehouse for {logical_date}; nothing to report. "
-            f"Run the load stage first.")
+            f"no rows in warehouse.{dataset} for {logical_date}; nothing to "
+            f"report. Run the load stage first.")
 
     out_dir.mkdir(parents=True, exist_ok=True)
-    pdf_path = out_dir / f"trips_report_{logical_date.isoformat()}.pdf"
+    pdf_path = out_dir / f"{dataset}_report_{logical_date.isoformat()}.pdf"
+    heading = title or f"{dataset.replace('_', ' ').title()} — Daily Report"
 
     styles = getSampleStyleSheet()
     h1 = ParagraphStyle("h1", parent=styles["Heading1"], fontSize=17,
@@ -183,22 +210,18 @@ def run(logical_date: date, out_dir: Path, conn=None) -> dict:
     doc = SimpleDocTemplate(str(pdf_path), pagesize=A4,
                             leftMargin=18 * mm, rightMargin=18 * mm,
                             topMargin=16 * mm, bottomMargin=16 * mm,
-                            title=f"Trips report {logical_date}")
+                            title=f"{dataset} report {logical_date}")
     story = [
-        Paragraph("Bikeshare Trips — Daily Report", h1),
+        Paragraph(heading, h1),
         Paragraph(
             f"Reporting date {logical_date.isoformat()} &nbsp;·&nbsp; "
             f"generated {datetime.now().strftime('%Y-%m-%d %H:%M')} &nbsp;·&nbsp; "
             f"source: masked warehouse", sub),
     ]
 
-    tiles = [[
-        f"{data['count']:,}\nTRIPS",
-        f"{data['avg_minutes']:.1f} min\nAVERAGE",
-        f"{data['longest']:,} min\nLONGEST",
-        f"{data['total_minutes']:,} min\nTOTAL RIDDEN",
-    ]]
-    t = Table(tiles, colWidths=[43 * mm] * 4, rowHeights=[17 * mm])
+    tiles = [[f"{value}\n{label}" for value, label in data["tiles"]]]
+    width = 172.0 / max(1, len(tiles[0]))
+    t = Table(tiles, colWidths=[width * mm] * len(tiles[0]), rowHeights=[17 * mm])
     t.setStyle(TableStyle([
         ("BOX", (0, 0), (-1, -1), 0.5, colors.HexColor(GRID)),
         ("INNERGRID", (0, 0), (-1, -1), 0.5, colors.HexColor(GRID)),
@@ -209,28 +232,28 @@ def run(logical_date: date, out_dir: Path, conn=None) -> dict:
     ]))
     story += [t, Spacer(1, 6)]
 
-    story += [Paragraph("Trips by hour of day", h2),
-              Image(_chart_trips_by_hour(data), width=170 * mm, height=68 * mm)]
-    story += [Paragraph("Trip duration distribution", h2),
-              Image(_chart_duration_hist(data), width=170 * mm, height=61 * mm)]
-    # Aspect ratio preserved (figure is 7.2 x 2.05 in), sized to leave room
-    # for the data-handling note on the same page.
-    story += [Paragraph("Busiest departure stations", h2),
-              Image(_chart_top_stations(data), width=170 * mm,
-                    height=170 * mm * (2.05 / 7.2))]
+    # Heights preserve each figure's aspect ratio (all are 7.2in wide).
+    for spec in data["charts"]:
+        render, height = _RENDERERS[spec["kind"]]
+        story += [Paragraph(spec["title"], h2),
+                  Image(render(spec), width=170 * mm, height=height * mm)]
 
-    masked_by = ", ".join(f"{m} ({c})" for m, c in data["provenance"])
+    masked_by = ", ".join(f"{m} ({c})" for m, c in data["provenance"]) or "n/a"
+    masked_cols = [s["column"] for s in data["charts"]
+                   if s["column"].endswith("_masked")]
+    masked_note = (
+        f" The masked values shown here (<b>{', '.join(masked_cols)}</b>) are "
+        f"the policy working as configured, not a rendering fault."
+        if masked_cols else "")
     story += [
         Paragraph("Data handling", h2),
         Paragraph(
-            "Station names, bike identifiers and membership tiers are shown "
-            "<b>masked</b>. Those fields were AES-256-GCM encrypted before "
+            "Columns classified as sensitive were AES-256-GCM encrypted before "
             "landing in Parquet, decrypted only inside the Hive stage, and "
             "written to the warehouse already masked under Apache Ranger "
-            f"policy — so no plaintext value exists in the warehouse this "
-            f"report reads. Masking applied by: <b>{masked_by}</b>. "
-            "A partially-masked station name is the policy working as "
-            "configured, not a rendering fault.", body),
+            "policy — so no plaintext value exists in the warehouse this "
+            f"report reads. Masking applied by: <b>{masked_by}</b>.{masked_note}",
+            body),
     ]
 
     doc.build(story)

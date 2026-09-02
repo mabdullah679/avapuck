@@ -1,0 +1,97 @@
+# Airflow image: standalone (api-server + scheduler + triggerer + dag-processor)
+# running the trips DAGs against the rest of the pipeline stack.
+#
+# Multi-stage so the runtime layer carries no build toolchain, matching
+# Dockerfile.pipeline. Installs from requirements.txt, which already pins
+# apache-airflow==3.0.2 and the providers the DAGs need -- Airflow is kept out
+# of requirements-pipeline.txt on purpose (see that file) so job pods never
+# carry it, but the Airflow container is exactly the place it belongs.
+FROM apache/hive:4.0.0 AS hive-src
+
+FROM python:3.12-slim AS builder
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        build-essential && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /build
+COPY requirements.txt .
+RUN pip install --no-cache-dir --prefix=/install -r requirements.txt
+
+# Hive JDBC bridge. JPype1 is a C++ extension, so it is compiled HERE where
+# the toolchain lives, and only the built artifact reaches the runtime layer.
+RUN apt-get update && apt-get install -y --no-install-recommends g++ \
+    && rm -rf /var/lib/apt/lists/* \
+    && pip install --no-cache-dir --prefix=/install "JPype1==1.5.0" "JayDeBeApi==1.2.3"
+
+
+FROM python:3.12-slim AS runtime
+
+# curl for healthchecks; a JRE because two stages need a JVM in THIS image:
+#   * the PySpark driver, which runs here and submits to spark-master
+#   * beeline, which registers the Hive table over JDBC
+# Headless JRE only -- no compiler, no AWT. Java 21: Spark 4.0.0 supports 17
+# and 21 but NOT 25, and Debian trixie (this base) ships only 21 and 25, so 21
+# is the single version that satisfies both. The spark images run 17; driver
+# and executors may differ across that range.
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        curl openjdk-21-jre-headless \
+    && rm -rf /var/lib/apt/lists/*
+
+# Derived, not hardcoded: the JDK path is arch-specific
+# (…-arm64 on Apple silicon, …-amd64 on x86), so resolve it at build time and
+# persist it for beeline, which refuses to start without JAVA_HOME.
+RUN JH="$(dirname "$(dirname "$(readlink -f "$(command -v java)")")")" \
+    && printf 'JAVA_HOME=%s\n' "$JH" >> /etc/environment \
+    && ln -sfn "$JH" /opt/java-home
+ENV JAVA_HOME=/opt/java-home
+
+# Hive JDBC driver, for registering the masked Parquet as an external table.
+#
+# Copied from the official Hive image rather than assembled from Maven: the
+# hive-jdbc "standalone" jar is missing Hadoop and commons-logging classes the
+# driver loads at CONNECT time, and chasing those transitively is how you end
+# up with a subtly wrong classpath. apache/hive:4.0.0 already ships a set that
+# is known to work together, so take that set wholesale.
+#
+# NOTE: pip's pyspark installs its own /usr/local/bin/beeline. That one is
+# Spark's, calls spark-class, and cannot talk to HiveServer2 -- do not use it.
+COPY --from=hive-src /opt/hive/lib /opt/hive-jdbc
+# Hive's lib does not contain Hadoop itself -- the image gets it from
+# /opt/hadoop -- and the driver loads org.apache.hadoop.fs.FileSystem while
+# opening a connection. Take Hadoop's common jars from the same image so the
+# two sets are the versions that were tested together.
+COPY --from=hive-src /opt/hadoop/share/hadoop/common /opt/hadoop-jars/common
+COPY --from=hive-src /opt/hadoop/share/hadoop/common/lib /opt/hadoop-jars/common-lib
+ENV HIVE_JDBC_JAR=/opt/hive-jdbc/hive-jdbc-4.0.0.jar \
+    HIVE_JDBC_CLASSPATH=/opt/hive-jdbc:/opt/hadoop-jars/common:/opt/hadoop-jars/common-lib
+
+COPY --from=builder /install /usr/local
+
+# The setproctitle native extension segfaults on fork on some hosts; Airflow
+# already no-ops it on its own worker/log-server paths, but the
+# scheduler/triggerer/executor import it unconditionally. Dropping the
+# compiled extension makes the package fall back to its built-in pure-Python
+# stub instead of crashing -- cosmetic loss only (no renamed process titles).
+RUN find /usr/local/lib -name '_setproctitle*.so' -delete
+
+WORKDIR /opt/pipeline
+COPY pipeline/   /opt/pipeline/pipeline/
+COPY services/   /opt/pipeline/services/
+COPY config/     /opt/pipeline/config/
+COPY dags/       /opt/pipeline/dags/
+
+ENV PYTHONPATH=/opt/pipeline \
+    PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    AIRFLOW_HOME=/opt/airflow \
+    AIRFLOW__CORE__DAGS_FOLDER=/opt/pipeline/dags \
+    AIRFLOW__CORE__LOAD_EXAMPLES=False
+
+RUN useradd -r -u 10001 -m -d /home/airflow airflow \
+    && mkdir -p /opt/airflow /data && chown -R 10001:10001 /opt/pipeline /opt/airflow /data
+USER 10001
+
+EXPOSE 8080
+
+ENTRYPOINT ["airflow"]
+CMD ["standalone"]

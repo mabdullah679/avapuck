@@ -1,10 +1,46 @@
-# ── Credentials. Never commit. ────────────────────────────────────────────
-# The whole secrets/ directory is ignored rather than individual filenames,
-# so a differently-named key file cannot slip through.
+# ═══════════════════════════════════════════════════════════════════════════
+# SENSITIVE — never commit anything matched below.
+#
+# Layered on purpose: named paths first (what we know we produce), then broad
+# patterns (what a future change might produce under a name nobody predicted).
+# tests/test_secret_hygiene.py enforces this from the other side by failing if
+# credential material is ever staged or tracked.
+# ═══════════════════════════════════════════════════════════════════════════
+
+# ── Cloud / service credentials ───────────────────────────────────────────
+# The whole directory is ignored rather than individual filenames, so a
+# differently-named key file cannot slip through.
 secrets/
-*.json.key
+# GCP service account keys download with the project name and a random hex
+# suffix (avapuck-4a3cc0b1102a.json), so match that shape wherever it lands.
+*-[0-9a-f][0-9a-f][0-9a-f][0-9a-f]*.json
 *-sa.json
-service-account*.json
+*service-account*.json
+*credentials*.json
+*client_secret*.json
+gcp-*.json
+application_default_credentials.json
+
+# ── TLS / key material ────────────────────────────────────────────────────
+# The dev CA and service certs come from scripts/gen_certs.sh. The public
+# certs (certs/*.crt) ARE committed so a checkout can verify without a
+# regeneration step; the private keys never are.
+certs/*.key
+certs/*.srl
+certs/*.cnf
+*.pem
+*.p12
+*.pfx
+*.jks
+*.keystore
+id_rsa
+id_rsa.*
+id_ed25519
+id_ed25519.*
+*.ppk
+
+# ── Environment files ─────────────────────────────────────────────────────
+# Real values live in .env; the committed examples carry placeholders only.
 .env
 .env.*
 .env.local
@@ -12,17 +48,47 @@ service-account*.json
 !.env.example
 !.env.local.example
 
-# Local state
-.venv/
-__pycache__/
-*.pyc
+# ═══════════════════════════════════════════════════════════════════════════
+# PIPELINE DATA — regenerated every run, and some of it is sensitive.
+# ═══════════════════════════════════════════════════════════════════════════
+
+# Extracted source data, before any encryption. PLAINTEXT by definition.
 data/csv/
+# Card prefix/suffix split out of PANs. Middles are encrypted, but the clear
+# prefix and suffix are still cardholder data and must not be committed.
+data/cards/
+# Encrypted Parquet, masked Hive files, generated PDFs.
 data/parquet/
 data/hive/
 data/reports/
+# Delivered report copies (scripts/collect_report.sh, and the report stage).
+pipeline-reports/
+
+# ── Local state ───────────────────────────────────────────────────────────
+.venv/
+venv/
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
 airflow_home/
 logs/
 *.log
+*.db
+*.sqlite
+*.sqlite3
 
-# Docker volumes
+# Airflow standalone writes a generated admin password to disk.
+standalone_admin_password.txt
+simple_auth_manager_passwords.json.generated
+
+# ── Docker / OS noise ─────────────────────────────────────────────────────
 docker/volumes/
+.DS_Store
+Thumbs.db
+*.swp
+*~
+.idea/
+.vscode/

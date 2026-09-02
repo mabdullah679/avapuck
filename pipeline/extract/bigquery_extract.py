@@ -260,6 +260,12 @@ class BigQueryExtractor:
             for r in rows:
                 w.writerow([_cell(r.get(c)) for c in COLUMNS])
 
+        # Downstream stages read the manifest rather than a hardcoded column
+        # list, so the live path has to write one too.
+        from pipeline.metadata import schema as schema_mod
+        schema_mod.write_manifest(
+            schema_mod.infer(csv_path, dataset="trips"), csv_path)
+
         result = ExtractResult(
             logical_date=logical_date.isoformat(),
             window_date=window_start.isoformat(),

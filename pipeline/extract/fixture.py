@@ -82,6 +82,14 @@ class FixtureExtractor:
             for r in rows:
                 w.writerow([r[c] for c in COLUMNS])
 
+        # The manifest is what the downstream stages read instead of a
+        # hardcoded column list. Written here too -- not just on the CSV-source
+        # path -- so trips flows through exactly the same generic stages as any
+        # other dataset, rather than keeping a private route through them.
+        from pipeline.metadata import schema as schema_mod
+        schema_mod.write_manifest(
+            schema_mod.infer(csv_path, dataset="trips"), csv_path)
+
         return ExtractResult(
             logical_date=logical_date.isoformat(),
             # The fixture has no archive to map onto -- it synthesises rows for
@@ -98,14 +106,22 @@ class FixtureExtractor:
 
 
 def get_extractor():
-    """Choose live or fixture from config.
+    """Choose the CSV source, live BigQuery, or the fixture, from config.
 
-    Defaults to the fixture ONLY when no project is configured, so that a
+    Defaults to the fixture ONLY when nothing else is configured, so that a
     misconfigured live run fails loudly rather than silently producing
     synthetic data that looks real.
+
+    CSV_SOURCE_PATH wins over everything when set, including EXTRACT_MODE=live:
+    naming a specific file is an unambiguous instruction, and silently querying
+    BigQuery instead would be both surprising and billable.
     """
     import os
     mode = os.environ.get("EXTRACT_MODE", "auto").lower()
+
+    if mode == "csv" or os.environ.get("CSV_SOURCE_PATH"):
+        from pipeline.extract.csv_source import extractor_from_env as csv_from_env
+        return csv_from_env()
     if mode == "fixture":
         return FixtureExtractor(row_limit=int(os.environ.get("BQ_ROW_LIMIT", "100")))
     if mode == "live":

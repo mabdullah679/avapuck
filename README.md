@@ -8,10 +8,16 @@ emits a PDF report with charts.
 Runs on Kubernetes (minikube) or locally with Docker Compose.
 
 ```
-BigQuery ──▶ CSV ──▶ [encrypt] ──▶ Parquet ──▶ [decrypt+mask] ──▶ Hive
+BigQuery/CSV ──▶ CSV ──▶ [card split] ──▶ [encrypt] ──▶ Parquet
+                                                            │
+                                              [decrypt + mask] ──▶ Hive
                                                                     │
                                           PDF ◀── Postgres ◀────────┘
 ```
+
+Six Airflow DAGs, chained by Airflow Assets: `01_extract` → `02_card_split` →
+`03_encrypt` → `04_mask` → `05_load` → `06_report`. Only the first has a clock
+schedule; the rest run when the data they consume appears.
 
 ---
 
@@ -21,8 +27,13 @@ BigQuery ──▶ CSV ──▶ [encrypt] ──▶ Parquet ──▶ [decrypt+
 production-grade, what is stubbed, and what has never been verified. Two
 examples that will matter to you on day one:
 
-- **TLS is not enabled.** Services speak plain HTTP inside the cluster. The
-  "HTTPS crypto service" is HTTP today.
+- **TLS is enabled locally, with a self-signed dev CA.** The IdP and crypto
+  service serve real HTTPS and every client verifies against `certs/ca.crt`.
+  But the CA's private key sits in `certs/` beside the certs it signs, so this
+  trust root is worth exactly as much as the machine holding it. The Kubernetes
+  manifests were **not** updated and are still plain HTTP.
+- **Card splitting protects only ~6 digits.** See §2.8 — fine for the published
+  test PANs in the sample data, not for live cardholder data.
 - **Apache Ranger's admin service is not deployed.** Masking uses genuine Ranger
   policy JSON, applied by a local engine implementing Ranger's semantics. Every
   masked row records `masked_by` so you can always tell which ran.
@@ -58,7 +69,12 @@ changing anything**:
 
 ---
 
-## Quick start — Kubernetes (recommended)
+## Quick start — Kubernetes
+
+**Start with Docker Compose below unless you specifically need Kubernetes.**
+The Compose path is the one that has TLS enabled, runs encryption on the real
+Spark cluster, and registers real Hive tables; the k8s manifests predate all
+three (see `TRUST-BOUNDARY.md` §4c).
 
 Full detail in **`docs/DEPLOYMENT.md`**. The short version:
 
@@ -82,12 +98,129 @@ make -f Makefile.k8s logs
 
 ## Quick start — local Docker Compose
 
+This is the path to use if you just want to see the pipeline run. It works
+**without a Google Cloud account**: the CSV source path exercises every stage
+end to end using sample data in the repo.
+
+### 1. Prerequisites
+
+- Docker Desktop with **≥ 12 GB** allocated to Docker (Settings → Resources).
+  The stack runs Spark, Hive, two Postgres instances and Airflow.
+- `openssl` on your PATH (macOS and most Linux ship it).
+- No Python install needed on the host — everything runs in containers.
+
+### 2. Generate your own TLS certificates
+
+The repo does **not** ship private keys. Generate your own local CA and the
+two service certificates:
+
 ```bash
-python3.12 -m venv .venv && .venv/bin/pip install -r requirements.txt
-docker compose --profile core up -d
-.venv/bin/python scripts/run_chain.py --slot 2026-08-31T12:00
-open data/reports/*.pdf
+./scripts/gen_certs.sh
 ```
+
+This writes `certs/{ca,idp,crypto}.{crt,key}`. The keys are gitignored. Re-run
+with `--force` to regenerate (this invalidates anything trusting the old CA).
+
+### 3. Start the stack
+
+```bash
+docker compose --profile core up -d
+```
+
+Wait for health: `docker compose ps` should show `pl-airflow`, `pl-idp`,
+`pl-crypto`, `pl-postgres` and `pl-spark-master` as `healthy`. First start
+pulls and builds images and can take several minutes.
+
+### 4. Run the pipeline end to end
+
+```bash
+# Point the extract stage at the sample CSV (no GCP account required).
+CSV=/data/csv/BLM_CO_Q2_2026_Oil_and_Gas_Lease_Sale_-2400573660170243848.csv
+
+for d in trips_01_extract trips_02_card_split trips_03_encrypt \
+         trips_04_mask trips_05_load trips_06_report; do
+  docker exec -e CSV_SOURCE_PATH=$CSV pl-airflow \
+    airflow dags test $d 2026-09-02
+done
+```
+
+The finished PDF lands in `pipeline-reports/` on your host.
+
+### 5. Open the Airflow UI (optional)
+
+<http://localhost:8085>. The generated admin password:
+
+```bash
+docker exec pl-airflow cat /opt/airflow/simple_auth_manager_passwords.json.generated
+```
+
+### 6. Verify it actually did the work
+
+Worth running, because several stages fall back silently if misconfigured:
+
+```bash
+# Encryption ran on the real Spark cluster (not the pyarrow fallback):
+curl -s http://localhost:8080/json/ | grep -o '"name":"pipeline-encrypt"' | head -1
+
+# The Hive table exists and is queryable:
+docker exec pl-airflow python -c "
+import os; from pathlib import Path; import jaydebeapi
+jars=sorted(str(j) for d in os.environ['HIVE_JDBC_CLASSPATH'].split(':') if d
+            for j in Path(d).glob('*.jar'))
+c=jaydebeapi.connect('org.apache.hive.jdbc.HiveDriver',
+                     'jdbc:hive2://hiveserver2:10000',['',''],jars)
+cur=c.cursor(); cur.execute('SHOW TABLES IN trips_warehouse'); print(cur.fetchall())"
+
+# No plaintext card number reached the warehouse:
+docker exec pl-postgres psql -U pipeline -d analytics -t -c \
+  "select card_info_masked from warehouse.blm_co_q2_2026_oil_and_gas_lease_sale limit 3;"
+```
+
+---
+
+## Credentials you must supply
+
+**Nothing sensitive is committed to this repository.** Everything below is
+generated locally or comes from your own account.
+
+| What | Where it goes | Required? | How to get it |
+|---|---|---|---|
+| **TLS CA + certs** | `certs/` | **Yes** | `./scripts/gen_certs.sh` — self-signed, local only |
+| **GCP service-account key** | `secrets/gcp-sa.json` | Only for live BigQuery | See below |
+| **GCP project id** | `GCP_PROJECT_ID` env or `.env` | Only for live BigQuery | The project **ID** string, not the number |
+| **Service secrets** | compose defaults | No | Dev fallbacks (`dev-spark-secret`, …) are fine locally, **not** anywhere shared |
+| **Postgres password** | compose default | No | `pipeline-dev-password` locally; override via `POSTGRES_PASSWORD` |
+| **Airflow admin password** | auto-generated | No | Read it from the container (step 5) |
+
+### If you want live BigQuery
+
+1. In Google Cloud Console → **IAM & Admin → Service Accounts → Create**.
+2. Grant **BigQuery Job User** (`roles/bigquery.jobUser`). That is enough — the
+   pipeline only runs query jobs, and `bigquery-public-data` is readable by any
+   authenticated user. Do not grant broader roles than this.
+3. **Keys → Add key → JSON**, download it.
+4. Put it at `secrets/gcp-sa.json` and `chmod 600` it. That directory is
+   gitignored; **never commit this file** — it bills a real project.
+5. Set your project id and switch the extract mode:
+
+```bash
+cat > .env <<'ENV'
+GCP_PROJECT_ID=your-project-id
+GOOGLE_APPLICATION_CREDENTIALS=/secrets/gcp-sa.json
+EXTRACT_MODE=live
+ENV
+docker compose --profile core up -d airflow
+```
+
+Cost control is already in place — 100 rows per run, capped in SQL and by
+`BQ_MAX_BYTES_BILLED` (default 300 MB) — but **you** are paying, so read
+`docs/DATASET-CHOICE.md` before pointing it at a large table.
+
+### Rotating or revoking
+
+- TLS: re-run `./scripts/gen_certs.sh --force`, then
+  `docker compose --profile core up -d --force-recreate idp crypto airflow`.
+- GCP: delete the key in the Cloud Console; the file alone is the credential.
 
 ---
 

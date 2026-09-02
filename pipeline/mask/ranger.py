@@ -85,13 +85,23 @@ class MaskingProvider(Protocol):
 
 
 class LocalPolicyProvider:
-    """Applies the policy file directly. Used when Ranger admin is not up."""
+    """Applies the policy file directly. Used when Ranger admin is not up.
+
+    Accepts EXTRA policy files so a generated per-dataset policy is enforced
+    through exactly the same path as the hand-authored trips one. They are
+    concatenated, not merged: `masks_for` already filters by database/table, so
+    a policy for another dataset simply never matches.
+    """
 
     name = "local-policy-engine"
 
-    def __init__(self, policy_path: Path = DEFAULT_POLICY):
+    def __init__(self, policy_path: Path = DEFAULT_POLICY,
+                 extra_paths: list[Path] | None = None):
         self.policy_path = policy_path
-        self._policies = json.loads(policy_path.read_text())["policies"]
+        self._policies = []
+        for path in [policy_path, *(extra_paths or [])]:
+            if path and Path(path).exists():
+                self._policies.extend(json.loads(Path(path).read_text())["policies"])
 
     def masks_for(self, database: str, table: str, group: str) -> dict[str, str]:
         out: dict[str, str] = {}
@@ -166,11 +176,15 @@ class RangerAdminProvider:
         return pushed
 
 
-def get_provider() -> MaskingProvider:
+def get_provider(extra_policy_paths: list[Path] | None = None) -> MaskingProvider:
     """Live Ranger when reachable, local policy engine otherwise.
 
     Probes rather than assuming, and logs which one it chose -- the distinction
     goes on every masked output and into the trust boundary.
+
+    `extra_policy_paths` carries generated per-dataset policies; live Ranger
+    ignores them because it serves whatever has been pushed to it, which is the
+    correct precedence -- the running service is the authority when it is up.
     """
     url = os.environ.get("RANGER_URL")
     if url:
@@ -188,4 +202,4 @@ def get_provider() -> MaskingProvider:
                     password=os.environ.get("RANGER_ADMIN_PASSWORD", ""))
         except Exception as e:  # noqa: BLE001
             log.warning("Ranger admin unreachable (%s); using local policy engine", e)
-    return LocalPolicyProvider()
+    return LocalPolicyProvider(extra_paths=extra_policy_paths)

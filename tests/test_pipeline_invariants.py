@@ -17,7 +17,10 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
 from pipeline.mask.ranger import LocalPolicyProvider, MaskingError, apply_mask
-from pipeline.transform.spark_encrypt import SENSITIVE_COLUMNS, assert_no_plaintext
+from pipeline.transform.spark_encrypt import (
+    TRIPS_SENSITIVE_COLUMNS as SENSITIVE_COLUMNS,
+    assert_no_plaintext,
+)
 
 
 # ── Masking ───────────────────────────────────────────────────────────────
@@ -63,7 +66,7 @@ def test_plaintext_guard_catches_unencrypted_column():
     out = [{f"{c}_encrypted": "enc:v1:AAAA" for c in SENSITIVE_COLUMNS}]
     out[0]["bike_id"] = "Barton Springs & Riverside"      # survived in the clear
     with pytest.raises(RuntimeError, match="REFUSING TO WRITE"):
-        assert_no_plaintext(out, src)
+        assert_no_plaintext(out, src, SENSITIVE_COLUMNS)
 
 
 def test_plaintext_guard_catches_missing_ciphertext():
@@ -71,7 +74,7 @@ def test_plaintext_guard_catches_missing_ciphertext():
     out = [{f"{c}_encrypted": "enc:v1:AAAA" for c in SENSITIVE_COLUMNS}]
     out[0]["bike_id_encrypted"] = None
     with pytest.raises(RuntimeError, match="REFUSING TO WRITE"):
-        assert_no_plaintext(out, src)
+        assert_no_plaintext(out, src, SENSITIVE_COLUMNS)
 
 
 def test_plaintext_guard_catches_non_envelope_output():
@@ -80,7 +83,7 @@ def test_plaintext_guard_catches_non_envelope_output():
     out = [{f"{c}_encrypted": "enc:v1:AAAA" for c in SENSITIVE_COLUMNS}]
     out[0]["subscriber_type_encrypted"] = "Local365"
     with pytest.raises(RuntimeError, match="REFUSING TO WRITE"):
-        assert_no_plaintext(out, src)
+        assert_no_plaintext(out, src, SENSITIVE_COLUMNS)
 
 
 def test_plaintext_guard_allows_short_values_without_false_positives():
@@ -89,7 +92,7 @@ def test_plaintext_guard_allows_short_values_without_false_positives():
     src = [{c: "1" for c in SENSITIVE_COLUMNS}]
     payload = base64.b64encode(b"\x00" * 28).decode()
     out = [{f"{c}_encrypted": f"enc:v1:{payload}" for c in SENSITIVE_COLUMNS}]
-    assert_no_plaintext(out, src)            # must not raise
+    assert_no_plaintext(out, src, SENSITIVE_COLUMNS)            # must not raise
 
 
 # ── Extract cost controls ─────────────────────────────────────────────────

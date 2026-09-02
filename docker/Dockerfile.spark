@@ -6,9 +6,31 @@
 FROM apache/spark:4.0.0-python3
 
 USER root
-RUN pip install --no-cache-dir \
+
+# PySpark refuses to run when driver and executor differ in Python MINOR
+# version, and it is the executors that must match the driver -- the Airflow
+# container (the driver) is python:3.12-slim, while this image is Ubuntu jammy
+# and ships only 3.10. deadsnakes provides 3.12 for jammy; without this the
+# whole stage fails with PYTHON_VERSION_MISMATCH and falls back to pyarrow.
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        software-properties-common gpg-agent \
+    && add-apt-repository -y ppa:deadsnakes/ppa \
+    && apt-get update && apt-get install -y --no-install-recommends \
+        python3.12 python3.12-venv python3.12-dev \
+    && curl -sS https://bootstrap.pypa.io/get-pip.py | python3.12 \
+    && apt-get purge -y software-properties-common gpg-agent \
+    && apt-get autoremove -y && rm -rf /var/lib/apt/lists/*
+
+# Executors run the pipeline's transform code, so its deps must exist under
+# the SAME interpreter Spark will launch.
+RUN python3.12 -m pip install --no-cache-dir \
       "requests==2.32.3" "PyJWT[crypto]==2.10.1" "cryptography==44.0.0" \
       "pyarrow==18.1.0" && \
     mkdir -p /tmp/.ivy2 && chmod 777 /tmp/.ivy2
-ENV PYTHONPATH=/opt/pipeline PYTHONUNBUFFERED=1
+
+# Point Spark at 3.12 for both executor and driver-side workers.
+ENV PYSPARK_PYTHON=/usr/bin/python3.12 \
+    PYSPARK_DRIVER_PYTHON=/usr/bin/python3.12 \
+    PYTHONPATH=/opt/pipeline \
+    PYTHONUNBUFFERED=1
 USER spark

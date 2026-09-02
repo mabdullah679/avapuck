@@ -55,15 +55,15 @@ DATA = Path(os.environ.get("PIPELINE_DATA_ROOT") or (ROOT / "data"))
 
 
 def _crypto(client_id: str, secret_env: str):
-    from pipeline.common.auth import TokenClient
+    from pipeline.common.auth import TokenClient, tls_verify_from_env
     from pipeline.transform.spark_encrypt import CryptoClient
     tokens = TokenClient(
-        idp_url=os.environ.get("IDP_URL", "http://localhost:8443"),
+        idp_url=os.environ.get("IDP_URL", "https://localhost:8443"),
         client_id=client_id,
         client_secret=os.environ.get(secret_env, f"dev-{client_id}-secret"),
-        verify_tls=False)
-    return CryptoClient(os.environ.get("CRYPTO_URL", "http://localhost:8444"),
-                        tokens, verify_tls=False)
+        verify_tls=tls_verify_from_env())
+    return CryptoClient(os.environ.get("CRYPTO_URL", "https://localhost:8444"),
+                        tokens, verify_tls=tls_verify_from_env())
 
 
 def _encrypt_via_spark(d: date) -> dict | None:

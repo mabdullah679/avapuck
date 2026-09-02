@@ -16,6 +16,7 @@ Verification here is strict by construction:
 from __future__ import annotations
 
 import os
+import ssl
 import threading
 import time
 from dataclasses import dataclass
@@ -67,7 +68,14 @@ class TokenVerifier:
         if self._client is None:
             with self._lock:
                 if self._client is None:
-                    self._client = PyJWKClient(self._jwks_url, cache_keys=True)
+                    # PyJWKClient fetches the JWKS over urllib, not requests,
+                    # so PIPELINE_CA_BUNDLE has to be turned into an SSL
+                    # context here -- otherwise this one call verifies against
+                    # the system store, fails to find the dev CA, and every
+                    # token verification fails with an opaque 401.
+                    self._client = PyJWKClient(
+                        self._jwks_url, cache_keys=True,
+                        ssl_context=_jwks_ssl_context())
         return self._client
 
     def verify(self, token: str) -> Principal:
@@ -162,6 +170,33 @@ class TokenClient:
 
     def auth_header(self, audience: str) -> dict[str, str]:
         return {"Authorization": f"Bearer {self.token_for(audience)}"}
+
+
+def _jwks_ssl_context() -> "ssl.SSLContext | None":
+    """SSL context for the JWKS fetch, honouring PIPELINE_CA_BUNDLE.
+
+    None means "urllib's default", which is right when the IdP presents a
+    publicly-trusted certificate. Verification is never switched off.
+    """
+    ca = os.environ.get("PIPELINE_CA_BUNDLE")
+    return ssl.create_default_context(cafile=ca) if ca else None
+
+
+def tls_verify_from_env() -> bool | str:
+    """What `requests` should use to verify service certificates.
+
+    Returns the CA bundle path when PIPELINE_CA_BUNDLE is set -- the dev CA
+    from scripts/gen_certs.sh signs the IdP and crypto certs, and it is not in
+    any system trust store, so without this every HTTPS call fails.
+
+    Unset, this returns True: verify against the system store. That is the
+    correct default for real certificates, and it fails closed against the dev
+    CA rather than silently accepting an unverified peer. Verification is
+    never disabled here -- a `verify=False` client cannot tell the crypto
+    service from anything that answers on its port, which matters precisely
+    because that is the one hop carrying plaintext.
+    """
+    return os.environ.get("PIPELINE_CA_BUNDLE") or True
 
 
 def verifier_from_env(audience: str) -> TokenVerifier:

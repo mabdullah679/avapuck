@@ -15,28 +15,92 @@ from pathlib import Path
 
 log = logging.getLogger(__name__)
 
-UPSERT = """
-INSERT INTO warehouse.trips (
-    trip_id, logical_date, bike_id_masked, subscriber_type_masked,
-    start_station_masked, end_station_masked,
-    bike_id_blind_index, start_station_blind_index,
-    start_time, duration_minutes, masked_by
-) VALUES (%(trip_id)s, %(logical_date)s, %(bike_id_masked)s, %(subscriber_type_masked)s,
-          %(start_station_masked)s, %(end_station_masked)s,
-          %(bike_id_blind_index)s, %(start_station_blind_index)s,
-          %(start_time)s, %(duration_minutes)s, %(masked_by)s)
-ON CONFLICT (trip_id) DO UPDATE SET
-    logical_date              = EXCLUDED.logical_date,
-    bike_id_masked             = EXCLUDED.bike_id_masked,
-    subscriber_type_masked    = EXCLUDED.subscriber_type_masked,
-    start_station_masked      = EXCLUDED.start_station_masked,
-    end_station_masked        = EXCLUDED.end_station_masked,
-    bike_id_blind_index        = EXCLUDED.bike_id_blind_index,
-    start_station_blind_index = EXCLUDED.start_station_blind_index,
-    start_time                = EXCLUDED.start_time,
-    duration_minutes          = EXCLUDED.duration_minutes,
-    masked_by                 = EXCLUDED.masked_by,
-    loaded_at                 = now()
+def _warehouse_columns(manifest, rows: list[dict]) -> list[tuple[str, str]]:
+    """The warehouse table's columns, in a stable order, as (name, sql_type).
+
+    Derived from the manifest rather than declared, so a dataset's table
+    matches the dataset. Masked and blind-index columns are TEXT regardless of
+    the source type: masking turns a number into a hash or a run of 'n's.
+    """
+    key = manifest.primary_key
+    key_col = manifest.column(key)
+
+    cols: list[tuple[str, str]] = [
+        # A synthetic key is a hex digest, and a SENSITIVE natural key arrives
+        # as its blind index (the encrypt stage substitutes it rather than
+        # writing the plaintext) -- both are text. Only a non-sensitive natural
+        # key keeps the type the data had.
+        (key, key_col.sql_type
+         if key_col and not manifest.key_is_synthetic and not manifest.key_is_sensitive
+         else "TEXT"),
+        ("logical_date", "DATE"),
+    ]
+    for col in manifest.public_columns:
+        if col == key:
+            continue
+        spec = manifest.column(col)
+        cols.append((col, spec.sql_type if spec else "TEXT"))
+    for col in manifest.blind_indexed:
+        cols.append((f"{col}_blind_index", "TEXT"))
+    for col in manifest.sensitive_columns:
+        cols.append((f"{col}_masked", "TEXT"))
+    cols.append(("masked_by", "TEXT"))
+
+    # Only keep what the masked rows actually carry, so a manifest that has
+    # drifted from the data produces a table matching the data, not the claim.
+    present = set(rows[0]) if rows else set()
+    return [(c, t) for c, t in cols if c in present or c in (key, "logical_date")]
+
+
+def _ensure_table(cur, manifest, columns: list[tuple[str, str]]) -> None:
+    """Create the dataset's table, and add any column it has grown.
+
+    Runtime DDL is deliberate here: the pipeline accepts datasets it has never
+    seen, so the table cannot be declared ahead of time in init-warehouse.sql.
+    It is additive only -- never a DROP, never a type change -- so an existing
+    table with data is widened rather than replaced.
+    """
+    key = manifest.primary_key
+    body = ",\n    ".join(f"{name} {sql_type}" for name, sql_type in columns)
+    cur.execute(f"""
+        CREATE TABLE IF NOT EXISTS warehouse.{manifest.dataset} (
+            {body},
+            loaded_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+            PRIMARY KEY ({key})
+        )
+    """)
+    cur.execute("""
+        SELECT column_name FROM information_schema.columns
+        WHERE table_schema = 'warehouse' AND table_name = %s
+    """, (manifest.dataset,))
+    existing = {r[0] for r in cur.fetchall()}
+    for name, sql_type in columns:
+        if name not in existing:
+            log.info("adding column %s %s to warehouse.%s", name, sql_type,
+                     manifest.dataset)
+            cur.execute(
+                f"ALTER TABLE warehouse.{manifest.dataset} "
+                f"ADD COLUMN {name} {sql_type}")
+
+
+def _build_upsert(manifest, columns: list[tuple[str, str]]) -> str:
+    """The UPSERT for this dataset.
+
+    Still an upsert on the primary key, so non-negotiable #5 holds exactly as
+    before: re-running a logical date replaces its rows instead of duplicating
+    them. Only the column list is now derived rather than typed out.
+    """
+    key = manifest.primary_key
+    names = [c for c, _ in columns]
+    placeholders = ", ".join(f"%({c})s" for c in names)
+    updates = ",\n    ".join(
+        f"{c} = EXCLUDED.{c}" for c in names if c != key)
+    return f"""
+INSERT INTO warehouse.{manifest.dataset} ({", ".join(names)})
+VALUES ({placeholders})
+ON CONFLICT ({key}) DO UPDATE SET
+    {updates},
+    loaded_at = now()
 RETURNING (xmax = 0) AS inserted
 """
 
@@ -56,9 +120,17 @@ def connection_from_env():
 def run(logical_date: date, hive_parquet: Path, extract_meta: dict | None = None) -> dict:
     import pyarrow.parquet as pq
 
+    from pipeline.metadata import schema as schema_mod
+
+    manifest = schema_mod.load_manifest(hive_parquet)
+
     rows = pq.read_table(hive_parquet).to_pylist()
     if not rows:
         raise RuntimeError(f"{hive_parquet} has no rows")
+
+    columns = _warehouse_columns(manifest, rows)
+    upsert = _build_upsert(manifest, columns)
+    names = [c for c, _ in columns]
 
     started = datetime.now(timezone.utc)
     run_id = str(uuid.uuid4())
@@ -67,20 +139,14 @@ def run(logical_date: date, hive_parquet: Path, extract_meta: dict | None = None
     conn = connection_from_env()
     try:
         with conn, conn.cursor() as cur:
+            _ensure_table(cur, manifest, columns)
+
             for r in rows:
-                cur.execute(UPSERT, {
-                    "trip_id": r["trip_id"],
-                    "logical_date": logical_date,
-                    "bike_id_masked": r.get("bike_id_masked"),
-                    "subscriber_type_masked": r.get("subscriber_type_masked"),
-                    "start_station_masked": r.get("start_station_masked"),
-                    "end_station_masked": r.get("end_station_masked"),
-                    "bike_id_blind_index": r.get("bike_id_blind_index"),
-                    "start_station_blind_index": r.get("start_station_blind_index"),
-                    "start_time": r["start_time"],
-                    "duration_minutes": int(r["duration_minutes"]),
-                    "masked_by": r.get("masked_by", "unknown"),
-                })
+                params = {c: r.get(c) for c in names}
+                # logical_date is the run's date, not whatever the row carried
+                # -- that is what makes a re-run overwrite its own partition.
+                params["logical_date"] = logical_date
+                cur.execute(upsert, params)
                 if cur.fetchone()[0]:
                     inserted += 1
                 else:
@@ -99,6 +165,7 @@ def run(logical_date: date, hive_parquet: Path, extract_meta: dict | None = None
     finally:
         conn.close()
 
-    log.info("loaded %d inserted / %d updated for %s", inserted, updated, logical_date)
+    log.info("loaded %d inserted / %d updated into warehouse.%s for %s",
+             inserted, updated, manifest.dataset, logical_date)
     return {"run_id": run_id, "inserted": inserted, "updated": updated,
-            "total": len(rows)}
+            "total": len(rows), "dataset": manifest.dataset}

@@ -19,9 +19,12 @@ services:
     profiles: [core]
     build: {context: ., dockerfile: docker/Dockerfile.service}
     container_name: pl-idp
-    command: uvicorn services.idp.app:app --host 0.0.0.0 --port 8443
+    command: >
+      uvicorn services.idp.app:app --host 0.0.0.0 --port 8443
+      --ssl-certfile /certs/idp.crt --ssl-keyfile /certs/idp.key
+    volumes: ["./certs:/certs:ro"]
     environment:
-      IDP_ISSUER: http://idp:8443
+      IDP_ISSUER: https://idp:8443
       IDP_TOKEN_TTL: "300"
       CLIENT_SECRET_EXTRACT_JOB: ${CLIENT_SECRET_EXTRACT_JOB:-dev-extract-secret}
       CLIENT_SECRET_SPARK_JOB: ${CLIENT_SECRET_SPARK_JOB:-dev-spark-secret}
@@ -32,7 +35,7 @@ services:
     ports: ["8443:8443"]
     mem_limit: 512m
     healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request;urllib.request.urlopen('http://localhost:8443/health')"]
+      test: ["CMD", "python", "-c", "import ssl,urllib.request;urllib.request.urlopen('https://localhost:8443/health',context=ssl.create_default_context(cafile='/certs/ca.crt'))"]
       interval: 5s
       timeout: 3s
       retries: 12
@@ -43,10 +46,14 @@ services:
     profiles: [core]
     build: {context: ., dockerfile: docker/Dockerfile.service}
     container_name: pl-crypto
-    command: uvicorn services.crypto.app:app --host 0.0.0.0 --port 8444
+    command: >
+      uvicorn services.crypto.app:app --host 0.0.0.0 --port 8444
+      --ssl-certfile /certs/crypto.crt --ssl-keyfile /certs/crypto.key
+    volumes: ["./certs:/certs:ro"]
     environment:
-      IDP_ISSUER: http://idp:8443
-      IDP_JWKS_URL: http://idp:8443/.well-known/jwks.json
+      IDP_ISSUER: https://idp:8443
+      IDP_JWKS_URL: https://idp:8443/.well-known/jwks.json
+      PIPELINE_CA_BUNDLE: /certs/ca.crt
       CRYPTO_MASTER_KEY: ${CRYPTO_MASTER_KEY:-}
       BLIND_INDEX_KEY: ${BLIND_INDEX_KEY:-}
       CRYPTO_KEY_VERSION: v1
@@ -55,7 +62,7 @@ services:
     depends_on:
       idp: {condition: service_healthy}
     healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request;urllib.request.urlopen('http://localhost:8444/health')"]
+      test: ["CMD", "python", "-c", "import ssl,urllib.request;urllib.request.urlopen('https://localhost:8444/health',context=ssl.create_default_context(cafile='/certs/ca.crt'))"]
       interval: 5s
       timeout: 3s
       retries: 12
@@ -120,6 +127,11 @@ services:
     volumes:
       - ./data/hive:/opt/hive/data/warehouse
       - ./docker/postgresql-jdbc.jar:/opt/hive/lib/postgresql.jar:ro
+      # The external table LOCATION is an absolute /data/... path written by
+      # the mask stage, and Hive resolves it inside ITS OWN container -- so
+      # /data must exist here too, at the same path, or the DDL fails with
+      # "not a directory or unable to create one".
+      - ./data:/data:rw
 
   hiveserver2:
     <<: *common
@@ -135,6 +147,11 @@ services:
     depends_on: [hive-metastore]
     volumes:
       - ./data/hive:/opt/hive/data/warehouse
+      # The external table LOCATION is an absolute /data/... path written by
+      # the mask stage, and Hive resolves it inside ITS OWN container -- so
+      # /data must exist here too, at the same path, or the DDL fails with
+      # "not a directory or unable to create one".
+      - ./data:/data:rw
 
   # ── Spark ────────────────────────────────────────────────────────────────
   spark-master:
@@ -166,12 +183,111 @@ services:
       SPARK_WORKER_CORES: "2"
       SPARK_WORKER_MEMORY: 2g
       PYTHONPATH: /opt/pipeline
+      IDP_URL: https://idp:8443
+      CRYPTO_URL: https://crypto:8444
+      PIPELINE_CA_BUNDLE: /opt/pipeline/certs/ca.crt
+      CLIENT_SECRET_SPARK_JOB: ${CLIENT_SECRET_SPARK_JOB:-dev-spark-secret}
     mem_limit: 3g
     depends_on:
       spark-master: {condition: service_healthy}
-    volumes: [./:/opt/pipeline:rw]
+    # Executors write the Parquet themselves, so /data must resolve to the
+    # SAME path here as in the driver container -- Spark passes an absolute
+    # output path across, not a relative one. Without this the tasks fail with
+    # "Mkdirs failed to create file:/data/..." and the stage silently falls
+    # back to pyarrow.
+    volumes:
+      - ./:/opt/pipeline:rw
+      - ./data:/data:rw
     deploy:
       replicas: 2
+
+  # ── Airflow (standalone: api-server + scheduler + triggerer + dag-processor)
+  airflow:
+    <<: *common
+    profiles: [core]
+    build: {context: ., dockerfile: docker/Dockerfile.airflow}
+    container_name: pl-airflow
+    command: standalone
+    environment:
+      # Deliberately NOT setting AIRFLOW__API__BASE_URL to the host-mapped
+      # localhost:8085: task subprocesses inherit that as
+      # execution_api_server_url (base_url + /execution/) and use it to phone
+      # home from inside the container, where 8085 doesn't exist -- only the
+      # container's own 8080 does. Leaving base_url unset keeps the internal
+      # default (http://localhost:8080), which is correct for both the task
+      # subprocess and the in-container healthcheck; 8085 is purely the
+      # host-side port mapping for browser access.
+      AIRFLOW__API__PORT: "8080"
+      PIPELINE_DATA_ROOT: /data
+      IDP_URL: https://idp:8443
+      CRYPTO_URL: https://crypto:8444
+      # Encrypt stage runs on the real Spark cluster. Unset this and
+      # spark_encrypt falls back to pyarrow -- correct output either way, but
+      # the trace then reports engine=pyarrow, which is the honest signal that
+      # Spark did not run.
+      SPARK_MASTER_URL: spark://spark-master:7077
+      # The driver runs in THIS container and the executors run in the worker
+      # containers, so the workers must be able to reach back to the driver by
+      # a resolvable name. Without this Spark advertises the container's
+      # hostname, which the workers cannot resolve, and every task times out.
+      SPARK_DRIVER_HOST: pl-airflow
+      # The executor interpreter is selected by the driver and shipped to the
+      # workers; the Spark image's own ENV does not decide it. Must match this
+      # container's Python minor version or PySpark refuses to run.
+      PYSPARK_PYTHON: /usr/bin/python3.12
+      # Hive registration over JDBC, replacing the old `docker exec` path.
+      HIVE_JDBC_URL: jdbc:hive2://hiveserver2:10000
+      # Every pipeline client verifies the service certs against this CA.
+      # Unset it and the clients fall back to the system trust store, which
+      # does NOT contain the dev CA -- calls then fail closed, by design.
+      PIPELINE_CA_BUNDLE: /certs/ca.crt
+      # postgres_load defaults to localhost:5433, which is the HOST-side port
+      # mapping. From inside this container the warehouse is postgres:5432 on
+      # the compose network; without these the load stage hangs in connect
+      # rather than failing, because there is nothing on localhost:5433 here.
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: "5432"
+      POSTGRES_DB: ${POSTGRES_DB:-analytics}
+      POSTGRES_USER: ${POSTGRES_USER:-pipeline}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-pipeline-dev-password}
+      CLIENT_SECRET_EXTRACT_JOB: ${CLIENT_SECRET_EXTRACT_JOB:-dev-extract-secret}
+      CLIENT_SECRET_SPARK_JOB: ${CLIENT_SECRET_SPARK_JOB:-dev-spark-secret}
+      CLIENT_SECRET_HIVE_JOB: ${CLIENT_SECRET_HIVE_JOB:-dev-hive-secret}
+      CLIENT_SECRET_POSTGRES_JOB: ${CLIENT_SECRET_POSTGRES_JOB:-dev-postgres-secret}
+      CLIENT_SECRET_REPORT_JOB: ${CLIENT_SECRET_REPORT_JOB:-dev-report-secret}
+      GOOGLE_APPLICATION_CREDENTIALS: ${GOOGLE_APPLICATION_CREDENTIALS:-/secrets/gcp-sa.json}
+      GCP_PROJECT_ID: ${GCP_PROJECT_ID:-avapuck}
+    ports: ["8085:8080"]
+    mem_limit: 4g
+    depends_on:
+      idp: {condition: service_healthy}
+      crypto: {condition: service_healthy}
+      postgres: {condition: service_healthy}
+      hive-metastore: {condition: service_started}
+    volumes:
+      - ./data:/data:rw
+      - ./dags:/opt/pipeline/dags:ro
+      - ./certs:/certs:ro
+      # Finished PDFs are filed here by the report stage. Separate from
+      # ./data so the deliverables are not mixed in with pipeline scratch.
+      - ./pipeline-reports:/opt/pipeline/pipeline-reports:rw
+      # GCP service account key. Read-only, and secrets/ is gitignored --
+      # this is a live credential that bills a real project.
+      - ./secrets:/secrets:ro
+      # pipeline/ and config/ are mounted rather than only baked into the
+      # image so a code or policy change takes effect on the next task run
+      # instead of needing a rebuild. config/ is writable because the mask
+      # stage GENERATES a Ranger policy for a dataset it has not seen before,
+      # and that file has to land in the repo where a human can review it.
+      - ./pipeline:/opt/pipeline/pipeline:ro
+      - ./config:/opt/pipeline/config:rw
+      - airflow_home:/opt/airflow
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://localhost:8080/api/v2/monitor/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+      start_period: 60s
 
   # ── Apache Ranger (heavy; opt in with --profile ranger) ──────────────────
   ranger-db:
@@ -227,3 +343,4 @@ volumes:
   hive_meta_data:
   ranger_db_data:
   ranger_solr_data:
+  airflow_home:

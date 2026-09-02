@@ -1,0 +1,12 @@
+{
+  "_comment": [
+    "Corrections to the inferred schema for the BLM lease-sale export.",
+    "county_des is a public administrative geography in this dataset, not a",
+    "narrowing quasi-identifier: it names a Colorado county, of which there",
+    "are 64, and the parcels are already public record."
+  ],
+  "primary_key": "objectid",
+  "columns": {
+    "county_des": {"sensitivity": "public"}
+  }
+}

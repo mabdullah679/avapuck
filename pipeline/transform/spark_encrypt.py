@@ -20,8 +20,12 @@ log = logging.getLogger(__name__)
 
 CIPHER_PREFIX = "enc"
 
-# Columns encrypted before landing. Everything else is non-sensitive and clear.
-SENSITIVE_COLUMNS = [
+# Which columns are sensitive is now a property of the DATASET, not of this
+# module: it comes from the schema manifest written at extract time (see
+# pipeline/metadata/schema.py). These names remain only as the documented
+# expectation for the trips dataset, so a regression that silently stops
+# classifying them is visible in tests rather than in production.
+TRIPS_SENSITIVE_COLUMNS = [
     "bike_id",
     "subscriber_type",
     "start_station_name",
@@ -29,9 +33,6 @@ SENSITIVE_COLUMNS = [
     "start_station_id",
     "end_station_id",
 ]
-
-# Fields that also get a deterministic blind index, so Hive can still join.
-BLIND_INDEXED = ["bike_id", "start_station_name"]
 
 
 class CryptoClient:
@@ -76,7 +77,8 @@ class CryptoClient:
 _SUBSTRING_CHECK_MIN_LEN = 6
 
 
-def assert_no_plaintext(rows: list[dict], original: list[dict]) -> None:
+def assert_no_plaintext(rows: list[dict], original: list[dict],
+                        sensitive_columns: list[str]) -> None:
     """Refuse to write Parquet that still contains a sensitive plaintext.
 
     The last line of defence before data lands. Three distinct checks, because
@@ -99,7 +101,7 @@ def assert_no_plaintext(rows: list[dict], original: list[dict]) -> None:
 
     leaked = []
     for out_row, src_row in zip(rows, original):
-        for col in SENSITIVE_COLUMNS:
+        for col in sensitive_columns:
             src = src_row.get(col)
             if src in (None, ""):
                 continue
@@ -113,7 +115,13 @@ def assert_no_plaintext(rows: list[dict], original: list[dict]) -> None:
             if not str(enc).startswith(f"{CIPHER_PREFIX}:"):
                 leaked.append(f"{col}: output is not a ciphertext envelope")
                 continue
-            if col in out_row:
+            # A sensitive column must not appear under its own name -- with one
+            # exception: a sensitive PRIMARY KEY is carried as its blind index
+            # under the key's name, because the row has to be keyed on
+            # something. That is allowed ONLY when the value is demonstrably
+            # not the plaintext, which is checked here rather than assumed;
+            # otherwise the exception would be a hole in the guard.
+            if col in out_row and str(out_row[col]) == src_s:
                 leaked.append(f"{col}: plaintext column survived into output")
 
             # 3. identity
@@ -148,46 +156,89 @@ def run(logical_date: date, csv_path: Path, out_dir: Path,
     """
     import csv as csvmod
 
-    with csv_path.open(newline="", encoding="utf-8") as fh:
-        source = list(csvmod.DictReader(fh))
-    if not source:
+    from pipeline.metadata import schema as schema_mod
+
+    manifest = schema_mod.load_manifest(csv_path)
+
+    # Read under the manifest's SOURCE names, then immediately re-key to the
+    # SQL-safe names. Everything after this point -- the encryption, the
+    # assertion, the Parquet, the warehouse -- speaks only safe names, so a
+    # header like "Oil & Gas Sale Status" never reaches a SQL identifier.
+    with csv_path.open(newline="", encoding="utf-8-sig") as fh:
+        raw = list(csvmod.DictReader(fh))
+    if not raw:
         raise RuntimeError(f"{csv_path} has no rows")
+
+    rename = {c.source_name: c.name for c in manifest.columns}
+    source = [{rename.get(k, k): v for k, v in r.items()} for r in raw]
+
+    sensitive = manifest.sensitive_columns
+    blind_indexed = manifest.blind_indexed
 
     encrypted_cols: dict[str, list] = {}
     blind_cols: dict[str, list] = {}
-    for col in SENSITIVE_COLUMNS:
+    for col in sensitive:
         values = [r.get(col) or None for r in source]
         cts, bis = crypto.encrypt_column(col, values)
         encrypted_cols[col] = cts
-        if col in BLIND_INDEXED:
+        if col in blind_indexed:
             blind_cols[col] = bis
         log.info("encrypted %d values for %s", len(cts), col)
 
+    key = manifest.primary_key
+    public = manifest.public_columns
+    key_is_sensitive = key in sensitive
+
     out_rows = []
     for i, r in enumerate(source):
+        if manifest.key_is_synthetic:
+            # Computed from the row itself; see schema.row_hash for why that
+            # keeps a re-run idempotent.
+            key_value = schema_mod.row_hash(
+                r, [c.name for c in manifest.columns], logical_date.isoformat())
+        elif key_is_sensitive:
+            # The natural key is ALSO sensitive (a parcel id, a customer id).
+            # Writing it in the clear to key the row would defeat the
+            # encryption it just went through, so the row is keyed on the
+            # blind index instead: deterministic, so the upsert still replaces
+            # the same row on a re-run, but not the plaintext.
+            key_value = blind_cols[key][i]
+        else:
+            key_value = r.get(key)
+
         row = {
-            "trip_id": r["trip_id"],
+            key: key_value,
             "logical_date": logical_date.isoformat(),
-            "start_time": r["start_time"],
-            "duration_minutes": int(r["duration_minutes"]),
         }
-        for col in SENSITIVE_COLUMNS:
+        # Public columns pass through in the clear -- that is what makes them
+        # public. They are typed on the way into the warehouse, not here.
+        for col in public:
+            if col != key:
+                row[col] = r.get(col)
+        for col in sensitive:
             row[f"{col}_encrypted"] = encrypted_cols[col][i]
-        for col in BLIND_INDEXED:
+        for col in blind_indexed:
             row[f"{col}_blind_index"] = blind_cols[col][i]
         out_rows.append(row)
 
-    assert_no_plaintext(out_rows, source)
+    assert_no_plaintext(out_rows, source, sensitive)
 
     out_dir.mkdir(parents=True, exist_ok=True)
     part_dir = out_dir / f"dt={logical_date.isoformat()}"
     part_dir.mkdir(parents=True, exist_ok=True)
-    parquet_path = part_dir / "trips.parquet"
+    parquet_path = part_dir / f"{manifest.dataset}.parquet"
 
     engine = _write_parquet(out_rows, parquet_path)
 
+    # The manifest travels WITH the data to the next stage. Re-inferring it
+    # from the Parquet would be guessing twice and could disagree with the
+    # first guess; carrying it forward means all five stages share one answer.
+    schema_mod.write_manifest(manifest, parquet_path)
+
     log.info("wrote %d encrypted rows to %s via %s", len(out_rows), parquet_path, engine)
-    return {"rows": len(out_rows), "parquet_path": str(parquet_path), "engine": engine}
+    return {"rows": len(out_rows), "parquet_path": str(parquet_path),
+            "engine": engine, "dataset": manifest.dataset,
+            "sensitive_columns": sensitive}
 
 
 def _write_parquet(rows: list[dict], path: Path) -> str:
@@ -203,12 +254,29 @@ def _write_parquet(rows: list[dict], path: Path) -> str:
     if master:
         try:
             from pyspark.sql import SparkSession
-            spark = (SparkSession.builder
-                     .appName("pipeline-encrypt")
-                     .master(master)
-                     .config("spark.sql.shuffle.partitions", "2")
-                     .config("spark.driver.memory", "900m")
-                     .getOrCreate())
+            builder = (SparkSession.builder
+                       .appName("pipeline-encrypt")
+                       .master(master)
+                       .config("spark.sql.shuffle.partitions", "2")
+                       .config("spark.driver.memory", "900m"))
+            # In containers the driver must advertise a name the executors can
+            # resolve. Spark otherwise offers the container's own hostname,
+            # which means nothing on the worker side, and every task hangs
+            # until it times out rather than failing fast.
+            driver_host = os.environ.get("SPARK_DRIVER_HOST")
+            if driver_host:
+                builder = (builder
+                           .config("spark.driver.host", driver_host)
+                           .config("spark.driver.bindAddress", "0.0.0.0"))
+            # PySpark requires the SAME Python minor version on both sides, and
+            # the executor interpreter is chosen by the DRIVER's config, not by
+            # the worker image's own env -- setting PYSPARK_PYTHON in the Spark
+            # image has no effect here. Name the interpreter explicitly so the
+            # executors launch the 3.12 the workers carry, matching this driver.
+            executor_python = os.environ.get("PYSPARK_PYTHON")
+            if executor_python:
+                builder = builder.config("spark.pyspark.python", executor_python)
+            spark = builder.getOrCreate()
             try:
                 df = spark.createDataFrame(rows)
                 staging = path.parent / "_spark_staging"
