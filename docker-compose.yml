@@ -256,7 +256,34 @@ services:
       CLIENT_SECRET_POSTGRES_JOB: ${CLIENT_SECRET_POSTGRES_JOB:-dev-postgres-secret}
       CLIENT_SECRET_REPORT_JOB: ${CLIENT_SECRET_REPORT_JOB:-dev-report-secret}
       GOOGLE_APPLICATION_CREDENTIALS: ${GOOGLE_APPLICATION_CREDENTIALS:-/secrets/gcp-sa.json}
-      GCP_PROJECT_ID: ${GCP_PROJECT_ID:-avapuck}
+      # NO default project: a fresh clone must not inherit whoever built
+      # this. Unset, EXTRACT_MODE=auto falls through to the offline fixture
+      # instead of failing against someone else's GCP project.
+      GCP_PROJECT_ID: ${GCP_PROJECT_ID:-}
+      # Retail point-of-sale transactions joined to customer records: real
+      # PII (names, emails, street addresses) is the point -- it is what the
+      # encrypt and mask stages exist to protect. ~24 MB scanned per run,
+      # well under BQ_MAX_BYTES_BILLED. `auto` uses BigQuery only when
+      # GCP_PROJECT_ID is set, and the offline fixture otherwise -- so a clone
+      # with no credentials runs end to end rather than erroring.
+      EXTRACT_MODE: ${EXTRACT_MODE:-auto}
+      BQ_DATASET: ${BQ_DATASET:-bigquery-public-data.thelook_ecommerce}
+      BQ_TABLE: ${BQ_TABLE:-order_items}
+      BQ_DATASET_NAME: ${BQ_DATASET_NAME:-rpos_transactions}
+      BQ_SQL_FILE: ${BQ_SQL_FILE:-/opt/pipeline/config/bq/rpos_transactions_cards.sql}
+      # The 4-hour window maps into this range. Deliberately NOT the table's
+      # full span: thelook_ecommerce has ~1-2 orders/day in 2019 versus ~100+
+      # in 2025, so a 4-hour slice of the early data is almost always empty
+      # and the extract fails closed. This window is dense enough that any
+      # slot yields a full 100 rows, and reading recent transactions is what a
+      # POS pipeline would actually do.
+      BQ_DATA_START: ${BQ_DATA_START:-2025-01-01}
+      BQ_DATA_END: ${BQ_DATA_END:-2026-08-31}
+      # A 4-hour slice of ~100 orders/day yields ~15-20 rows, not 100. 24h
+      # fills the 100-row cap on most slots. The cap still binds in the SQL --
+      # this widens the window, it does not raise the limit.
+      BQ_WINDOW_HOURS: ${BQ_WINDOW_HOURS:-24}
+      BQ_MAX_BYTES_BILLED: ${BQ_MAX_BYTES_BILLED:-314572800}
     ports: ["8085:8080"]
     mem_limit: 4g
     depends_on:

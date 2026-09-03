@@ -82,8 +82,14 @@ COLUMNS = [
 # advances one archive-day per run, deterministically derived from the logical
 # date. That keeps runs idempotent (same logical date -> same window -> same
 # rows) and keeps a daily schedule meaningful against frozen data.
-DATA_START = date(2013, 12, 12)
-DATA_END = date(2024, 6, 30)
+# Configurable: these bound the archive the 4-hour window maps into, and they
+# are a property of the SOURCE TABLE, not of the pipeline. The defaults are
+# austin_bikeshare's span; point BQ_DATASET elsewhere and these must move with
+# it, or the window lands on a date the new table has no rows for and the
+# extract fails closed (which is what it should do -- an empty extract is a
+# bug, not an empty day).
+DATA_START = date.fromisoformat(os.environ.get("BQ_DATA_START", "2013-12-12"))
+DATA_END = date.fromisoformat(os.environ.get("BQ_DATA_END", "2024-06-30"))
 
 
 @dataclass(frozen=True)
@@ -177,6 +183,31 @@ class BigQueryExtractor:
         """
         from google.cloud import bigquery
 
+        window_start_p, window_end_p = self.window_for(logical_date)
+
+        # BQ_SQL lets a different source be configured rather than coded. The
+        # cost guards do not move: the caller still dry-runs it, still applies
+        # maximum_bytes_billed, and still asserts the row count afterwards, so
+        # a custom query cannot quietly become a billing incident. It MUST
+        # reference @row_limit, which is checked below.
+        custom = os.environ.get("BQ_SQL")
+        sql_file = os.environ.get("BQ_SQL_FILE")
+        if not custom and sql_file:
+            # A file keeps a multi-line join readable and reviewable in the
+            # repo, rather than crammed into a compose environment value.
+            custom = Path(sql_file).read_text()
+        if custom:
+            if "@row_limit" not in custom:
+                raise RuntimeError(
+                    "BQ_SQL must use LIMIT @row_limit -- the 100-row cap is "
+                    "enforced in the SQL, not merely asserted afterwards.")
+            params = [
+                bigquery.ScalarQueryParameter("window_start", "TIMESTAMP", window_start_p),
+                bigquery.ScalarQueryParameter("window_end", "TIMESTAMP", window_end_p),
+                bigquery.ScalarQueryParameter("row_limit", "INT64", self.row_limit),
+            ]
+            return custom, params
+
         cols = ",\n               ".join(COLUMNS)
         sql = f"""
             SELECT {cols}
@@ -253,18 +284,28 @@ class BigQueryExtractor:
         # stages resolve inputs by date, and an ISO timestamp in a filename
         # also carries colons, which are hostile in paths.
         _d = logical_date.date() if hasattr(logical_date, "date") else logical_date
-        csv_path = out_dir / f"trips_{_d.isoformat()}.csv"
+        # The dataset name is configuration, not a constant: this extractor
+        # is no longer trips-specific, and every downstream stage keys off the
+        # manifest's dataset name rather than a hardcoded table.
+        ds_name = os.environ.get("BQ_DATASET_NAME", "trips")
+        csv_path = out_dir / f"{ds_name}_{_d.isoformat()}.csv"
+        # Take the column list from the RESULT, not from the module-level
+        # COLUMNS constant: with BQ_SQL/BQ_SQL_FILE the query selects whatever
+        # that file selects, and writing the bikeshare COLUMNS here produced a
+        # CSV of empty cells with trips headers -- every row identical, so the
+        # synthetic row_hash key collapsed 96 rows into 1.
+        out_cols = list(rows[0].keys()) if rows else COLUMNS
         with csv_path.open("w", newline="", encoding="utf-8") as fh:
             w = csv.writer(fh)
-            w.writerow(COLUMNS)
+            w.writerow(out_cols)
             for r in rows:
-                w.writerow([_cell(r.get(c)) for c in COLUMNS])
+                w.writerow([_cell(r.get(c)) for c in out_cols])
 
         # Downstream stages read the manifest rather than a hardcoded column
         # list, so the live path has to write one too.
         from pipeline.metadata import schema as schema_mod
         schema_mod.write_manifest(
-            schema_mod.infer(csv_path, dataset="trips"), csv_path)
+            schema_mod.infer(csv_path, dataset=ds_name), csv_path)
 
         result = ExtractResult(
             logical_date=logical_date.isoformat(),

@@ -22,11 +22,12 @@ export AIRFLOW__CORE__LOAD_EXAMPLES=False
 .venv/bin/airflow db migrate
 .venv/bin/airflow dags reserialize          # register all five before testing
 
-.venv/bin/airflow dags test trips_01_extract 2026-08-27
+docker exec pl-airflow airflow dags test trips_pipeline 2026-09-13
 ```
 
 `dags reserialize` matters: `TriggerDagRunOperator` needs the downstream DAG in
-the metadata DB, and `dags test` alone does not register siblings.
+the metadata DB. With one DAG this is no longer a concern -- a single
+`dags test` runs all seven tasks in order.
 
 For the scheduler-driven chain, set `AIRFLOW_CHAIN_WAIT=1` so each stage blocks
 on the next. Without a running scheduler leave it unset, or stages poll forever.

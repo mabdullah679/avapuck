@@ -1,0 +1,545 @@
+{
+  "_comment": [
+    "GENERATED Ranger masking policies for dataset 'rpos_transactions'.",
+    "",
+    "Written once by pipeline/metadata/policy_gen.py when this dataset was",
+    "first ingested, from the sensitivity inferred for each column. It is",
+    "NOT regenerated on later runs -- edit the mask types here and your",
+    "edits survive, which is what authoring policy in a file is for.",
+    "",
+    "Each policy records why the classifier thought the column was",
+    "sensitive. Review those reasons: a guess that reads wrong is a",
+    "signal to fix the mask type here, or the sensitivity itself in",
+    "config/datasets/rpos_transactions.json."
+  ],
+  "policies": [
+    {
+      "service": "hive_pipeline",
+      "name": "mask-rpos-transactions-product-name",
+      "policyType": 1,
+      "description": "product_name classified quasi_identifier by schema inference: a bare `name` column usually labels a real entity.",
+      "isEnabled": true,
+      "_generated": true,
+      "_sensitivity": "quasi_identifier",
+      "resources": {
+        "database": {
+          "values": [
+            "trips_warehouse"
+          ],
+          "isExcludes": false,
+          "isRecursive": false
+        },
+        "table": {
+          "values": [
+            "rpos_transactions"
+          ],
+          "isExcludes": false,
+          "isRecursive": false
+        },
+        "column": {
+          "values": [
+            "product_name"
+          ],
+          "isExcludes": false,
+          "isRecursive": false
+        }
+      },
+      "dataMaskPolicyItems": [
+        {
+          "accesses": [
+            {
+              "type": "select",
+              "isAllowed": true
+            }
+          ],
+          "users": [],
+          "groups": [
+            "analyst"
+          ],
+          "roles": [],
+          "dataMaskInfo": {
+            "dataMaskType": "MASK_SHOW_LAST_4"
+          }
+        },
+        {
+          "accesses": [
+            {
+              "type": "select",
+              "isAllowed": true
+            }
+          ],
+          "users": [],
+          "groups": [
+            "data_steward"
+          ],
+          "roles": [],
+          "dataMaskInfo": {
+            "dataMaskType": "MASK_NONE"
+          }
+        }
+      ]
+    },
+    {
+      "service": "hive_pipeline",
+      "name": "mask-rpos-transactions-customer-first-name",
+      "policyType": 1,
+      "description": "customer_first_name classified direct_identifier by schema inference: column name denotes a person name.",
+      "isEnabled": true,
+      "_generated": true,
+      "_sensitivity": "direct_identifier",
+      "resources": {
+        "database": {
+          "values": [
+            "trips_warehouse"
+          ],
+          "isExcludes": false,
+          "isRecursive": false
+        },
+        "table": {
+          "values": [
+            "rpos_transactions"
+          ],
+          "isExcludes": false,
+          "isRecursive": false
+        },
+        "column": {
+          "values": [
+            "customer_first_name"
+          ],
+          "isExcludes": false,
+          "isRecursive": false
+        }
+      },
+      "dataMaskPolicyItems": [
+        {
+          "accesses": [
+            {
+              "type": "select",
+              "isAllowed": true
+            }
+          ],
+          "users": [],
+          "groups": [
+            "analyst"
+          ],
+          "roles": [],
+          "dataMaskInfo": {
+            "dataMaskType": "MASK_HASH"
+          }
+        },
+        {
+          "accesses": [
+            {
+              "type": "select",
+              "isAllowed": true
+            }
+          ],
+          "users": [],
+          "groups": [
+            "data_steward"
+          ],
+          "roles": [],
+          "dataMaskInfo": {
+            "dataMaskType": "MASK_NONE"
+          }
+        }
+      ]
+    },
+    {
+      "service": "hive_pipeline",
+      "name": "mask-rpos-transactions-customer-last-name",
+      "policyType": 1,
+      "description": "customer_last_name classified direct_identifier by schema inference: column name denotes a person name.",
+      "isEnabled": true,
+      "_generated": true,
+      "_sensitivity": "direct_identifier",
+      "resources": {
+        "database": {
+          "values": [
+            "trips_warehouse"
+          ],
+          "isExcludes": false,
+          "isRecursive": false
+        },
+        "table": {
+          "values": [
+            "rpos_transactions"
+          ],
+          "isExcludes": false,
+          "isRecursive": false
+        },
+        "column": {
+          "values": [
+            "customer_last_name"
+          ],
+          "isExcludes": false,
+          "isRecursive": false
+        }
+      },
+      "dataMaskPolicyItems": [
+        {
+          "accesses": [
+            {
+              "type": "select",
+              "isAllowed": true
+            }
+          ],
+          "users": [],
+          "groups": [
+            "analyst"
+          ],
+          "roles": [],
+          "dataMaskInfo": {
+            "dataMaskType": "MASK_HASH"
+          }
+        },
+        {
+          "accesses": [
+            {
+              "type": "select",
+              "isAllowed": true
+            }
+          ],
+          "users": [],
+          "groups": [
+            "data_steward"
+          ],
+          "roles": [],
+          "dataMaskInfo": {
+            "dataMaskType": "MASK_NONE"
+          }
+        }
+      ]
+    },
+    {
+      "service": "hive_pipeline",
+      "name": "mask-rpos-transactions-customer-email",
+      "policyType": 1,
+      "description": "customer_email classified direct_identifier by schema inference: column name denotes an email address.",
+      "isEnabled": true,
+      "_generated": true,
+      "_sensitivity": "direct_identifier",
+      "resources": {
+        "database": {
+          "values": [
+            "trips_warehouse"
+          ],
+          "isExcludes": false,
+          "isRecursive": false
+        },
+        "table": {
+          "values": [
+            "rpos_transactions"
+          ],
+          "isExcludes": false,
+          "isRecursive": false
+        },
+        "column": {
+          "values": [
+            "customer_email"
+          ],
+          "isExcludes": false,
+          "isRecursive": false
+        }
+      },
+      "dataMaskPolicyItems": [
+        {
+          "accesses": [
+            {
+              "type": "select",
+              "isAllowed": true
+            }
+          ],
+          "users": [],
+          "groups": [
+            "analyst"
+          ],
+          "roles": [],
+          "dataMaskInfo": {
+            "dataMaskType": "MASK_HASH"
+          }
+        },
+        {
+          "accesses": [
+            {
+              "type": "select",
+              "isAllowed": true
+            }
+          ],
+          "users": [],
+          "groups": [
+            "data_steward"
+          ],
+          "roles": [],
+          "dataMaskInfo": {
+            "dataMaskType": "MASK_NONE"
+          }
+        }
+      ]
+    },
+    {
+      "service": "hive_pipeline",
+      "name": "mask-rpos-transactions-customer-street-address",
+      "policyType": 1,
+      "description": "customer_street_address classified direct_identifier by schema inference: column name denotes a postal address.",
+      "isEnabled": true,
+      "_generated": true,
+      "_sensitivity": "direct_identifier",
+      "resources": {
+        "database": {
+          "values": [
+            "trips_warehouse"
+          ],
+          "isExcludes": false,
+          "isRecursive": false
+        },
+        "table": {
+          "values": [
+            "rpos_transactions"
+          ],
+          "isExcludes": false,
+          "isRecursive": false
+        },
+        "column": {
+          "values": [
+            "customer_street_address"
+          ],
+          "isExcludes": false,
+          "isRecursive": false
+        }
+      },
+      "dataMaskPolicyItems": [
+        {
+          "accesses": [
+            {
+              "type": "select",
+              "isAllowed": true
+            }
+          ],
+          "users": [],
+          "groups": [
+            "analyst"
+          ],
+          "roles": [],
+          "dataMaskInfo": {
+            "dataMaskType": "MASK_HASH"
+          }
+        },
+        {
+          "accesses": [
+            {
+              "type": "select",
+              "isAllowed": true
+            }
+          ],
+          "users": [],
+          "groups": [
+            "data_steward"
+          ],
+          "roles": [],
+          "dataMaskInfo": {
+            "dataMaskType": "MASK_NONE"
+          }
+        }
+      ]
+    },
+    {
+      "service": "hive_pipeline",
+      "name": "mask-rpos-transactions-customer-postal-code",
+      "policyType": 1,
+      "description": "customer_postal_code classified direct_identifier by schema inference: column name denotes a postal address.",
+      "isEnabled": true,
+      "_generated": true,
+      "_sensitivity": "direct_identifier",
+      "resources": {
+        "database": {
+          "values": [
+            "trips_warehouse"
+          ],
+          "isExcludes": false,
+          "isRecursive": false
+        },
+        "table": {
+          "values": [
+            "rpos_transactions"
+          ],
+          "isExcludes": false,
+          "isRecursive": false
+        },
+        "column": {
+          "values": [
+            "customer_postal_code"
+          ],
+          "isExcludes": false,
+          "isRecursive": false
+        }
+      },
+      "dataMaskPolicyItems": [
+        {
+          "accesses": [
+            {
+              "type": "select",
+              "isAllowed": true
+            }
+          ],
+          "users": [],
+          "groups": [
+            "analyst"
+          ],
+          "roles": [],
+          "dataMaskInfo": {
+            "dataMaskType": "MASK_HASH"
+          }
+        },
+        {
+          "accesses": [
+            {
+              "type": "select",
+              "isAllowed": true
+            }
+          ],
+          "users": [],
+          "groups": [
+            "data_steward"
+          ],
+          "roles": [],
+          "dataMaskInfo": {
+            "dataMaskType": "MASK_NONE"
+          }
+        }
+      ]
+    },
+    {
+      "service": "hive_pipeline",
+      "name": "mask-rpos-transactions-customer-city",
+      "policyType": 1,
+      "description": "customer_city classified quasi_identifier by schema inference: column carries a narrowing geography.",
+      "isEnabled": true,
+      "_generated": true,
+      "_sensitivity": "quasi_identifier",
+      "resources": {
+        "database": {
+          "values": [
+            "trips_warehouse"
+          ],
+          "isExcludes": false,
+          "isRecursive": false
+        },
+        "table": {
+          "values": [
+            "rpos_transactions"
+          ],
+          "isExcludes": false,
+          "isRecursive": false
+        },
+        "column": {
+          "values": [
+            "customer_city"
+          ],
+          "isExcludes": false,
+          "isRecursive": false
+        }
+      },
+      "dataMaskPolicyItems": [
+        {
+          "accesses": [
+            {
+              "type": "select",
+              "isAllowed": true
+            }
+          ],
+          "users": [],
+          "groups": [
+            "analyst"
+          ],
+          "roles": [],
+          "dataMaskInfo": {
+            "dataMaskType": "MASK_SHOW_LAST_4"
+          }
+        },
+        {
+          "accesses": [
+            {
+              "type": "select",
+              "isAllowed": true
+            }
+          ],
+          "users": [],
+          "groups": [
+            "data_steward"
+          ],
+          "roles": [],
+          "dataMaskInfo": {
+            "dataMaskType": "MASK_NONE"
+          }
+        }
+      ]
+    },
+    {
+      "service": "hive_pipeline",
+      "name": "mask-rpos-transactions-card-info",
+      "policyType": 1,
+      "description": "card_info classified direct_identifier by schema inference: column name denotes a payment card.",
+      "isEnabled": true,
+      "_generated": true,
+      "_sensitivity": "direct_identifier",
+      "resources": {
+        "database": {
+          "values": [
+            "trips_warehouse"
+          ],
+          "isExcludes": false,
+          "isRecursive": false
+        },
+        "table": {
+          "values": [
+            "rpos_transactions"
+          ],
+          "isExcludes": false,
+          "isRecursive": false
+        },
+        "column": {
+          "values": [
+            "card_info"
+          ],
+          "isExcludes": false,
+          "isRecursive": false
+        }
+      },
+      "dataMaskPolicyItems": [
+        {
+          "accesses": [
+            {
+              "type": "select",
+              "isAllowed": true
+            }
+          ],
+          "users": [],
+          "groups": [
+            "analyst"
+          ],
+          "roles": [],
+          "dataMaskInfo": {
+            "dataMaskType": "MASK_HASH"
+          }
+        },
+        {
+          "accesses": [
+            {
+              "type": "select",
+              "isAllowed": true
+            }
+          ],
+          "users": [],
+          "groups": [
+            "data_steward"
+          ],
+          "roles": [],
+          "dataMaskInfo": {
+            "dataMaskType": "MASK_NONE"
+          }
+        }
+      ]
+    }
+  ]
+}

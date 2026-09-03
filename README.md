@@ -9,15 +9,16 @@ Runs on Kubernetes (minikube) or locally with Docker Compose.
 
 ```
 BigQuery/CSV ──▶ CSV ──▶ [card split] ──▶ [encrypt] ──▶ Parquet
+                          prefix/mid/sfx     AES-256-GCM
                                                             │
                                               [decrypt + mask] ──▶ Hive
                                                                     │
                                           PDF ◀── Postgres ◀────────┘
 ```
 
-Six Airflow DAGs, chained by Airflow Assets: `01_extract` → `02_card_split` →
-`03_encrypt` → `04_mask` → `05_load` → `06_report`. Only the first has a clock
-schedule; the rest run when the data they consume appears.
+One Airflow DAG, `trips_pipeline`, with seven tasks chained in order:
+`extract` → `card_split` → `encrypt` → `mask` → `register` → `load` → `report`.
+Scheduled every 4 hours; each task consumes what the previous one wrote.
 
 ---
 
@@ -45,12 +46,23 @@ reading that file first.
 
 ## For AI coding agents
 
+**`AGENTS.md` in the repository root is the working agreement** — invariants
+that must not be broken, the things that will surprise you, and how to describe
+this system honestly. Read it before changing anything.
+
+A `pipeline-run` skill in `.claude/skills/` covers bringing the stack up,
+running the pipeline, and verifying that Spark and Hive actually did the work
+rather than silently falling back.
+
+
+
 If you are an agent working on this repository, read these in order **before
 changing anything**:
 
 | Read | For |
 |---|---|
-| `docs/AGENTS.md` | **Start here.** Working agreement, invariants you must not break, where things live |
+| `AGENTS.md` (root) | **Start here.** Working agreement, invariants, how to describe this honestly |
+| `docs/AGENTS.md` | Longer-form background on the same invariants |
 | `TRUST-BOUNDARY.md` | What is real vs. stubbed. Never claim a stub works |
 | `docs/ARCHITECTURE.md` | Why the data flows this way; the security model |
 | `docs/EXECUTION-FLOW.md` | One run end to end, with the correlation-id trace |
@@ -134,14 +146,18 @@ pulls and builds images and can take several minutes.
 ### 4. Run the pipeline end to end
 
 ```bash
-# Point the extract stage at the sample CSV (no GCP account required).
-CSV=/data/csv/BLM_CO_Q2_2026_Oil_and_Gas_Lease_Sale_-2400573660170243848.csv
+docker exec pl-airflow airflow dags test trips_pipeline 2026-09-13
+```
 
-for d in trips_01_extract trips_02_card_split trips_03_encrypt \
-         trips_04_mask trips_05_load trips_06_report; do
-  docker exec -e CSV_SOURCE_PATH=$CSV pl-airflow \
-    airflow dags test $d 2026-09-02
-done
+That is the whole pipeline: one DAG, seven tasks. With no GCP credentials
+configured it uses the bundled offline fixture, so this works on a fresh clone.
+
+To run it against a specific CSV instead:
+
+```bash
+CSV=/data/csv/BLM_CO_Q2_2026_Oil_and_Gas_Lease_Sale_-2400573660170243848.csv
+docker exec -e CSV_SOURCE_PATH=$CSV pl-airflow \
+  airflow dags test trips_pipeline 2026-09-13
 ```
 
 The finished PDF lands in `pipeline-reports/` on your host.
@@ -211,6 +227,24 @@ EXTRACT_MODE=live
 ENV
 docker compose --profile core up -d airflow
 ```
+
+The default live source is retail point-of-sale transactions joined to customer
+records (`bigquery-public-data.thelook_ecommerce`) — real names, emails and
+street addresses, which is what makes it a meaningful test of the encrypt and
+mask stages. ~30 MB scanned per run, about **$0.0002**.
+
+Two SQL files ship in `config/bq/`, selected with `BQ_SQL_FILE`:
+
+| File | What it adds |
+|---|---|
+| `rpos_transactions.sql` | Transactions + customer PII |
+| `rpos_transactions_cards.sql` | The same, plus a `card_info` column of **published Visa/Mastercard test PANs** — no BigQuery public dataset carries card numbers, so these are synthesised in SQL and assigned deterministically by transaction id |
+
+To point at a different table entirely, set `BQ_SQL_FILE` to your own query and
+move `BQ_DATA_START`/`BQ_DATA_END` to that table's real span — the 4-hour window
+maps into that range, and a mismatch lands on an empty day. Your query **must**
+use `LIMIT @row_limit`; the extractor refuses one that does not, because the
+row cap is enforced in the SQL rather than merely asserted afterwards.
 
 Cost control is already in place — 100 rows per run, capped in SQL and by
 `BQ_MAX_BYTES_BILLED` (default 300 MB) — but **you** are paying, so read

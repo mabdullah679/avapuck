@@ -98,11 +98,11 @@ Each of these was a real failure, not a hypothetical:
 
 | # | Assumption |
 |---|---|
-| 5.1 | GCP project ID is `avapuck`, inferred from the service-account email domain. **Not confirmed** — only the project *number* (58996819807) was supplied. |
+| 5.1 | **The build account's GCP project ID (`avapuck`) and project number (58996819807) appear in this repository's git history** and are therefore public. Neither is a credential — both are useless without IAM access — but they identify the account this was built on. A client running their own copy supplies their own `GCP_PROJECT_ID`; there is no default, so a clone with no credentials falls through to the offline fixture rather than failing against someone else's project. |
 | 5.2 | Dataset choice: `bigquery-public-data.austin_bikeshare.bikeshare_trips`. Picked for size, partition-friendliness and having genuinely maskable fields. Not requested by name. |
 | 5.3 | Which columns are "sensitive". For trips, station names and bike IDs are treated as PII/quasi-identifiers. For any other dataset this is now **inferred by heuristic** — see §7. Defensible either way, but a real classification exercise would involve a data steward. |
 | 5.4 | The warehouse serves the `analyst` group. The `data_steward` policy path exists in the Ranger config but no run has used it. |
-| 5.5 | Stages are chained by **Airflow Assets**, not `TriggerDagRunOperator`. Only `trips_01_extract` has a clock schedule (`0 */4 * * *`); every other stage is scheduled by the asset it consumes. This decouples the stages and makes a manual repair trigger downstream automatically. |
+| 5.5 | Stages are **seven tasks in one DAG** (`trips_pipeline`), chained by `>>` and scheduled `0 */4 * * *`. An earlier version ran six separate DAGs scheduled on Airflow Assets, so a manual repair cascaded downstream on its own; that was traded for a single graph that triggers and backfills once. **The cost is real:** re-running `mask` by hand no longer makes `load` follow automatically — clear the downstream tasks too. |
 | 5.6 | The archive window mapping gives each 4-hour run its own slice. Six runs/day therefore read six different windows and produce genuinely new rows, rather than re-reading one day six times. |
 
 ## 6. What was actually verified

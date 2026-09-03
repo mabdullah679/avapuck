@@ -1,53 +1,49 @@
-"""Trips pipeline — asset-driven, every 4 hours.
+"""Trips pipeline — one DAG, six stages, every 4 hours.
 
-SCHEDULING MODEL
-================
+STRUCTURE
+=========
 
-Only the first DAG has a clock schedule. Every other stage is scheduled by
-**data availability**: it declares the Airflow Asset it consumes, and Airflow
-runs it when that asset is updated. No stage names the stage after it.
+A single DAG owns the whole run. Each task consumes what the one before it
+wrote, so the `>>` chain IS the data dependency -- there is no ordering here
+that could be violated and still produce a correct result.
 
-    schedule="0 */4 * * *"          ┌────────────────┐
-    ─────────────────────────────▶│ 01 extract     │──▶ CSV_READY
-                                  └────────────────┘
-    CSV_READY ───────────────────▶│ 02 card_split  │──▶ CARDS_SPLIT
-                                  └────────────────┘
-    CARDS_SPLIT ─────────────────▶│ 03 encrypt     │──▶ PARQUET_READY
-                                  └────────────────┘
-    PARQUET_READY ───────────────▶│ 04 mask        │──▶ HIVE_READY
-                                  └────────────────┘
-    HIVE_READY ──────────────────▶│ 05 load        │──▶ WAREHOUSE_READY
-                                  └────────────────┘
-    WAREHOUSE_READY ─────────────▶│ 06 report      │──▶ REPORT_READY
-                                  └────────────────┘
+    schedule="0 */4 * * *"
+    ──────────▶ extract ──▶ card_split ──▶ encrypt ──▶ mask
+                                                         │
+                          report ◀── load ◀── register ◀─┘
 
-Stage 02 is a no-op for datasets with no card column: it emits CARDS_SPLIT
-regardless, so the chain never stalls on a dataset that simply has no cards.
+  extract      100 rows from BigQuery (or a CSV source) -> data/csv
+  card_split   PANs -> prefix / encrypted middle / suffix -> data/cards
+               A NO-OP when the dataset has no card column, which is the
+               normal case; the run continues either way.
+  encrypt      AES-256-GCM on every sensitive column -> data/parquet
+  mask         decrypt, apply Ranger policy, write masked -> data/hive
+  register     expose the masked Parquet as a Hive external table
+  load         upsert into Postgres
+  report       PDF with charts, filed into pipeline-reports/
 
-WHY ASSETS RATHER THAN TriggerDagRunOperator
---------------------------------------------
-The previous version chained stages on *task success*, which is a weaker and
-subtly different claim than *the data is there*. Three concrete consequences:
+WHY ONE DAG RATHER THAN SIX CHAINED BY ASSETS
+---------------------------------------------
+An earlier version ran six separate DAGs scheduled on Airflow Assets, so a
+manual repair of one stage cascaded downstream on its own. That is a genuinely
+nice property, and it was traded for a plainer one: a single graph that shows
+the whole run, triggers once, and backfills once.
 
-  1. **Repair triggers downstream.** Re-run the mask stage by hand, or fix a
-     Parquet file, and the load stage runs on its own. With explicit triggers
-     nothing happens until you also remember to trigger the next one.
-  2. **No coupling.** A stage does not know what comes after it. Adding a
-     second consumer of WAREHOUSE_READY -- a data-quality check, an export --
-     needs no edit to any existing DAG.
-  3. **The lineage is real.** Airflow's asset graph shows what produced what,
-     rather than a chain of triggers that only implies it.
+The cost is real and worth stating -- re-running `mask` by hand no longer
+makes `load` follow automatically; clear the downstream tasks too, or re-run
+the DAG from that task onward. `docs/EXECUTION-FLOW.md` records what the asset
+model gave up.
 
-Each stage still *verifies* its input exists before working. Asset scheduling
-says "something updated this"; the check says "and it is actually usable".
-Those are different guarantees and the pipeline wants both.
+Each stage still *verifies* its input exists before working, rather than
+trusting that the previous task succeeded. Those are different guarantees and
+the pipeline wants both.
 
 IDEMPOTENCY
 -----------
 Every stage keys off the run's logical timestamp. The extractor maps that
 timestamp to a fixed 4-hour archive window, so re-running the 08:00 slice
-always reads the same rows; the Postgres load upserts on trip_id. Re-running
-any run replaces its data rather than duplicating it.
+always reads the same rows; the Postgres load upserts on the dataset's key.
+Re-running any run replaces its data rather than duplicating it.
 """
 from __future__ import annotations
 
@@ -76,19 +72,13 @@ try:
 except ImportError:
     pass
 
-from airflow.sdk import DAG, Asset, task
+from airflow.sdk import DAG, task
 
 from pipeline.common.trace import stage_event, trace_from_context
 
 DATA = Path(os.environ.get("PIPELINE_DATA_ROOT") or (ROOT / "data"))
 
 # ── The assets. These ARE the schedule. ───────────────────────────────────
-CSV_READY = Asset(name="trips_csv", uri="file://data/csv")
-CARDS_SPLIT = Asset(name="trips_cards_split", uri="file://data/cards")
-PARQUET_READY = Asset(name="trips_parquet_encrypted", uri="file://data/parquet")
-HIVE_READY = Asset(name="trips_hive_masked", uri="file://data/hive")
-WAREHOUSE_READY = Asset(name="trips_warehouse", uri="postgres://warehouse/trips")
-REPORT_READY = Asset(name="trips_report_pdf", uri="file://data/reports")
 
 DEFAULT_ARGS = {
     "owner": "data-platform",
@@ -131,7 +121,7 @@ def _crypto(client_id: str, secret_env: str):
 def _require(path: Path, stage: str) -> Path:
     """Assert the input actually exists before doing work.
 
-    Asset scheduling says something updated upstream; this says the file is
+    A predecessor task succeeding says work happened upstream; this says the file is
     really there. Failing here names the missing path, which beats a
     FileNotFoundError from three frames deeper.
     """
@@ -160,16 +150,16 @@ def _find(directory: Path, pattern: str, stage: str) -> Path:
     return matches[-1]
 
 
-# ── 1. Extract — the only clock-scheduled DAG ─────────────────────────────
+# ── The pipeline: one DAG, six stages ─────────────────────────────────────
 with DAG(
-    dag_id="trips_01_extract",
-    description="Every 4h: pull 100 rows from BigQuery into a local CSV",
+    dag_id="trips_pipeline",
+    description=("BigQuery/CSV -> card split -> encrypt -> mask -> load -> PDF, "
+                 "every 4 hours"),
     schedule="0 */4 * * *",
     **COMMON,
-) as dag_extract:
+) as dag:
 
-    @task(task_id="extract_to_csv", outlets=[CSV_READY],
-          execution_timeout=timedelta(minutes=10))
+    @task(task_id="extract_to_csv", execution_timeout=timedelta(minutes=10))
     def extract(**ctx):
         """Bounded, cost-capped read of one 4-hour archive window.
 
@@ -192,18 +182,7 @@ with DAG(
             csv=r.csv_path,
         )
 
-    extract()
-
-
-# ── 2. Card split — runs when CSV_READY updates ───────────────────────────
-with DAG(
-    dag_id="trips_02_card_split",
-    description="Split PANs into prefix / encrypted middle / suffix",
-    schedule=[CSV_READY],
-    **COMMON,
-) as dag_card_split:
-
-    @task(task_id="split_card_numbers", outlets=[CARDS_SPLIT])
+    @task(task_id="split_card_numbers")
     def card_split(**ctx):
         """Break card columns into three parts; encrypt only the middle.
 
@@ -222,18 +201,7 @@ with DAG(
                            cards=r["cards"], columns=r["columns"],
                            dataset=r["dataset"], output=r["output"])
 
-    card_split()
-
-
-# ── 3. Encrypt — runs when CSV_READY updates ──────────────────────────────
-with DAG(
-    dag_id="trips_03_encrypt",
-    description="AES-256-GCM encrypt sensitive fields; write Parquet",
-    schedule=[CARDS_SPLIT],
-    **COMMON,
-) as dag_encrypt:
-
-    @task(task_id="encrypt_to_parquet", outlets=[PARQUET_READY])
+    @task(task_id="encrypt_to_parquet")
     def encrypt(**ctx):
         from pipeline.transform.spark_encrypt import run
         trace = trace_from_context(ctx)
@@ -246,17 +214,6 @@ with DAG(
                            parquet=r["parquet_path"], algorithm="AES-256-GCM",
                            identity="spark-job", dataset=r["dataset"],
                            encrypted_columns=len(r["sensitive_columns"]))
-
-    encrypt()
-
-
-# ── 4. Mask — runs when PARQUET_READY updates ─────────────────────────────
-with DAG(
-    dag_id="trips_04_mask",
-    description="Decrypt, apply Apache Ranger masking policy, write Hive table",
-    schedule=[PARQUET_READY],
-    **COMMON,
-) as dag_mask:
 
     @task(task_id="decrypt_and_mask")
     def mask(**ctx):
@@ -274,7 +231,7 @@ with DAG(
                            identity="hive-job", dataset=r["dataset"],
                            policy_file=r["policy_file"])
 
-    @task(task_id="register_hive_table", outlets=[HIVE_READY])
+    @task(task_id="register_hive_table")
     def register(**ctx):
         """Expose the masked Parquet as a Hive table.
 
@@ -296,18 +253,7 @@ with DAG(
                            table=r.get("table"),
                            partition=r.get("partition"), reason=r.get("reason"))
 
-    mask() >> register()
-
-
-# ── 5. Load — runs when HIVE_READY updates ────────────────────────────────
-with DAG(
-    dag_id="trips_05_load",
-    description="Upsert masked rows into the Postgres warehouse",
-    schedule=[HIVE_READY],
-    **COMMON,
-) as dag_load:
-
-    @task(task_id="load_postgres", outlets=[WAREHOUSE_READY])
+    @task(task_id="load_postgres")
     def load(**ctx):
         from pipeline.load.postgres_load import run
         trace = trace_from_context(ctx)
@@ -319,18 +265,7 @@ with DAG(
                            updated=r["updated"], run_id=r["run_id"],
                            dataset=r["dataset"])
 
-    load()
-
-
-# ── 6. Report — runs when WAREHOUSE_READY updates ─────────────────────────
-with DAG(
-    dag_id="trips_06_report",
-    description="Build the PDF report with charts from the masked warehouse",
-    schedule=[WAREHOUSE_READY],
-    **COMMON,
-) as dag_report:
-
-    @task(task_id="build_pdf", outlets=[REPORT_READY])
+    @task(task_id="build_pdf")
     def report(**ctx):
         from pipeline.metadata import schema as schema_mod
         from pipeline.report.pdf_report import run
@@ -353,4 +288,15 @@ with DAG(
                            dataset=manifest.dataset,
                            collected=c.get("dest") or c.get("reason"))
 
-    report()
+    # The whole run, in order. Each task consumes what the one before it
+    # wrote, so the chain IS the data dependency -- there is no step here
+    # that could run out of order and still be correct.
+    (
+        extract()
+        >> card_split()
+        >> encrypt()
+        >> mask()
+        >> register()
+        >> load()
+        >> report()
+    )
