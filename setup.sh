@@ -59,17 +59,18 @@ docker info >/dev/null 2>&1 || die \
 ok "docker $(docker version --format '{{.Server.Version}}' 2>/dev/null || echo present)"
 ok "compose $(docker compose version --short 2>/dev/null || echo present)"
 
-# Memory. The core profile's limits total ~16.5 GB, but those are CAPS, not
-# reservations -- the stack idles far below that. Below 8 GB, though, Spark
-# and Hive get OOM-killed mid-run, which surfaces as a confusing stage
-# failure rather than an obvious out-of-memory error.
+# Memory. The core profile's caps total ~13.5 GB, but a cap is a ceiling, not
+# a reservation: measured working set across a full run is about 4.2 GB. What
+# actually matters is leaving enough that a JVM heap spike in Spark, Hive or
+# Kafka is not OOM-killed -- that surfaces as a stage failing for no visible
+# reason rather than as an obvious out-of-memory error.
 MEM_MB=$(docker info --format '{{.MemTotal}}' 2>/dev/null | awk '{printf "%d", $1/1048576}')
 if [ -n "${MEM_MB:-}" ] && [ "$MEM_MB" -gt 0 ]; then
-  if   [ "$MEM_MB" -lt 7000 ]; then
+  if   [ "$MEM_MB" -lt 5000 ]; then
     warn "Docker sees only ${MEM_MB} MiB. Spark and Hive will likely be OOM-killed."
-    warn "Give the VM at least 12 GB (16 GB comfortable) and re-run."
-  elif [ "$MEM_MB" -lt 11000 ]; then
-    warn "Docker sees ${MEM_MB} MiB. Workable, but 12 GB+ is recommended."
+    warn "Give Docker at least 6 GB (8 GB comfortable) and re-run."
+  elif [ "$MEM_MB" -lt 7500 ]; then
+    warn "Docker sees ${MEM_MB} MiB. Workable, but 8 GB is more comfortable."
   else
     ok "memory: ${MEM_MB} MiB"
   fi
@@ -80,7 +81,60 @@ DISK_AVAIL=$(df -Pm . | awk 'NR==2 {print $4}')
   && warn "only ${DISK_AVAIL} MiB free here; images need roughly 15 GB" \
   || ok "disk: ${DISK_AVAIL} MiB free"
 
-ok "architecture: $(uname -m) ($(uname -s))"
+# ── Platform detection ───────────────────────────────────────────────────
+# Not cosmetic: WSL2 has two failure modes that do not exist on native Linux
+# or macOS, and both are silent -- the stack starts and then behaves badly
+# rather than erroring.
+PLATFORM="$(uname -s)"
+IS_WSL=0
+if grep -qi microsoft /proc/version 2>/dev/null; then
+  IS_WSL=1
+  PLATFORM="WSL2"
+fi
+ok "platform: $PLATFORM on $(uname -m)"
+
+if [ "$IS_WSL" = "1" ]; then
+  # 1. Repo location. A checkout under /mnt/c (the Windows filesystem) goes
+  #    through the 9p translation layer, where bind-mount I/O is roughly an
+  #    order of magnitude slower. Spark and Hive write thousands of small
+  #    files, so this turns a 30-second stage into minutes -- and it looks
+  #    like the pipeline is broken rather than the disk being slow.
+  case "$(pwd -P)" in
+    /mnt/*)
+      warn "this repo lives on the Windows filesystem ($(pwd -P))."
+      warn "Bind-mount I/O there is ~10x slower and Spark/Hive will crawl."
+      warn "Move it into the Linux filesystem and re-run:"
+      warn "    cp -r \"$(pwd -P)\" ~/avapuck && cd ~/avapuck && ./setup.sh"
+      # No TTY (CI, or a piped run): do not block, and do not silently
+      # proceed into a setup that will be painfully slow -- say why and stop.
+      # /dev/tty EXISTS even with no terminal attached, so test whether it can
+      # actually be opened rather than whether the file is there.
+      if { : </dev/tty; } 2>/dev/null; then
+        printf '    continue anyway? [y/N] '
+        read -r reply </dev/tty || reply=n
+      else
+        reply=n
+        warn "no terminal to prompt on; refusing to continue from a /mnt path"
+      fi
+      case "$reply" in [Yy]*) ;; *) die "moved nothing; re-run from a Linux path." ;; esac
+      ;;
+    *) ok "repo is on the Linux filesystem (fast bind mounts)" ;;
+  esac
+
+  # 2. Memory. WSL2 takes half the host RAM by default, which on a 16 GB
+  #    machine leaves 8 GB -- below what Spark and Hive need together.
+  #    Raising it needs a .wslconfig on the WINDOWS side and `wsl --shutdown`,
+  #    so tell the user exactly what to write.
+  WSL_MEM=$(awk '/MemTotal/ {printf "%d", $2/1024}' /proc/meminfo 2>/dev/null || echo 0)
+  if [ "${WSL_MEM:-0}" -gt 0 ] && [ "$WSL_MEM" -lt 11000 ]; then
+    warn "WSL2 has ${WSL_MEM} MiB of RAM; this stack wants 12 GB+."
+    warn "In Windows, create %UserProfile%\\.wslconfig containing:"
+    warn "    [wsl2]"
+    warn "    memory=12GB"
+    warn "    processors=4"
+    warn "then run  wsl --shutdown  in PowerShell and start WSL again."
+  fi
+fi
 
 # ─────────────────────────────────────────────────────────────────────────
 say "Generating TLS certificates"

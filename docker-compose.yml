@@ -117,7 +117,7 @@ services:
       KAFKA_AUTO_CREATE_TOPICS_ENABLE: "false"
       CLUSTER_ID: pl-kafka-local-cluster
     ports: ["29092:29092"]
-    mem_limit: 1g
+    mem_limit: 1500m
     volumes:
       - kafka_data:/var/lib/kafka/data
       - ./docker/kafka-jaas.conf:/etc/kafka/kafka-jaas.conf:ro
@@ -201,7 +201,7 @@ services:
         -Djavax.jdo.option.ConnectionUserName=hive
         -Djavax.jdo.option.ConnectionPassword=${HIVE_METASTORE_PASSWORD:-hive-dev-password}
     ports: ["9083:9083"]
-    mem_limit: 2g
+    mem_limit: 1200m
     depends_on:
       hive-metastore-db: {condition: service_healthy}
     volumes:
@@ -223,7 +223,7 @@ services:
       SERVICE_OPTS: -Dhive.metastore.uris=thrift://hive-metastore:9083
       IS_RESUME: "true"
     ports: ["10000:10000", "10002:10002"]
-    mem_limit: 2g
+    mem_limit: 1500m
     depends_on: [hive-metastore]
     volumes:
       - ./data/hive:/opt/hive/data/warehouse
@@ -245,7 +245,7 @@ services:
       SPARK_MASTER_HOST: spark-master
       PYTHONPATH: /opt/pipeline
     ports: ["8080:8080", "7077:7077"]
-    mem_limit: 2g
+    mem_limit: 1g
     volumes: [./:/opt/pipeline:rw]
     healthcheck:
       test: ["CMD-SHELL", "curl -sf http://localhost:8080 >/dev/null"]
@@ -261,13 +261,13 @@ services:
     environment:
       SPARK_NO_DAEMONIZE: "true"
       SPARK_WORKER_CORES: "2"
-      SPARK_WORKER_MEMORY: 2g
+      SPARK_WORKER_MEMORY: 1g
       PYTHONPATH: /opt/pipeline
       IDP_URL: https://idp:8443
       CRYPTO_URL: https://crypto:8444
       PIPELINE_CA_BUNDLE: /opt/pipeline/certs/ca.crt
       CLIENT_SECRET_SPARK_JOB: ${CLIENT_SECRET_SPARK_JOB:-dev-spark-secret}
-    mem_limit: 3g
+    mem_limit: 1500m
     depends_on:
       spark-master: {condition: service_healthy}
     # Executors write the Parquet themselves, so /data must resolve to the
@@ -383,7 +383,7 @@ services:
       CSV_FALLBACK_PATH: ${CSV_FALLBACK_PATH:-/data/csv/BLM_CO_Q2_2026_Oil_and_Gas_Lease_Sale_-2400573660170243848.csv}
       BQ_MAX_BYTES_BILLED: ${BQ_MAX_BYTES_BILLED:-314572800}
     ports: ["8085:8080"]
-    mem_limit: 4g
+    mem_limit: 3g
     depends_on:
       idp: {condition: service_healthy}
       crypto: {condition: service_healthy}

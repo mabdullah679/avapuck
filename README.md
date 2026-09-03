@@ -147,10 +147,16 @@ the host — and works on x86_64 and arm64.
 ./setup.sh --clean      # stop the stack and delete its volumes
 ```
 
-**VM sizing:** give it **16 GB RAM (12 GB minimum)**, 4 CPUs and 40 GB of disk.
-Below ~8 GB, Spark and Hive are OOM-killed mid-run and surface as a confusing
-stage failure rather than an obvious memory error; `setup.sh` warns you before
-that happens.
+**Sizing:** the stack's measured working set across a full run is about
+**4.2 GB**; container caps total 13.5 GB, but a cap is a ceiling, not a
+reservation. Give Docker **8 GB** (6 GB minimum), 4 CPUs and 40 GB of disk.
+Below ~5 GB, Spark and Hive get OOM-killed mid-run and surface as a stage
+failing for no visible reason; `setup.sh` warns you before that happens.
+
+**On Windows:** run it inside WSL2 — `setup.sh` detects WSL and checks two
+things that silently ruin performance there: a repo checked out under `/mnt/c`
+(Windows filesystem, ~10× slower bind mounts) and WSL2's default memory
+allocation. It tells you exactly what to change.
 
 Everything below is the same thing done by hand.
 

@@ -1,0 +1,26 @@
+# Line endings.
+#
+# Windows checkouts default to core.autocrlf=true, which rewrites LF to CRLF.
+# That silently breaks anything a Linux container executes: `#!/bin/sh\r` is
+# not a valid interpreter path, and the failure ("no such file or directory"
+# for a file that plainly exists) gives no hint about line endings.
+#
+# Everything below must stay LF on every platform.
+*.sh            text eol=lf
+*.bash          text eol=lf
+Dockerfile*     text eol=lf
+*.yml           text eol=lf
+*.yaml          text eol=lf
+*.sql           text eol=lf
+*.conf          text eol=lf
+*.properties    text eol=lf
+*.py            text eol=lf
+.env.example    text eol=lf
+Makefile*       text eol=lf
+
+# Binary: never touch these.
+*.pdf           binary
+*.parquet       binary
+*.jar           binary
+*.png           binary
+*.jpg           binary
