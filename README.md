@@ -123,6 +123,37 @@ make -f Makefile.k8s run-now
 make -f Makefile.k8s logs
 ```
 
+## Quick start — one command
+
+On a clean machine (tested on Ubuntu in a VM and on macOS):
+
+```bash
+git clone https://github.com/mabdullah679/avapuck.git
+cd avapuck
+./scripts/install-prereqs-ubuntu.sh   # Ubuntu/Debian only; skip if Docker is installed
+./setup.sh
+```
+
+`setup.sh` checks prerequisites, generates your own TLS certificates, creates
+the directories the containers bind-mount, builds and starts every service,
+creates the Kafka topics and ACLs, runs the pipeline once, and tells you where
+the PDF landed. It needs **only Docker** — no Python, Java or Kafka client on
+the host — and works on x86_64 and arm64.
+
+```bash
+./setup.sh --no-run     # set up, but do not run the pipeline
+./setup.sh --rebuild    # force a rebuild of the locally-built images
+./setup.sh --down       # stop the stack, keep the data
+./setup.sh --clean      # stop the stack and delete its volumes
+```
+
+**VM sizing:** give it **16 GB RAM (12 GB minimum)**, 4 CPUs and 40 GB of disk.
+Below ~8 GB, Spark and Hive are OOM-killed mid-run and surface as a confusing
+stage failure rather than an obvious memory error; `setup.sh` warns you before
+that happens.
+
+Everything below is the same thing done by hand.
+
 ## Quick start — local Docker Compose
 
 This is the path to use if you just want to see the pipeline run. It works

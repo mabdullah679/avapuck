@@ -22,9 +22,14 @@ gcp-*.json
 application_default_credentials.json
 
 # ── TLS / key material ────────────────────────────────────────────────────
-# The dev CA and service certs come from scripts/gen_certs.sh. The public
-# certs (certs/*.crt) ARE committed so a checkout can verify without a
-# regeneration step; the private keys never are.
+# The dev CA and service certs come from scripts/gen_certs.sh, and NONE of it
+# is committed -- not even the public certs.
+#
+# Committing the .crt files while ignoring the .key files was a real trap: a
+# fresh clone got three certificates with no matching keys, gen_certs.sh
+# refused to overwrite them ("certs/ already populated"), and the IdP died
+# with X509: KEY_VALUES_MISMATCH. Every machine generates its own pair.
+certs/*.crt
 certs/*.key
 certs/*.srl
 certs/*.cnf
