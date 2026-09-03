@@ -82,11 +82,34 @@ services:
       # The CONTROLLER listener must NOT appear in advertised.listeners, and
       # this image derives one from the other unless both are given
       # explicitly -- otherwise it advertises 0.0.0.0 and refuses to start.
-      KAFKA_LISTENERS: PLAINTEXT://kafka:9092,CONTROLLER://kafka:9093,EXTERNAL://0.0.0.0:29092
-      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092,EXTERNAL://localhost:29092
-      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,CONTROLLER:PLAINTEXT,EXTERNAL:PLAINTEXT
+      # Client listeners require SASL/PLAIN; the controller listener stays
+      # plain because it never leaves this node in a single-node KRaft setup.
+      #
+      # SASL_PLAINTEXT is AUTHENTICATION, not encryption: it proves who the
+      # client is and the ACLs below decide what they may do, but the message
+      # bytes still travel unencrypted. Sensitive fields on rpos_encrypted are
+      # already AES ciphertext, so what a network observer would see there is
+      # ciphertext either way. Wire encryption needs SASL_SSL and broker certs
+      # -- see TRUST-BOUNDARY.md 2.9.
+      KAFKA_LISTENERS: SASL_PLAINTEXT://kafka:9092,CONTROLLER://kafka:9093,EXTERNAL://0.0.0.0:29092
+      KAFKA_ADVERTISED_LISTENERS: SASL_PLAINTEXT://kafka:9092,EXTERNAL://localhost:29092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: SASL_PLAINTEXT:SASL_PLAINTEXT,CONTROLLER:PLAINTEXT,EXTERNAL:SASL_PLAINTEXT
       KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
-      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: SASL_PLAINTEXT
+      KAFKA_SASL_ENABLED_MECHANISMS: PLAIN
+      KAFKA_SASL_MECHANISM_INTER_BROKER_PROTOCOL: PLAIN
+      # Authorization. Without an authorizer, authentication alone would let
+      # any authenticated client read or write any topic.
+      KAFKA_AUTHORIZER_CLASS_NAME: org.apache.kafka.metadata.authorizer.StandardAuthorizer
+      # ANONYMOUS is the controller listener's principal: that listener is
+      # PLAINTEXT (it never leaves this node), so the broker registering
+      # itself arrives unauthenticated and a deny-by-default authorizer
+      # refuses it. Client listeners still require SASL, so this does not
+      # make the broker open -- nothing external can reach CONTROLLER.
+      KAFKA_SUPER_USERS: User:admin;User:ANONYMOUS
+      # Deny by default: a principal with no matching ACL gets nothing.
+      KAFKA_ALLOW_EVERYONE_IF_NO_ACL_FOUND: "false"
+      KAFKA_OPTS: -Djava.security.auth.login.config=/etc/kafka/kafka-jaas.conf
       KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: "1"
       KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: "1"
       KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: "1"
@@ -95,9 +118,12 @@ services:
       CLUSTER_ID: pl-kafka-local-cluster
     ports: ["29092:29092"]
     mem_limit: 1g
-    volumes: [kafka_data:/var/lib/kafka/data]
+    volumes:
+      - kafka_data:/var/lib/kafka/data
+      - ./docker/kafka-jaas.conf:/etc/kafka/kafka-jaas.conf:ro
+      - ./docker/kafka-admin.properties:/etc/kafka/admin.properties:ro
     healthcheck:
-      test: ["CMD-SHELL", "/opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:9092 --list >/dev/null 2>&1"]
+      test: ["CMD-SHELL", "/opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:9092 --command-config /etc/kafka/admin.properties --list >/dev/null 2>&1"]
       interval: 10s
       timeout: 10s
       retries: 20
@@ -116,7 +142,9 @@ services:
     environment:
       T_ENC: ${KAFKA_TOPIC_ENCRYPTED:-rpos_encrypted}
       T_PUB: ${KAFKA_TOPIC_PUBLIC:-rpos_flat}
-    volumes: ["./docker/kafka-init.sh:/kafka-init.sh:ro"]
+    volumes:
+      - ./docker/kafka-init.sh:/kafka-init.sh:ro
+      - ./docker/kafka-admin.properties:/etc/kafka/admin.properties:ro
     entrypoint: ["/bin/sh", "/kafka-init.sh"]
 
   # ── Warehouse ────────────────────────────────────────────────────────────
@@ -295,6 +323,13 @@ services:
       KAFKA_BOOTSTRAP: ${KAFKA_BOOTSTRAP:-kafka:9092}
       KAFKA_TOPIC_ENCRYPTED: ${KAFKA_TOPIC_ENCRYPTED:-rpos_encrypted}
       KAFKA_TOPIC_PUBLIC: ${KAFKA_TOPIC_PUBLIC:-rpos_flat}
+      # The publisher authenticates as `pipeline`, which ACLs allow to WRITE
+      # both topics and to read neither -- a compromised publisher cannot
+      # drain the topics it feeds.
+      KAFKA_SASL_USERNAME: ${KAFKA_SASL_USERNAME:-pipeline}
+      KAFKA_SASL_PASSWORD: ${KAFKA_SASL_PASSWORD:-pipeline-dev-password}
+      KAFKA_SECURITY_PROTOCOL: ${KAFKA_SECURITY_PROTOCOL:-SASL_PLAINTEXT}
+      KAFKA_SASL_MECHANISM: ${KAFKA_SASL_MECHANISM:-PLAIN}
       # Every pipeline client verifies the service certs against this CA.
       # Unset it and the clients fall back to the system trust store, which
       # does NOT contain the dev CA -- calls then fail closed, by design.

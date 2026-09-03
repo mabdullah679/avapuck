@@ -27,6 +27,11 @@ Airflow UI.
 (non-sensitive business columns). **No sensitive value is published in the
 clear** — see `TRUST-BOUNDARY.md` §2.9.
 
+Kafka requires SASL authentication and enforces per-topic ACLs: the
+`pipeline` user may write both topics and read neither; `consumer` may read
+`rpos_flat` only. Note that SASL_PLAINTEXT authenticates but does **not**
+encrypt the connection — see §2.9a.
+
 If BigQuery fails 3 times (`BQ_ATTEMPTS`), the extract stage falls back to
 `CSV_FALLBACK_PATH` rather than failing the run, and says so in the UI.
 
@@ -222,6 +227,7 @@ generated locally or comes from your own account.
 | **Service secrets** | compose defaults | No | Dev fallbacks (`dev-spark-secret`, …) are fine locally, **not** anywhere shared |
 | **Postgres password** | compose default | No | `pipeline-dev-password` locally; override via `POSTGRES_PASSWORD` |
 | **Airflow admin password** | auto-generated | No | Read it from the container (step 5) |
+| **Kafka SASL users** | `docker/kafka-jaas.conf` | No | Dev defaults (`pipeline`, `consumer`, `admin`). Change all three before anywhere shared |
 
 ### If you want live BigQuery
 

@@ -64,6 +64,7 @@ class TwoTopicPublisher:
             from kafka import KafkaProducer
             self._producer = KafkaProducer(
                 bootstrap_servers=self.bootstrap.split(","),
+                **_sasl_config(),
                 value_serializer=lambda v: json.dumps(v, default=_json_default).encode(),
                 key_serializer=lambda k: None if k is None else str(k).encode(),
                 # acks=all: a row that Kafka has not durably accepted must not
@@ -167,3 +168,25 @@ def _assert_no_plaintext_published(manifest, rows, pub_cols: list[str]) -> None:
         raise AssertionError(
             f"refusing to publish: {leaked} are sensitive columns but were "
             f"routed to the public topic")
+
+def _sasl_config() -> dict:
+    """SASL settings for the broker, or {} when auth is not configured.
+
+    The broker denies any principal with no matching ACL, so an unauthenticated
+    client does not fail open -- it fails at connect. Returning {} when
+    KAFKA_SASL_USERNAME is unset keeps a plain local broker usable for tests
+    without a second code path.
+
+    NOTE: SASL_PLAINTEXT authenticates the client; it does not encrypt the
+    connection. Set KAFKA_SECURITY_PROTOCOL=SASL_SSL once the broker has certs.
+    """
+    user = os.environ.get("KAFKA_SASL_USERNAME")
+    if not user:
+        return {}
+    return {
+        "security_protocol": os.environ.get("KAFKA_SECURITY_PROTOCOL",
+                                            "SASL_PLAINTEXT"),
+        "sasl_mechanism": os.environ.get("KAFKA_SASL_MECHANISM", "PLAIN"),
+        "sasl_plain_username": user,
+        "sasl_plain_password": os.environ.get("KAFKA_SASL_PASSWORD", ""),
+    }

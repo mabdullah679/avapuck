@@ -83,9 +83,11 @@ c=jaydebeapi.connect('org.apache.hive.jdbc.HiveDriver',
                      'jdbc:hive2://hiveserver2:10000',['',''],jars)
 cur=c.cursor(); cur.execute('SHOW TABLES IN trips_warehouse'); print(cur.fetchall())"
 
-# Kafka got both topics (encrypted + flat):
+# Kafka got both topics (encrypted + flat). Kafka requires SASL, so every
+# client command needs a credentials file:
 docker exec pl-kafka /opt/kafka/bin/kafka-get-offsets.sh \
-  --bootstrap-server kafka:9092 --topic rpos_encrypted
+  --bootstrap-server kafka:9092 --topic rpos_encrypted \
+  --command-config /etc/kafka/admin.properties
 
 # Nothing sensitive reached the warehouse:
 docker exec pl-postgres psql -U pipeline -d analytics -c "\d warehouse.<table>"
@@ -124,6 +126,8 @@ Regenerated whenever that file is lost — re-read it rather than assuming.
 | `no Ranger masking policy for [...]` | A new sensitive column — policy is appended on the next run; re-run the stage |
 | `fell_back_to_csv=True` in the trace | BigQuery failed `BQ_ATTEMPTS` times; the run used `CSV_FALLBACK_PATH` and did **not** read BigQuery |
 | `NoBrokersAvailable` | Kafka not up, or `KAFKA_BOOTSTRAP` wrong — topics are not auto-created, so a typo fails rather than making a third topic |
+| `TopicAuthorizationException` | The principal has no ACL for that topic. `pipeline` can write but not read; `consumer` can read `rpos_flat` only. This is the design, not a fault |
+| Kafka CLI hangs then disconnects | Missing `--command-config` / `--consumer.config` — the broker requires SASL and drops unauthenticated clients |
 
 Failing closed is the designed behaviour in every one of these. Do not work
 around them by disabling a check.
