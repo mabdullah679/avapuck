@@ -125,6 +125,7 @@ Regenerated whenever that file is lost — re-read it rather than assuming.
 | `0 rows for window …` | `BQ_DATA_START`/`END` do not match the source table's real span |
 | `no Ranger masking policy for [...]` | A new sensitive column — policy is appended on the next run; re-run the stage |
 | `fell_back_to_csv=True` in the trace | BigQuery failed `BQ_ATTEMPTS` times; the run used `CSV_FALLBACK_PATH` and did **not** read BigQuery |
+| DAG triggered from the UI sits in `up_for_retry` | Was `KeyError: 'logical_date'` — the UI Run button does not supply it on Airflow 3, unlike `dags test`. Fixed by `logical_ts(ctx)`; if it returns, a new task is reading `ctx["logical_date"]` directly |
 | `NoBrokersAvailable` | Kafka not up, or `KAFKA_BOOTSTRAP` wrong — topics are not auto-created, so a typo fails rather than making a third topic |
 | `TopicAuthorizationException` | The principal has no ACL for that topic. `pipeline` can write but not read; `consumer` can read `rpos_flat` only. This is the design, not a fault |
 | Kafka CLI hangs then disconnects | Missing `--command-config` / `--consumer.config` — the broker requires SASL and drops unauthenticated clients |

@@ -104,6 +104,25 @@ COMMON = dict(
 )
 
 
+def logical_ts(ctx: dict):
+    """The run's logical timestamp, however Airflow chose to supply it.
+
+    `ctx["logical_date"]` is NOT always present. A run triggered from the UI
+    Run button (or `airflow dags trigger`) on Airflow 3 arrives without it,
+    while `airflow dags test` supplies it -- so a KeyError here fails only on
+    the UI path, then sits in `up_for_retry` for the retry delay looking like
+    the scheduler is stuck. Fall back the same way trace_from_context does.
+    """
+    ts = (ctx.get("logical_date")
+          or ctx.get("data_interval_start")
+          or (ctx.get("dag_run") and getattr(ctx["dag_run"], "logical_date", None))
+          or (ctx.get("dag_run") and getattr(ctx["dag_run"], "run_after", None)))
+    if ts is None:
+        from datetime import datetime, timezone
+        ts = datetime.now(timezone.utc)
+    return ts
+
+
 def _crypto(client_id: str, secret_env: str):
     """A crypto client authenticated as a specific job identity.
 
@@ -181,7 +200,7 @@ with DAG(
         from pipeline.extract.fixture import get_extractor, extract_with_fallback
         trace = trace_from_context(ctx)
         _t0 = stage_start("extract", trace)
-        ts = ctx["logical_date"]
+        ts = logical_ts(ctx)
         r, ex, attempts, fell_back = extract_with_fallback(ts, DATA / "csv", log)
         _ev = stage_event(
             "extract", trace,
@@ -209,7 +228,7 @@ with DAG(
         from pipeline.transform.card_split import run
         trace = trace_from_context(ctx)
         _t0 = stage_start("card_split", trace)
-        ts = ctx["logical_date"]
+        ts = logical_ts(ctx)
         d = ts.date() if hasattr(ts, "date") else ts
         csv_path = _find(DATA / "csv", f"*_{d.isoformat()}.csv", "card_split")
         r = run(d, csv_path, DATA / "cards",
@@ -226,7 +245,7 @@ with DAG(
         from pipeline.transform.spark_encrypt import run
         trace = trace_from_context(ctx)
         _t0 = stage_start("encrypt", trace)
-        ts = ctx["logical_date"]
+        ts = logical_ts(ctx)
         d = ts.date() if hasattr(ts, "date") else ts
         csv_path = _find(DATA / "csv", f"*_{d.isoformat()}.csv", "encrypt")
         r = run(d, csv_path, DATA / "parquet",
@@ -251,7 +270,7 @@ with DAG(
         from pipeline.publish.kafka_publish import run
         trace = trace_from_context(ctx)
         _t0 = stage_start("publish", trace)
-        ts = ctx["logical_date"]
+        ts = logical_ts(ctx)
         d = ts.date() if hasattr(ts, "date") else ts
         pq = _find(DATA / "parquet" / f"dt={d.isoformat()}", "*.parquet", "publish")
         r = run(d, pq)
@@ -272,7 +291,7 @@ with DAG(
         from pipeline.transform.hive_mask import run
         trace = trace_from_context(ctx)
         _t0 = stage_start("mask", trace)
-        ts = ctx["logical_date"]
+        ts = logical_ts(ctx)
         d = ts.date() if hasattr(ts, "date") else ts
         pq = _find(DATA / "parquet" / f"dt={d.isoformat()}", "*.parquet", "mask")
         r = run(d, pq, DATA / "hive" / pq.stem,
@@ -297,7 +316,7 @@ with DAG(
         from pipeline.transform.hive_register import run
         trace = trace_from_context(ctx)
         _t0 = stage_start("hive_register", trace)
-        ts = ctx["logical_date"]
+        ts = logical_ts(ctx)
         d = ts.date() if hasattr(ts, "date") else ts
         # The DDL is built from the masked file itself, so the table matches
         # whatever dataset just ran rather than a hardcoded trips schema.
@@ -316,7 +335,7 @@ with DAG(
         from pipeline.load.postgres_load import run
         trace = trace_from_context(ctx)
         _t0 = stage_start("load", trace)
-        ts = ctx["logical_date"]
+        ts = logical_ts(ctx)
         d = ts.date() if hasattr(ts, "date") else ts
         pq = _find(DATA / "hive", f"*/dt={d.isoformat()}/*_masked.parquet", "load")
         r = run(d, pq)
@@ -334,7 +353,7 @@ with DAG(
         from pipeline.report.collect import collect
         trace = trace_from_context(ctx)
         _t0 = stage_start("report", trace)
-        ts = ctx["logical_date"]
+        ts = logical_ts(ctx)
         d = ts.date() if hasattr(ts, "date") else ts
         # The report reads the warehouse, not a file -- but it still needs to
         # know WHICH table, so it reads the manifest the mask stage left beside
