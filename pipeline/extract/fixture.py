@@ -131,3 +131,73 @@ def get_extractor():
         from pipeline.extract.bigquery_extract import extractor_from_env
         return extractor_from_env()
     return FixtureExtractor(row_limit=int(os.environ.get("BQ_ROW_LIMIT", "100")))
+
+def extract_with_fallback(logical_ts, out_dir, log=None):
+    """Try BigQuery up to BQ_ATTEMPTS times, then fall back to the CSV source.
+
+    Returns (result, extractor_used, bq_attempts, fell_back).
+
+    The client requirement is "if BigQuery fails 3 times, default to the CSV
+    workflow". Retrying inside the task rather than relying on Airflow's task
+    retries is deliberate: an Airflow retry re-runs the WHOLE task, so it would
+    retry the fallback too and there would be no way to say "three BigQuery
+    attempts, then switch". Here the attempt count applies to BigQuery alone.
+
+    A fallback is never silent. Every failed attempt is logged with its
+    exception, and the caller records `mode` and `fell_back_to_csv` in the
+    stage result so the Airflow UI shows which source actually ran.
+    """
+    import logging
+    import os
+    log = log or logging.getLogger(__name__)
+
+    ex = get_extractor()
+    attempts_allowed = int(os.environ.get("BQ_ATTEMPTS", "3"))
+
+    # Only the BigQuery path gets retried -- a CSV or fixture source that
+    # fails has nothing to fall back TO, and retrying it would just delay a
+    # legitimate failure.
+    if type(ex).__name__ != "BigQueryExtractor":
+        log.info("extract: source is %s; no BigQuery fallback needed",
+                 type(ex).__name__)
+        return ex.extract(logical_ts, out_dir), ex, 0, False
+
+    last = None
+    for attempt in range(1, attempts_allowed + 1):
+        try:
+            log.info("extract: BigQuery attempt %d/%d", attempt, attempts_allowed)
+            r = ex.extract(logical_ts, out_dir)
+            if attempt > 1:
+                log.info("extract: BigQuery succeeded on attempt %d", attempt)
+            return r, ex, attempt, False
+        except Exception as e:  # noqa: BLE001
+            last = e
+            log.warning("extract: BigQuery attempt %d/%d failed: %s",
+                        attempt, attempts_allowed, e)
+
+    log.warning("extract: BigQuery failed %d times (last: %s); FALLING BACK to "
+                "the CSV source", attempts_allowed, last)
+
+    # The fallback needs its OWN path variable. Setting CSV_SOURCE_PATH would
+    # short-circuit get_extractor() above and BigQuery would never be tried at
+    # all; leaving it unset would make the CSV extractor raise KeyError here.
+    fallback = os.environ.get("CSV_FALLBACK_PATH") or os.environ.get("CSV_SOURCE_PATH")
+    if not fallback:
+        log.error("extract: BigQuery failed %d times and CSV_FALLBACK_PATH is "
+                  "not set -- nothing to fall back to", attempts_allowed)
+        raise last
+
+    from pipeline.extract.csv_source import extractor_from_env as csv_from_env
+    prev = os.environ.get("CSV_SOURCE_PATH")
+    os.environ["CSV_SOURCE_PATH"] = fallback
+    try:
+        csv_ex = csv_from_env()
+        r = csv_ex.extract(logical_ts, out_dir)
+    finally:
+        if prev is None:
+            os.environ.pop("CSV_SOURCE_PATH", None)
+        else:
+            os.environ["CSV_SOURCE_PATH"] = prev
+    log.warning("extract: fell back to %s -- this run did NOT read BigQuery",
+                type(csv_ex).__name__)
+    return r, csv_ex, attempts_allowed, True

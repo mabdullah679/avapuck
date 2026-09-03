@@ -64,3 +64,37 @@ def trace_from_context(ctx: dict, pipeline: str = "trips") -> str:
     if ts is None:
         ts = datetime.now()
     return trace_id(ts, pipeline)
+
+# ── Airflow UI visibility ─────────────────────────────────────────────────
+# Airflow shows a task's own logger output in the UI's log view, so writing to
+# `airflow.task` is what makes a step's progress visible there rather than only
+# in the container's stdout. `stage_event` already emits one machine-parseable
+# line per boundary; these two bracket it with something a human reads at a
+# glance while a run is in flight.
+_ui = logging.getLogger("airflow.task")
+
+
+def stage_start(stage: str, trace: str, **fields) -> float:
+    """Log a step's start banner. Returns a monotonic start time for stage_end."""
+    import time
+    parts = " ".join(f"{k}={v}" for k, v in fields.items() if v is not None)
+    _ui.info("=" * 68)
+    _ui.info("▶ START  %s   trace=%s", stage.upper(), trace)
+    if parts:
+        _ui.info("  inputs: %s", parts)
+    _ui.info("=" * 68)
+    return time.monotonic()
+
+
+def stage_end(stage: str, trace: str, started: float, status: str = "SUCCESS",
+              **fields) -> None:
+    """Log a step's outcome, its duration, and the headline numbers."""
+    import time
+    secs = time.monotonic() - started
+    mark = "✔" if status == "SUCCESS" else "✖"
+    _ui.info("-" * 68)
+    _ui.info("%s %s  %s in %.2fs", mark, status, stage.upper(), secs)
+    for k, v in fields.items():
+        if v is not None:
+            _ui.info("    %-18s %s", k, v)
+    _ui.info("-" * 68)

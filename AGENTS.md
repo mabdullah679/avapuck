@@ -24,11 +24,15 @@ system accurately and overselling it.
 
 ## The shape of it
 
-**One DAG, `trips_pipeline`, seven tasks:**
+**One DAG, `trips_pipeline`, eight tasks:**
 
 ```
-extract → card_split → encrypt → mask → register → load → report
+extract → card_split → encrypt → publish → mask → register → load → report
 ```
+
+Every task brackets itself with `stage_start` / `stage_end` on the
+`airflow.task` logger, so the UI shows each step's status and duration while a
+run is in flight — not only after it finishes.
 
 Chained by `>>`; each task consumes what the previous one wrote. An earlier
 version ran six asset-scheduled DAGs — that history is in
@@ -76,7 +80,14 @@ and `maximum_bytes_billed`, which makes BigQuery *refuse* an over-budget query.
 A custom `BQ_SQL_FILE` must reference `@row_limit`; the extractor rejects one
 that does not.
 
-### 5. Re-running replaces, never duplicates
+### 5. Nothing sensitive is published in the clear
+The `publish` stage sends ciphertext to `rpos_encrypted` and never-sensitive
+columns to `rpos_flat`. Kafka is durable, replicated and retained — plaintext
+there is a larger exposure than the warehouse ever was.
+`_assert_no_plaintext_published` refuses the send if the manifest's sensitive
+columns are ever routed to the flat topic. **Do not "simplify" that away.**
+
+### 6. Re-running replaces, never duplicates
 Every stage keys off the logical timestamp; the warehouse upserts on the
 manifest's key. Verify by re-running a slice and expecting `0 inserted /
 N updated`.

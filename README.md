@@ -16,9 +16,19 @@ BigQuery/CSV ──▶ CSV ──▶ [card split] ──▶ [encrypt] ──▶ 
                                           PDF ◀── Postgres ◀────────┘
 ```
 
-One Airflow DAG, `trips_pipeline`, with seven tasks chained in order:
-`extract` → `card_split` → `encrypt` → `mask` → `register` → `load` → `report`.
-Scheduled every 4 hours; each task consumes what the previous one wrote.
+One Airflow DAG, `trips_pipeline`, with eight tasks chained in order:
+`extract` → `card_split` → `encrypt` → `publish` → `mask` → `register` →
+`load` → `report`. Scheduled every 4 hours; each task consumes what the
+previous one wrote, and logs its own start, status and duration to the
+Airflow UI.
+
+`publish` sends each row to two Kafka topics from one producer:
+`rpos_encrypted` (sensitive fields as ciphertext) and `rpos_flat`
+(non-sensitive business columns). **No sensitive value is published in the
+clear** — see `TRUST-BOUNDARY.md` §2.9.
+
+If BigQuery fails 3 times (`BQ_ATTEMPTS`), the extract stage falls back to
+`CSV_FALLBACK_PATH` rather than failing the run, and says so in the UI.
 
 ---
 
@@ -186,6 +196,11 @@ jars=sorted(str(j) for d in os.environ['HIVE_JDBC_CLASSPATH'].split(':') if d
 c=jaydebeapi.connect('org.apache.hive.jdbc.HiveDriver',
                      'jdbc:hive2://hiveserver2:10000',['',''],jars)
 cur=c.cursor(); cur.execute('SHOW TABLES IN trips_warehouse'); print(cur.fetchall())"
+
+# Kafka received both topics:
+docker exec pl-kafka /opt/kafka/bin/kafka-console-consumer.sh \
+  --bootstrap-server kafka:9092 --topic rpos_flat \
+  --from-beginning --max-messages 1 --timeout-ms 15000
 
 # No plaintext card number reached the warehouse:
 docker exec pl-postgres psql -U pipeline -d analytics -t -c \

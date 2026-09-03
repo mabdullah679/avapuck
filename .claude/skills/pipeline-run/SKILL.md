@@ -5,8 +5,9 @@ description: Bring up the BigQuery → Spark → Hive → Postgres → PDF stack
 
 # Running this pipeline
 
-One DAG, `trips_pipeline`, seven tasks:
-`extract → card_split → encrypt → mask → register → load → report`.
+One DAG, `trips_pipeline`, eight tasks:
+`extract → card_split → encrypt → publish → mask → register → load → report`.
+Each step logs its own start, status and duration to the Airflow UI.
 
 The default path costs nothing and needs no cloud account.
 
@@ -27,7 +28,8 @@ trusting the old CA).
 docker compose --profile core up -d
 ```
 
-Ten containers. First run builds three images and pulls Hive/Spark/Postgres —
+Twelve containers (including a Kafka broker and a one-shot topic creator).
+First run builds three images and pulls Hive/Spark/Postgres/Kafka —
 allow 10–20 minutes and ≥12 GB of Docker memory. Wait for health:
 
 ```bash
@@ -81,6 +83,10 @@ c=jaydebeapi.connect('org.apache.hive.jdbc.HiveDriver',
                      'jdbc:hive2://hiveserver2:10000',['',''],jars)
 cur=c.cursor(); cur.execute('SHOW TABLES IN trips_warehouse'); print(cur.fetchall())"
 
+# Kafka got both topics (encrypted + flat):
+docker exec pl-kafka /opt/kafka/bin/kafka-get-offsets.sh \
+  --bootstrap-server kafka:9092 --topic rpos_encrypted
+
 # Nothing sensitive reached the warehouse:
 docker exec pl-postgres psql -U pipeline -d analytics -c "\d warehouse.<table>"
 ```
@@ -116,6 +122,8 @@ Regenerated whenever that file is lost — re-read it rather than assuming.
 | `CERTIFICATE_VERIFY_FAILED` | `PIPELINE_CA_BUNDLE` unset, or certs regenerated without recreating containers |
 | `0 rows for window …` | `BQ_DATA_START`/`END` do not match the source table's real span |
 | `no Ranger masking policy for [...]` | A new sensitive column — policy is appended on the next run; re-run the stage |
+| `fell_back_to_csv=True` in the trace | BigQuery failed `BQ_ATTEMPTS` times; the run used `CSV_FALLBACK_PATH` and did **not** read BigQuery |
+| `NoBrokersAvailable` | Kafka not up, or `KAFKA_BOOTSTRAP` wrong — topics are not auto-created, so a typo fails rather than making a third topic |
 
 Failing closed is the designed behaviour in every one of these. Do not work
 around them by disabling a check.

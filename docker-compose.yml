@@ -67,6 +67,58 @@ services:
       timeout: 3s
       retries: 12
 
+  # ── Kafka (KRaft — no ZooKeeper) ─────────────────────────────────────────
+  kafka:
+    <<: *common
+    profiles: [core]
+    image: apache/kafka:3.9.0
+    container_name: pl-kafka
+    environment:
+      # Single-node KRaft: this broker is also the controller. Fine for a
+      # local stack; a real deployment runs 3+ controllers and RF>=3.
+      KAFKA_NODE_ID: "1"
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:9093
+      # The CONTROLLER listener must NOT appear in advertised.listeners, and
+      # this image derives one from the other unless both are given
+      # explicitly -- otherwise it advertises 0.0.0.0 and refuses to start.
+      KAFKA_LISTENERS: PLAINTEXT://kafka:9092,CONTROLLER://kafka:9093,EXTERNAL://0.0.0.0:29092
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092,EXTERNAL://localhost:29092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,CONTROLLER:PLAINTEXT,EXTERNAL:PLAINTEXT
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: "1"
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: "1"
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: "1"
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: "0"
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "false"
+      CLUSTER_ID: pl-kafka-local-cluster
+    ports: ["29092:29092"]
+    mem_limit: 1g
+    volumes: [kafka_data:/var/lib/kafka/data]
+    healthcheck:
+      test: ["CMD-SHELL", "/opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:9092 --list >/dev/null 2>&1"]
+      interval: 10s
+      timeout: 10s
+      retries: 20
+      start_period: 30s
+
+  # Creates the two topics once, then exits. Topics are NOT auto-created:
+  # a typo in a topic name should fail loudly, not silently make a new topic.
+  kafka-init:
+    <<: *common
+    profiles: [core]
+    image: apache/kafka:3.9.0
+    container_name: pl-kafka-init
+    restart: "no"
+    depends_on:
+      kafka: {condition: service_healthy}
+    environment:
+      T_ENC: ${KAFKA_TOPIC_ENCRYPTED:-rpos_encrypted}
+      T_PUB: ${KAFKA_TOPIC_PUBLIC:-rpos_flat}
+    volumes: ["./docker/kafka-init.sh:/kafka-init.sh:ro"]
+    entrypoint: ["/bin/sh", "/kafka-init.sh"]
+
   # ── Warehouse ────────────────────────────────────────────────────────────
   postgres:
     <<: *common
@@ -237,6 +289,12 @@ services:
       PYSPARK_PYTHON: /usr/bin/python3.12
       # Hive registration over JDBC, replacing the old `docker exec` path.
       HIVE_JDBC_URL: jdbc:hive2://hiveserver2:10000
+      # Kafka. Two topics, one publisher: the encrypted sensitive fields go to
+      # one, the non-sensitive business columns to the other. NOTHING sensitive
+      # is ever published in the clear -- see TRUST-BOUNDARY.md 2.9.
+      KAFKA_BOOTSTRAP: ${KAFKA_BOOTSTRAP:-kafka:9092}
+      KAFKA_TOPIC_ENCRYPTED: ${KAFKA_TOPIC_ENCRYPTED:-rpos_encrypted}
+      KAFKA_TOPIC_PUBLIC: ${KAFKA_TOPIC_PUBLIC:-rpos_flat}
       # Every pipeline client verifies the service certs against this CA.
       # Unset it and the clients fall back to the system trust store, which
       # does NOT contain the dev CA -- calls then fail closed, by design.
@@ -283,6 +341,11 @@ services:
       # fills the 100-row cap on most slots. The cap still binds in the SQL --
       # this widens the window, it does not raise the limit.
       BQ_WINDOW_HOURS: ${BQ_WINDOW_HOURS:-24}
+      # If BigQuery fails BQ_ATTEMPTS times in a row, the extract stage falls
+      # back to this CSV rather than failing the run. Distinct from
+      # CSV_SOURCE_PATH, which would bypass BigQuery entirely.
+      BQ_ATTEMPTS: ${BQ_ATTEMPTS:-3}
+      CSV_FALLBACK_PATH: ${CSV_FALLBACK_PATH:-/data/csv/BLM_CO_Q2_2026_Oil_and_Gas_Lease_Sale_-2400573660170243848.csv}
       BQ_MAX_BYTES_BILLED: ${BQ_MAX_BYTES_BILLED:-314572800}
     ports: ["8085:8080"]
     mem_limit: 4g
@@ -291,6 +354,7 @@ services:
       crypto: {condition: service_healthy}
       postgres: {condition: service_healthy}
       hive-metastore: {condition: service_started}
+      kafka: {condition: service_healthy}
     volumes:
       - ./data:/data:rw
       - ./dags:/opt/pipeline/dags:ro
@@ -366,6 +430,7 @@ networks:
     name: pipeline-net
 
 volumes:
+  kafka_data:
   pg_data:
   hive_meta_data:
   ranger_db_data:

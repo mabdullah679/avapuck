@@ -47,6 +47,7 @@ Re-running any run replaces its data rather than duplicating it.
 """
 from __future__ import annotations
 
+import logging
 import os
 import sys
 from datetime import datetime, timedelta
@@ -74,7 +75,11 @@ except ImportError:
 
 from airflow.sdk import DAG, task
 
-from pipeline.common.trace import stage_event, trace_from_context
+from pipeline.common.trace import (stage_end, stage_event, stage_start,
+                                   trace_from_context)
+
+# Task logs go to the Airflow UI; this is the logger every stage writes to.
+log = logging.getLogger("airflow.task")
 
 DATA = Path(os.environ.get("PIPELINE_DATA_ROOT") or (ROOT / "data"))
 
@@ -161,26 +166,37 @@ with DAG(
 
     @task(task_id="extract_to_csv", execution_timeout=timedelta(minutes=10))
     def extract(**ctx):
-        """Bounded, cost-capped read of one 4-hour archive window.
+        """Bounded, cost-capped read of one window, with a CSV fallback.
 
-        Emits CSV_READY on success, which is what starts stage 2. A failure
-        emits nothing, so the chain stops here rather than running later
-        stages on absent or stale data.
+        BigQuery is attempted up to BQ_ATTEMPTS times (default 3). If all of
+        them fail, the stage falls back to the CSV source rather than failing
+        the run -- a transient BigQuery outage should not stop the pipeline
+        when a local source can serve the same window.
+
+        Every attempt is logged with its exception, and the stage result
+        records which source actually produced the data (`mode`) and how many
+        BigQuery attempts were made, so a fallback is visible in the UI rather
+        than looking like an ordinary run.
         """
-        from pipeline.extract.fixture import get_extractor
+        from pipeline.extract.fixture import get_extractor, extract_with_fallback
         trace = trace_from_context(ctx)
+        _t0 = stage_start("extract", trace)
         ts = ctx["logical_date"]
-        ex = get_extractor()
-        r = ex.extract(ts, DATA / "csv")
-        return stage_event(
+        r, ex, attempts, fell_back = extract_with_fallback(ts, DATA / "csv", log)
+        _ev = stage_event(
             "extract", trace,
             mode=type(ex).__name__,
+            bq_attempts=attempts,
+            fell_back_to_csv=fell_back,
             rows=r.row_count,
             archive_window=f"{r.window_date}..{r.window_end}",
             bytes_billed=r.bytes_billed,
             bq_job_id=r.query_id,
             csv=r.csv_path,
         )
+        stage_end("extract", trace, _t0, **{k: v for k, v in _ev.items()
+                                            if k not in ("trace_id", "stage")})
+        return _ev
 
     @task(task_id="split_card_numbers")
     def card_split(**ctx):
@@ -192,28 +208,62 @@ with DAG(
         """
         from pipeline.transform.card_split import run
         trace = trace_from_context(ctx)
+        _t0 = stage_start("card_split", trace)
         ts = ctx["logical_date"]
         d = ts.date() if hasattr(ts, "date") else ts
         csv_path = _find(DATA / "csv", f"*_{d.isoformat()}.csv", "card_split")
         r = run(d, csv_path, DATA / "cards",
                 _crypto("spark-job", "CLIENT_SECRET_SPARK_JOB"))
-        return stage_event("card_split", trace, rows=r["rows"],
+        _ev = stage_event("card_split", trace, rows=r["rows"],
                            cards=r["cards"], columns=r["columns"],
                            dataset=r["dataset"], output=r["output"])
+        stage_end("card_split", trace, _t0, **{k: v for k, v in _ev.items()
+                                            if k not in ("trace_id", "stage")})
+        return _ev
 
     @task(task_id="encrypt_to_parquet")
     def encrypt(**ctx):
         from pipeline.transform.spark_encrypt import run
         trace = trace_from_context(ctx)
+        _t0 = stage_start("encrypt", trace)
         ts = ctx["logical_date"]
         d = ts.date() if hasattr(ts, "date") else ts
         csv_path = _find(DATA / "csv", f"*_{d.isoformat()}.csv", "encrypt")
         r = run(d, csv_path, DATA / "parquet",
                 _crypto("spark-job", "CLIENT_SECRET_SPARK_JOB"))
-        return stage_event("encrypt", trace, rows=r["rows"], engine=r["engine"],
+        _ev = stage_event("encrypt", trace, rows=r["rows"], engine=r["engine"],
                            parquet=r["parquet_path"], algorithm="AES-256-GCM",
                            identity="spark-job", dataset=r["dataset"],
                            encrypted_columns=len(r["sensitive_columns"]))
+        stage_end("encrypt", trace, _t0, **{k: v for k, v in _ev.items()
+                                            if k not in ("trace_id", "stage")})
+        return _ev
+
+    @task(task_id="publish_kafka")
+    def publish(**ctx):
+        """Publish each encrypted row to two Kafka topics from one publisher.
+
+        Encrypted sensitive fields to one topic, non-sensitive business
+        columns to the other. No sensitive value is ever published in the
+        clear -- see TRUST-BOUNDARY.md 2.9 for why the "unencrypted" topic
+        carries the never-sensitive columns rather than decrypted PII.
+        """
+        from pipeline.publish.kafka_publish import run
+        trace = trace_from_context(ctx)
+        _t0 = stage_start("publish", trace)
+        ts = ctx["logical_date"]
+        d = ts.date() if hasattr(ts, "date") else ts
+        pq = _find(DATA / "parquet" / f"dt={d.isoformat()}", "*.parquet", "publish")
+        r = run(d, pq)
+        _ev = stage_event("publish", trace, rows=r["rows"],
+                           topic_encrypted=r["topic_encrypted"],
+                           topic_public=r["topic_public"],
+                           encrypted_fields=r["encrypted_fields"],
+                           public_fields=r["public_fields"],
+                           dataset=r["dataset"])
+        stage_end("publish", trace, _t0, **{k: v for k, v in _ev.items()
+                                            if k not in ("trace_id", "stage")})
+        return _ev
 
     @task(task_id="decrypt_and_mask")
     def mask(**ctx):
@@ -221,15 +271,19 @@ with DAG(
         plaintext exists only inside this task's memory."""
         from pipeline.transform.hive_mask import run
         trace = trace_from_context(ctx)
+        _t0 = stage_start("mask", trace)
         ts = ctx["logical_date"]
         d = ts.date() if hasattr(ts, "date") else ts
         pq = _find(DATA / "parquet" / f"dt={d.isoformat()}", "*.parquet", "mask")
         r = run(d, pq, DATA / "hive" / pq.stem,
                 _crypto("hive-job", "CLIENT_SECRET_HIVE_JOB"))
-        return stage_event("mask", trace, rows=r["rows"], masked_by=r["masked_by"],
+        _ev = stage_event("mask", trace, rows=r["rows"], masked_by=r["masked_by"],
                            policies=len(r["masks_applied"]), hive=r["hive_path"],
                            identity="hive-job", dataset=r["dataset"],
                            policy_file=r["policy_file"])
+        stage_end("mask", trace, _t0, **{k: v for k, v in _ev.items()
+                                            if k not in ("trace_id", "stage")})
+        return _ev
 
     @task(task_id="register_hive_table")
     def register(**ctx):
@@ -242,6 +296,7 @@ with DAG(
         """
         from pipeline.transform.hive_register import run
         trace = trace_from_context(ctx)
+        _t0 = stage_start("hive_register", trace)
         ts = ctx["logical_date"]
         d = ts.date() if hasattr(ts, "date") else ts
         # The DDL is built from the masked file itself, so the table matches
@@ -249,21 +304,28 @@ with DAG(
         pq = _find(DATA / "hive", f"*/dt={d.isoformat()}/*_masked.parquet",
                    "hive_register")
         r = run(d, pq)
-        return stage_event("hive_register", trace, registered=r.get("registered"),
+        _ev = stage_event("hive_register", trace, registered=r.get("registered"),
                            table=r.get("table"),
                            partition=r.get("partition"), reason=r.get("reason"))
+        stage_end("hive_register", trace, _t0, **{k: v for k, v in _ev.items()
+                                            if k not in ("trace_id", "stage")})
+        return _ev
 
     @task(task_id="load_postgres")
     def load(**ctx):
         from pipeline.load.postgres_load import run
         trace = trace_from_context(ctx)
+        _t0 = stage_start("load", trace)
         ts = ctx["logical_date"]
         d = ts.date() if hasattr(ts, "date") else ts
         pq = _find(DATA / "hive", f"*/dt={d.isoformat()}/*_masked.parquet", "load")
         r = run(d, pq)
-        return stage_event("load", trace, inserted=r["inserted"],
+        _ev = stage_event("load", trace, inserted=r["inserted"],
                            updated=r["updated"], run_id=r["run_id"],
                            dataset=r["dataset"])
+        stage_end("load", trace, _t0, **{k: v for k, v in _ev.items()
+                                            if k not in ("trace_id", "stage")})
+        return _ev
 
     @task(task_id="build_pdf")
     def report(**ctx):
@@ -271,6 +333,7 @@ with DAG(
         from pipeline.report.pdf_report import run
         from pipeline.report.collect import collect
         trace = trace_from_context(ctx)
+        _t0 = stage_start("report", trace)
         ts = ctx["logical_date"]
         d = ts.date() if hasattr(ts, "date") else ts
         # The report reads the warehouse, not a file -- but it still needs to
@@ -284,9 +347,12 @@ with DAG(
         # contract: the run has already produced its artifact, and a failed
         # copy must not fail the DAG.
         c = collect(r["pdf_path"])
-        return stage_event("report", trace, rows=r["rows"], pdf=r["pdf_path"],
+        _ev = stage_event("report", trace, rows=r["rows"], pdf=r["pdf_path"],
                            dataset=manifest.dataset,
                            collected=c.get("dest") or c.get("reason"))
+        stage_end("report", trace, _t0, **{k: v for k, v in _ev.items()
+                                            if k not in ("trace_id", "stage")})
+        return _ev
 
     # The whole run, in order. Each task consumes what the one before it
     # wrote, so the chain IS the data dependency -- there is no step here
@@ -295,6 +361,7 @@ with DAG(
         extract()
         >> card_split()
         >> encrypt()
+        >> publish()
         >> mask()
         >> register()
         >> load()
