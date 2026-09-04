@@ -15,6 +15,7 @@ system accurately and overselling it.
 |---|---|
 | `TRUST-BOUNDARY.md` | What is real vs. stubbed. **Never claim a stub works.** |
 | `README.md` | Setup, credentials, running it |
+| `docs/ORCHESTRATION-SPEC.md` | Orchestrator, Spark submission, task graph, data handoff, local dev |
 | `docs/ARCHITECTURE.md` | Why the data flows this way |
 | `docs/EXECUTION-FLOW.md` | One run end to end, with the trace |
 | `docs/RUNBOOK.md` | Operating it, and failures actually hit |

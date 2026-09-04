@@ -79,6 +79,7 @@ changing anything**:
 | `AGENTS.md` (root) | **Start here.** Working agreement, invariants, how to describe this honestly |
 | `docs/AGENTS.md` | Longer-form background on the same invariants |
 | `TRUST-BOUNDARY.md` | What is real vs. stubbed. Never claim a stub works |
+| `docs/ORCHESTRATION-SPEC.md` | Orchestrator and version, Spark submission, task graph, data handoff, local dev story |
 | `docs/ARCHITECTURE.md` | Why the data flows this way; the security model |
 | `docs/EXECUTION-FLOW.md` | One run end to end, with the correlation-id trace |
 | `docs/RUNBOOK.md` | Operating it, and every failure we have actually hit |
