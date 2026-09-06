@@ -21,8 +21,8 @@ from typing import Annotated
 import jwt
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric import rsa
-from fastapi import Depends, FastAPI, Form, HTTPException, status
-from pydantic import BaseModel
+from fastapi import Depends, FastAPI, Form, Header, HTTPException, status
+from pydantic import BaseModel, Field
 
 ISSUER = os.environ.get("IDP_ISSUER", "https://idp.local")
 KEY_ID = "wps-idp-key-1"
@@ -38,7 +38,14 @@ CLIENTS: dict[str, dict] = {
                      "scopes": ["crypto.decrypt", "ranger.policy.read"]},
     "postgres-job": {"audiences": ["warehouse"], "scopes": ["warehouse.write"]},
     "report-job":   {"audiences": ["warehouse"], "scopes": ["warehouse.read"]},
+    # The orchestrator may ask THIS service to sign a run verdict, and nothing
+    # else. Its token audience is the IdP itself; the JWS it gets back carries
+    # a different audience (pipeline-consumers) so the two cannot be confused.
+    "orchestrator-job": {"audiences": ["idp"], "scopes": ["verdict.sign"]},
 }
+
+# The audience stamped on signed verdicts. Consumers verify against it.
+VERDICT_AUDIENCE = "pipeline-consumers"
 
 
 def _load_or_create_key() -> rsa.RSAPrivateKey:
@@ -144,3 +151,68 @@ def token(
                          headers={"kid": KEY_ID})
     return TokenResponse(access_token=encoded, expires_in=TOKEN_TTL_SECONDS,
                          scope=claims["scope"])
+
+
+# ── Verdict signing ──────────────────────────────────────────────────────
+#
+# The orchestrator does not hold a signing key; it asks the IdP to vouch for
+# a run verdict, the same way every job asks it to vouch for an identity. The
+# IdP signs a DIGEST of the payload plus the event id, never the payload
+# itself, so the statement is bound to exactly one message and one content.
+# Consumers verify with the same JWKS they already trust. docs/DECISIONS.md D6.
+
+class SignRequest(BaseModel):
+    digest: str = Field(pattern=r"^[0-9a-f]{64}$")
+    event_id: str = Field(pattern=r"^[0-9a-f]{32}$")
+    event_type: str
+    dataset: str = Field(min_length=1)
+    run_slot: str = Field(pattern=r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$")
+
+
+class SignResponse(BaseModel):
+    jws: str
+    kid: str = KEY_ID
+
+
+def _verify_own_token(authorization: str | None, audience: str) -> dict:
+    """Verify a bearer token this IdP issued. Signature, issuer, audience,
+    expiry, algorithm pinned -- the same rules services apply, applied here."""
+    if not authorization or not authorization.lower().startswith("bearer "):
+        raise HTTPException(status.HTTP_401_UNAUTHORIZED, "missing bearer token")
+    token = authorization.split(None, 1)[1].strip()
+    try:
+        return jwt.decode(
+            token, PUBLIC_KEY, algorithms=["RS256"], audience=audience,
+            issuer=ISSUER, leeway=30,
+            options={"require": ["exp", "iat", "nbf", "iss", "aud", "sub"]})
+    except jwt.InvalidTokenError as e:
+        raise HTTPException(status.HTTP_401_UNAUTHORIZED, f"invalid token: {e}") from e
+
+
+@app.post("/sign", response_model=SignResponse)
+def sign(req: SignRequest,
+         authorization: Annotated[str | None, Header()] = None) -> SignResponse:
+    claims_in = _verify_own_token(authorization, audience="idp")
+    if "verdict.sign" not in claims_in.get("scope", "").split():
+        raise HTTPException(status.HTTP_403_FORBIDDEN,
+                            f"{claims_in['sub']!r} lacks scope verdict.sign")
+    if req.event_type != "run.verdict":
+        raise HTTPException(status.HTTP_400_BAD_REQUEST,
+                            f"only run.verdict is signed, not {req.event_type!r}")
+
+    now = int(time.time())
+    claims = {
+        "iss": ISSUER,
+        "sub": claims_in["sub"],           # who asked: orchestrator-job
+        "aud": VERDICT_AUDIENCE,
+        "iat": now,
+        "jti": str(uuid.uuid4()),
+        # A statement, not a session: no exp. See VerdictVerifier.
+        "digest": req.digest,
+        "event_id": req.event_id,
+        "event_type": req.event_type,
+        "dataset": req.dataset,
+        "run_slot": req.run_slot,
+    }
+    return SignResponse(jws=jwt.encode(claims, PRIVATE_KEY, algorithm="RS256",
+                                       headers={"kid": KEY_ID}))

@@ -1,0 +1,123 @@
+{
+  "envelope": {
+    "schema_version": "1",
+    "event_type": "run.verdict",
+    "event_id": "7f5bc45fa189d7229aa65fea1a0e5edd",
+    "idempotency_key": "52fa96c919ccd0eb069fbe4502983540",
+    "dataset": "trips",
+    "logical_date": "2026-09-06",
+    "run_slot": "2026-09-06T04:00:00Z",
+    "trace_id": "trips-20260906T0400-1a2b3c",
+    "run_id": "scheduled__2026-09-06T04:00:00+00:00",
+    "try_number": 1,
+    "key": null,
+    "producer": "pipeline",
+    "produced_at": "2026-09-06T04:07:12Z"
+  },
+  "payload": {
+    "proceed": true,
+    "status": "complete",
+    "reasons": [],
+    "stages": {
+      "extract": {
+        "ok": true,
+        "reported": true,
+        "detail": {
+          "rows": 100,
+          "mode": "BigQueryExtractor",
+          "bq_attempts": 1,
+          "fell_back_to_csv": false,
+          "window_date": "2025-03-02T00:00:00",
+          "window_end": "2025-03-03T00:00:00",
+          "window_source": "archive_mapping",
+          "bytes_billed": 24000000
+        }
+      },
+      "card_split": {
+        "ok": true,
+        "reported": true,
+        "detail": {
+          "rows": 100,
+          "cards": 0,
+          "dataset": "trips"
+        }
+      },
+      "encrypt": {
+        "ok": true,
+        "reported": true,
+        "detail": {
+          "rows": 100,
+          "engine": "spark",
+          "spark_configured": true,
+          "encrypted_columns": 6
+        }
+      },
+      "publish": {
+        "ok": true,
+        "reported": true,
+        "detail": {
+          "rows": 100,
+          "topic_encrypted": "rpos_encrypted",
+          "topic_public": "rpos_flat"
+        }
+      },
+      "mask": {
+        "ok": true,
+        "reported": true,
+        "detail": {
+          "rows": 100,
+          "masked_by": "local-policy-engine",
+          "policies": 6,
+          "policy_file": "config/ranger/hive_masking_policies.json"
+        }
+      },
+      "hive_register": {
+        "ok": true,
+        "reported": true,
+        "detail": {
+          "registered": true,
+          "table": "trips_warehouse.trips",
+          "partition": "dt=2026-09-06",
+          "reason": null
+        }
+      },
+      "load": {
+        "ok": true,
+        "reported": true,
+        "detail": {
+          "inserted": 100,
+          "updated": 0,
+          "run_id": "7a0d2a2e-1",
+          "dataset": "trips"
+        }
+      },
+      "report": {
+        "ok": true,
+        "reported": true,
+        "detail": {
+          "rows": 100,
+          "pdf": "/data/reports/trips_report_20260906T0400Z.pdf",
+          "collected": "/opt/pipeline/pipeline-reports/trips_report_20260906T0400Z.pdf"
+        }
+      }
+    },
+    "outputs": {
+      "warehouse_table": "warehouse.trips",
+      "hive_table": "trips_warehouse.trips",
+      "pdf": "/data/reports/trips_report_20260906T0400Z.pdf",
+      "rows_published": 100,
+      "rows_loaded": 100,
+      "topics": {
+        "encrypted": "rpos_encrypted",
+        "flat": "rpos_flat"
+      }
+    },
+    "data_window": {
+      "start": "2025-03-02T00:00:00",
+      "end": "2025-03-03T00:00:00",
+      "source": "archive_mapping"
+    },
+    "computed_at": "2026-09-06T04:09:00Z"
+  },
+  "signature": "eyJhbGciOiJSUzI1NiIsImtpZCI6Indwcy1pZHAta2V5LTEiLCJ0eXAiOiJKV1QifQ.eyJpc3MiOiJodHRwczovL2lkcDo4NDQzIiwic3ViIjoib3JjaGVzdHJhdG9yLWpvYiJ9.c2lnbmF0dXJl"
+}

@@ -1,0 +1,8 @@
+{
+  "trace_id": "trips-20260906T0400-1a2b3c",
+  "stage": "load",
+  "inserted": 100,
+  "updated": 0,
+  "run_id": "7a0d2a2e-1",
+  "dataset": "trips"
+}

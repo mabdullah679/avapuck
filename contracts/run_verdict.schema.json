@@ -1,0 +1,88 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://avapuck.local/contracts/run_verdict.schema.json",
+  "title": "run.verdict",
+  "description": "The mother DAG's end-of-run verdict. Emitted once per run, always, even on failure (trigger_rule=all_done). Consumers key off `proceed` and nothing else. Published to the control topic, signed.",
+  "allOf": [
+    {"$ref": "envelope.schema.json"},
+    {
+      "required": ["signature"],
+      "properties": {
+        "envelope": {
+          "properties": {
+            "event_type": {"const": "run.verdict"},
+            "key": {"type": "null"}
+          }
+        },
+        "signature": {"type": "string", "minLength": 1},
+        "payload": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["proceed", "status", "reasons", "stages", "outputs", "data_window", "computed_at"],
+          "properties": {
+            "proceed": {
+              "type": "boolean",
+              "description": "The only field a consumer reacts to."
+            },
+            "status": {
+              "type": "string",
+              "enum": ["complete", "degraded", "failed"],
+              "description": "For people and the PDF. degraded still means proceed=true."
+            },
+            "reasons": {
+              "type": "array",
+              "items": {"type": "string"},
+              "description": "Why the status is not complete. Empty when complete."
+            },
+            "stages": {
+              "type": "object",
+              "description": "One entry per pipeline stage, in order.",
+              "additionalProperties": {
+                "type": "object",
+                "required": ["ok", "reported"],
+                "properties": {
+                  "ok": {"type": "boolean"},
+                  "reported": {"type": "boolean", "description": "Whether a stage event existed at all."},
+                  "detail": {"type": "object"}
+                }
+              }
+            },
+            "outputs": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["warehouse_table", "hive_table", "pdf", "rows_published", "topics", "rows_loaded"],
+              "properties": {
+                "warehouse_table": {"type": ["string", "null"]},
+                "hive_table": {"type": ["string", "null"]},
+                "pdf": {"type": ["string", "null"]},
+                "rows_published": {"type": ["integer", "null"]},
+                "rows_loaded": {"type": ["integer", "null"]},
+                "topics": {
+                  "type": "object",
+                  "additionalProperties": {"type": "string"}
+                }
+              }
+            },
+            "data_window": {
+              "type": "object",
+              "required": ["start", "end", "source"],
+              "properties": {
+                "start": {"type": ["string", "null"]},
+                "end": {"type": ["string", "null"]},
+                "source": {
+                  "type": "string",
+                  "enum": ["archive_mapping", "event_time_column", "logical_date", "unknown"],
+                  "description": "How the window was derived. logical_date means the source had no date of its own."
+                }
+              }
+            },
+            "computed_at": {
+              "type": "string",
+              "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}Z$"
+            }
+          }
+        }
+      }
+    }
+  ]
+}

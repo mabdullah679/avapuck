@@ -1,0 +1,19 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://avapuck.local/contracts/row_flat.schema.json",
+  "title": "row.flat",
+  "description": "One row's never-sensitive business columns, in the clear. Which columns qualify comes from the dataset manifest; the publisher refuses to send if a sensitive column is routed here. Published to the flat topic.",
+  "allOf": [
+    {"$ref": "envelope.schema.json"},
+    {
+      "properties": {
+        "envelope": {"properties": {"event_type": {"const": "row.flat"}}},
+        "payload": {
+          "type": "object",
+          "description": "Column name to value. No key may end in _encrypted, _blind_index or _masked.",
+          "propertyNames": {"not": {"pattern": "_(encrypted|blind_index|masked)$"}}
+        }
+      }
+    }
+  ]
+}

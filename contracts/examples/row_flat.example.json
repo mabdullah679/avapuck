@@ -1,0 +1,22 @@
+{
+  "envelope": {
+    "schema_version": "1",
+    "event_type": "row.flat",
+    "event_id": "8aa05cbd2375dc45f99850654be7c0ad",
+    "idempotency_key": "76f5b4899940477beac91227f8d49957",
+    "dataset": "trips",
+    "logical_date": "2026-09-06",
+    "run_slot": "2026-09-06T04:00:00Z",
+    "trace_id": "trips-20260906T0400-1a2b3c",
+    "run_id": "scheduled__2026-09-06T04:00:00+00:00",
+    "try_number": 1,
+    "key": "9b1f2e7c0001",
+    "producer": "pipeline",
+    "produced_at": "2026-09-06T04:07:12Z"
+  },
+  "payload": {
+    "trip_id": "9b1f2e7c0001",
+    "start_time": "2025-03-02T13:41:00",
+    "duration_minutes": 17
+  }
+}

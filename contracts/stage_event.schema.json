@@ -1,0 +1,115 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://avapuck.local/contracts/stage_event.schema.json",
+  "title": "Stage event",
+  "description": "The dict each pipeline stage returns (and Airflow stores in XCom). This is the per-step contract: the verdict function consumes these, so a stage that stops reporting a field fails here rather than making the verdict silently wrong.",
+  "type": "object",
+  "required": ["trace_id", "stage"],
+  "properties": {
+    "trace_id": {"type": "string", "minLength": 1},
+    "stage": {
+      "type": "string",
+      "enum": ["extract", "card_split", "encrypt", "publish", "mask", "hive_register", "load", "report"]
+    }
+  },
+  "allOf": [
+    {
+      "if": {"properties": {"stage": {"const": "extract"}}},
+      "then": {
+        "required": ["rows", "mode", "bq_attempts", "fell_back_to_csv", "window_date", "window_end", "window_source"],
+        "properties": {
+          "rows": {"type": "integer", "minimum": 1},
+          "mode": {"type": "string"},
+          "bq_attempts": {"type": "integer", "minimum": 0},
+          "fell_back_to_csv": {"type": "boolean"},
+          "window_date": {"type": "string"},
+          "window_end": {"type": "string"},
+          "window_source": {"type": "string", "enum": ["archive_mapping", "event_time_column", "logical_date"]}
+        }
+      }
+    },
+    {
+      "if": {"properties": {"stage": {"const": "card_split"}}},
+      "then": {
+        "required": ["rows", "cards", "dataset"],
+        "properties": {
+          "rows": {"type": "integer", "minimum": 0},
+          "cards": {"type": "integer", "minimum": 0},
+          "dataset": {"type": "string"}
+        }
+      }
+    },
+    {
+      "if": {"properties": {"stage": {"const": "encrypt"}}},
+      "then": {
+        "required": ["rows", "engine", "spark_configured", "dataset", "encrypted_columns"],
+        "properties": {
+          "rows": {"type": "integer", "minimum": 1},
+          "engine": {"type": "string", "enum": ["spark", "pyarrow"]},
+          "spark_configured": {"type": "boolean"},
+          "dataset": {"type": "string"},
+          "encrypted_columns": {"type": "integer", "minimum": 0}
+        }
+      }
+    },
+    {
+      "if": {"properties": {"stage": {"const": "publish"}}},
+      "then": {
+        "required": ["rows", "topic_encrypted", "topic_public", "dataset"],
+        "properties": {
+          "rows": {"type": "integer", "minimum": 0},
+          "topic_encrypted": {"type": "string"},
+          "topic_public": {"type": "string"},
+          "dataset": {"type": "string"}
+        }
+      }
+    },
+    {
+      "if": {"properties": {"stage": {"const": "mask"}}},
+      "then": {
+        "required": ["rows", "masked_by", "policies", "dataset"],
+        "properties": {
+          "rows": {"type": "integer", "minimum": 1},
+          "masked_by": {"type": "string"},
+          "policies": {"type": "integer", "minimum": 0},
+          "dataset": {"type": "string"}
+        }
+      }
+    },
+    {
+      "if": {"properties": {"stage": {"const": "hive_register"}}},
+      "then": {
+        "required": ["registered"],
+        "properties": {
+          "registered": {"type": ["boolean", "null"]},
+          "table": {"type": ["string", "null"]},
+          "reason": {"type": ["string", "null"]}
+        }
+      }
+    },
+    {
+      "if": {"properties": {"stage": {"const": "load"}}},
+      "then": {
+        "required": ["inserted", "updated", "run_id", "dataset"],
+        "properties": {
+          "inserted": {"type": "integer", "minimum": 0},
+          "updated": {"type": "integer", "minimum": 0},
+          "run_id": {"type": "string"},
+          "dataset": {"type": "string"}
+        }
+      }
+    },
+    {
+      "if": {"properties": {"stage": {"const": "report"}}},
+      "then": {
+        "required": ["rows", "pdf", "dataset", "collected"],
+        "properties": {
+          "rows": {"type": "integer", "minimum": 0},
+          "pdf": {"type": "string"},
+          "dataset": {"type": "string"},
+          "collected": {"type": ["string", "null"], "description": "Delivery path on success, else the reason the copy failed."}
+        }
+      }
+    }
+  ]
+}

@@ -1,0 +1,77 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://avapuck.local/contracts/envelope.schema.json",
+  "title": "Platform message envelope",
+  "description": "The wrapper every Kafka message carries, on every topic. This is the platform contract: payload schemas embed it by reference and may not override it. Bump schema_version when a field here changes shape.",
+  "type": "object",
+  "required": ["envelope", "payload"],
+  "properties": {
+    "envelope": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version", "event_type", "event_id", "idempotency_key",
+        "dataset", "logical_date", "run_slot", "trace_id", "run_id",
+        "try_number", "key", "producer", "produced_at"
+      ],
+      "properties": {
+        "schema_version": {
+          "type": "string",
+          "const": "1",
+          "description": "Version of THIS envelope contract."
+        },
+        "event_type": {
+          "type": "string",
+          "enum": ["row.encrypted", "row.flat", "run.verdict"],
+          "description": "Selects the payload schema."
+        },
+        "event_id": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{32}$",
+          "description": "Unique per emission: sha256(idempotency_key|run_id|try_number). A consumer that has seen this id drops the message."
+        },
+        "idempotency_key": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{32}$",
+          "description": "Deterministic per logical unit of work: sha256(schema_version|event_type|dataset|run_slot|key). A consumer upserts on this key, so a re-run of the same slot replaces rather than duplicates."
+        },
+        "dataset": {"type": "string", "minLength": 1},
+        "logical_date": {
+          "type": "string",
+          "format": "date",
+          "description": "The run's logical date, UTC."
+        },
+        "run_slot": {
+          "type": "string",
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}Z$",
+          "description": "Start of the run's schedule interval, UTC, second precision."
+        },
+        "trace_id": {"type": "string", "minLength": 1},
+        "run_id": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Airflow dag_run.run_id, or a caller-supplied id outside Airflow."
+        },
+        "try_number": {"type": "integer", "minimum": 1},
+        "key": {
+          "type": ["string", "null"],
+          "description": "The row's primary-key value for row events; null for run events."
+        },
+        "producer": {
+          "type": "string",
+          "minLength": 1,
+          "description": "The SASL principal that wrote the message."
+        },
+        "produced_at": {
+          "type": "string",
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}Z$"
+        }
+      }
+    },
+    "payload": {"type": "object"},
+    "signature": {
+      "type": ["string", "null"],
+      "description": "Compact JWS from the IdP over sha256 of the canonical payload. Required for run.verdict; absent on row events."
+    }
+  }
+}

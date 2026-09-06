@@ -1,0 +1,24 @@
+{
+  "envelope": {
+    "schema_version": "1",
+    "event_type": "row.encrypted",
+    "event_id": "2e125e0703584d30b3297ff4bae69fd1",
+    "idempotency_key": "e33c9202c3dde82fb4e1b53505dd9958",
+    "dataset": "trips",
+    "logical_date": "2026-09-06",
+    "run_slot": "2026-09-06T04:00:00Z",
+    "trace_id": "trips-20260906T0400-1a2b3c",
+    "run_id": "scheduled__2026-09-06T04:00:00+00:00",
+    "try_number": 1,
+    "key": "9b1f2e7c0001",
+    "producer": "pipeline",
+    "produced_at": "2026-09-06T04:07:12Z"
+  },
+  "payload": {
+    "bike_id_encrypted": "enc:v1:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=",
+    "bike_id_blind_index": "3f2a9c1e5d7b4a6f8c0e2d4b6a8f1c3e5d7b9a1f3c5e7d9b1a3f5c7e9d1b3a5f",
+    "start_station_name_encrypted": "enc:v1:BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB",
+    "start_station_name_blind_index": "7d9b1a3f5c7e9d1b3a5f7c9e1d3b5a7f9c1e3d5b7a9f1c3e5d7b9a1f3c5e7d9b",
+    "subscriber_type_encrypted": null
+  }
+}

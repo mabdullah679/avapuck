@@ -1,0 +1,23 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://avapuck.local/contracts/row_encrypted.schema.json",
+  "title": "row.encrypted",
+  "description": "One row's sensitive fields as AES-256-GCM ciphertext envelopes (enc:<version>:<base64>), plus blind indexes. Never plaintext. Published to the encrypted topic.",
+  "allOf": [
+    {"$ref": "envelope.schema.json"},
+    {
+      "properties": {
+        "envelope": {"properties": {"event_type": {"const": "row.encrypted"}}},
+        "payload": {
+          "type": "object",
+          "description": "Column name to value. Every key ends in _encrypted or _blind_index; _encrypted values are ciphertext envelopes.",
+          "propertyNames": {"pattern": "^.+_(encrypted|blind_index)$"},
+          "additionalProperties": {"type": ["string", "null"]},
+          "patternProperties": {
+            "_encrypted$": {"type": ["string", "null"], "pattern": "^enc:[^:]+:.+$"}
+          }
+        }
+      }
+    }
+  ]
+}
