@@ -1,15 +1,37 @@
-# Local stack for the BigQuery -> Spark -> Hive -> Postgres -> PDF pipeline.
+# Local stack for the BigQuery -> Spark -> Kafka -> Hive -> Postgres -> PDF pipeline.
 #
-# Sized for a 23GB Docker allocation. Profiles let you bring up only what you
-# need: the `core` profile is enough to run the pipeline end to end; `ranger`
-# adds the real Apache Ranger admin, which is heavy and slow to start.
+# EVERY value comes from .env.local (docs/DECISIONS.md D12). There are no
+# built-in defaults here on purpose: `${VAR:?}` fails the whole `up` naming
+# the missing variable, and `${VAR?}` allows an empty value but still requires
+# the variable to be declared. One file is the contact point for the entire
+# stack; copy .env.example to .env.local and edit it.
 #
-#   docker compose --profile core up -d              # ~8GB, fast
-#   docker compose --profile core --profile ranger up -d   # ~14GB, slow start
+#   docker compose --env-file .env.local --profile core up -d        # the pipeline
+#   docker compose --env-file .env.local --profile core --profile ci up -d     # + Jenkins
+#   docker compose --env-file .env.local --profile core --profile ranger up -d # + Ranger admin
+#
+# setup.sh does all of this. Memory: the core profile's caps total ~15 GB but
+# the measured working set is ~4.7 GB; give Docker 8 GB.
 
 x-common: &common
   restart: unless-stopped
   networks: [pipeline]
+
+# Every pipeline client verifies the service certs against this CA. Unset it
+# and the clients fall back to the system trust store, which does NOT contain
+# the dev CA -- calls then fail closed, by design.
+x-tls: &tls
+  PIPELINE_CA_BUNDLE: /certs/ca.crt
+  IDP_ISSUER: https://idp:8443
+  IDP_JWKS_URL: https://idp:8443/.well-known/jwks.json
+
+x-kafka-client: &kafka-client
+  KAFKA_BOOTSTRAP: ${KAFKA_BOOTSTRAP:?}
+  KAFKA_TOPIC_ENCRYPTED: ${KAFKA_TOPIC_ENCRYPTED:?}
+  KAFKA_TOPIC_PUBLIC: ${KAFKA_TOPIC_PUBLIC:?}
+  KAFKA_TOPIC_CONTROL: ${KAFKA_TOPIC_CONTROL:?}
+  KAFKA_SECURITY_PROTOCOL: SASL_PLAINTEXT
+  KAFKA_SASL_MECHANISM: PLAIN
 
 services:
 
@@ -26,12 +48,16 @@ services:
     environment:
       IDP_ISSUER: https://idp:8443
       IDP_TOKEN_TTL: "300"
-      CLIENT_SECRET_EXTRACT_JOB: ${CLIENT_SECRET_EXTRACT_JOB:-dev-extract-secret}
-      CLIENT_SECRET_SPARK_JOB: ${CLIENT_SECRET_SPARK_JOB:-dev-spark-secret}
-      CLIENT_SECRET_HIVE_JOB: ${CLIENT_SECRET_HIVE_JOB:-dev-hive-secret}
-      CLIENT_SECRET_POSTGRES_JOB: ${CLIENT_SECRET_POSTGRES_JOB:-dev-postgres-secret}
-      CLIENT_SECRET_REPORT_JOB: ${CLIENT_SECRET_REPORT_JOB:-dev-report-secret}
-      IDP_SIGNING_KEY: ${IDP_SIGNING_KEY:-}
+      CLIENT_SECRET_EXTRACT_JOB: ${CLIENT_SECRET_EXTRACT_JOB:?}
+      CLIENT_SECRET_SPARK_JOB: ${CLIENT_SECRET_SPARK_JOB:?}
+      CLIENT_SECRET_HIVE_JOB: ${CLIENT_SECRET_HIVE_JOB:?}
+      CLIENT_SECRET_POSTGRES_JOB: ${CLIENT_SECRET_POSTGRES_JOB:?}
+      CLIENT_SECRET_REPORT_JOB: ${CLIENT_SECRET_REPORT_JOB:?}
+      # May sign run verdicts (POST /sign) and nothing else.
+      CLIENT_SECRET_ORCHESTRATOR_JOB: ${CLIENT_SECRET_ORCHESTRATOR_JOB:?}
+      # Empty -> an ephemeral key per start; tokens and verdict signatures
+      # then do not survive a restart. Fine locally, fatal anywhere else.
+      IDP_SIGNING_KEY: ${IDP_SIGNING_KEY?}
     ports: ["8443:8443"]
     mem_limit: 512m
     healthcheck:
@@ -51,11 +77,11 @@ services:
       --ssl-certfile /certs/crypto.crt --ssl-keyfile /certs/crypto.key
     volumes: ["./certs:/certs:ro"]
     environment:
-      IDP_ISSUER: https://idp:8443
-      IDP_JWKS_URL: https://idp:8443/.well-known/jwks.json
-      PIPELINE_CA_BUNDLE: /certs/ca.crt
-      CRYPTO_MASTER_KEY: ${CRYPTO_MASTER_KEY:-}
-      BLIND_INDEX_KEY: ${BLIND_INDEX_KEY:-}
+      <<: *tls
+      # Empty -> a new master key per start and ALL prior ciphertext becomes
+      # unreadable. TRUST-BOUNDARY 2.2.
+      CRYPTO_MASTER_KEY: ${CRYPTO_MASTER_KEY?}
+      BLIND_INDEX_KEY: ${BLIND_INDEX_KEY?}
       CRYPTO_KEY_VERSION: v1
     ports: ["8444:8444"]
     mem_limit: 512m
@@ -73,7 +99,15 @@ services:
     profiles: [core]
     image: apache/kafka:3.9.0
     container_name: pl-kafka
+    # Renders the JAAS file and admin config from the environment, then runs
+    # the image's own start script. No credential file is committed.
+    entrypoint: ["/bin/sh", "/kafka-entrypoint.sh"]
     environment:
+      KAFKA_ADMIN_PASSWORD: ${KAFKA_ADMIN_PASSWORD:?}
+      KAFKA_PIPELINE_PASSWORD: ${KAFKA_PIPELINE_PASSWORD:?}
+      KAFKA_CONSUMER_PASSWORD: ${KAFKA_CONSUMER_PASSWORD:?}
+      KAFKA_UI_PASSWORD: ${KAFKA_UI_PASSWORD:?}
+      KAFKA_WATCHDOG_PASSWORD: ${KAFKA_WATCHDOG_PASSWORD:?}
       # Single-node KRaft: this broker is also the controller. Fine for a
       # local stack; a real deployment runs 3+ controllers and RF>=3.
       KAFKA_NODE_ID: "1"
@@ -86,11 +120,10 @@ services:
       # plain because it never leaves this node in a single-node KRaft setup.
       #
       # SASL_PLAINTEXT is AUTHENTICATION, not encryption: it proves who the
-      # client is and the ACLs below decide what they may do, but the message
-      # bytes still travel unencrypted. Sensitive fields on rpos_encrypted are
-      # already AES ciphertext, so what a network observer would see there is
-      # ciphertext either way. Wire encryption needs SASL_SSL and broker certs
-      # -- see TRUST-BOUNDARY.md 2.9.
+      # client is and the ACLs decide what they may do, but the message bytes
+      # still travel unencrypted. Sensitive fields on the encrypted topic are
+      # already AES ciphertext. Wire encryption needs SASL_SSL and broker
+      # certs -- TRUST-BOUNDARY 2.9a.
       KAFKA_LISTENERS: SASL_PLAINTEXT://kafka:9092,CONTROLLER://kafka:9093,EXTERNAL://0.0.0.0:29092
       KAFKA_ADVERTISED_LISTENERS: SASL_PLAINTEXT://kafka:9092,EXTERNAL://localhost:29092
       KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: SASL_PLAINTEXT:SASL_PLAINTEXT,CONTROLLER:PLAINTEXT,EXTERNAL:SASL_PLAINTEXT
@@ -109,7 +142,6 @@ services:
       KAFKA_SUPER_USERS: User:admin;User:ANONYMOUS
       # Deny by default: a principal with no matching ACL gets nothing.
       KAFKA_ALLOW_EVERYONE_IF_NO_ACL_FOUND: "false"
-      KAFKA_OPTS: -Djava.security.auth.login.config=/etc/kafka/kafka-jaas.conf
       KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: "1"
       KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: "1"
       KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: "1"
@@ -120,16 +152,15 @@ services:
     mem_limit: 1500m
     volumes:
       - kafka_data:/var/lib/kafka/data
-      - ./docker/kafka-jaas.conf:/etc/kafka/kafka-jaas.conf:ro
-      - ./docker/kafka-admin.properties:/etc/kafka/admin.properties:ro
+      - ./docker/kafka-entrypoint.sh:/kafka-entrypoint.sh:ro
     healthcheck:
-      test: ["CMD-SHELL", "/opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:9092 --command-config /etc/kafka/admin.properties --list >/dev/null 2>&1"]
+      test: ["CMD-SHELL", "/opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:9092 --command-config /tmp/admin.properties --list >/dev/null 2>&1"]
       interval: 10s
       timeout: 10s
       retries: 20
       start_period: 30s
 
-  # Creates the two topics once, then exits. Topics are NOT auto-created:
+  # Creates the topics and ACLs once, then exits. Topics are NOT auto-created:
   # a typo in a topic name should fail loudly, not silently make a new topic.
   kafka-init:
     <<: *common
@@ -140,12 +171,74 @@ services:
     depends_on:
       kafka: {condition: service_healthy}
     environment:
-      T_ENC: ${KAFKA_TOPIC_ENCRYPTED:-rpos_encrypted}
-      T_PUB: ${KAFKA_TOPIC_PUBLIC:-rpos_flat}
+      <<: *kafka-client
+      KAFKA_ADMIN_PASSWORD: ${KAFKA_ADMIN_PASSWORD:?}
     volumes:
       - ./docker/kafka-init.sh:/kafka-init.sh:ro
-      - ./docker/kafka-admin.properties:/etc/kafka/admin.properties:ro
     entrypoint: ["/bin/sh", "/kafka-init.sh"]
+
+  # ── Kafka UI (Kafbat), read-only ─────────────────────────────────────────
+  # Always on: the point is watching a verdict land during a demo. Read-only
+  # twice over -- the UI flag, and an ACL principal that cannot write and
+  # cannot read the ciphertext topic. docs/DECISIONS.md D9.
+  kafka-ui:
+    <<: *common
+    profiles: [core]
+    image: ghcr.io/kafbat/kafka-ui:v1.5.0
+    container_name: pl-kafka-ui
+    environment:
+      KAFKA_CLUSTERS_0_NAME: pipeline
+      KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: ${KAFKA_BOOTSTRAP:?}
+      KAFKA_CLUSTERS_0_PROPERTIES_SECURITY_PROTOCOL: SASL_PLAINTEXT
+      KAFKA_CLUSTERS_0_PROPERTIES_SASL_MECHANISM: PLAIN
+      KAFKA_CLUSTERS_0_PROPERTIES_SASL_JAAS_CONFIG: org.apache.kafka.common.security.plain.PlainLoginModule required username="ui" password="${KAFKA_UI_PASSWORD:?}";
+      KAFKA_CLUSTERS_0_READONLY: "true"
+      DYNAMIC_CONFIG_ENABLED: "false"
+      AUTH_TYPE: LOGIN_FORM
+      SPRING_SECURITY_USER_NAME: ${KAFKA_UI_LOGIN_USER:?}
+      SPRING_SECURITY_USER_PASSWORD: ${KAFKA_UI_LOGIN_PASSWORD:?}
+      JAVA_OPTS: -Xms128m -Xmx384m
+    ports: ["8090:8080"]
+    mem_limit: 768m
+    depends_on:
+      kafka: {condition: service_healthy}
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q --spider http://localhost:8080/actuator/health || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 20
+      start_period: 60s
+
+  # ── Absence watchdog ─────────────────────────────────────────────────────
+  # Outside Airflow, because a dead scheduler cannot report itself. Unhealthy
+  # when a verdict is late or negative. docs/DECISIONS.md D8.
+  watchdog:
+    <<: *common
+    profiles: [core]
+    build: {context: ., dockerfile: docker/Dockerfile.watchdog}
+    container_name: pl-watchdog
+    environment:
+      <<: [*tls, *kafka-client]
+      KAFKA_SASL_USERNAME: watchdog
+      KAFKA_SASL_PASSWORD: ${KAFKA_WATCHDOG_PASSWORD:?}
+      WATCHDOG_INTERVAL_HOURS: ${WATCHDOG_INTERVAL_HOURS:?}
+      WATCHDOG_GRACE_MINUTES: ${WATCHDOG_GRACE_MINUTES:?}
+      # Comma-separated datasets that MUST report. Empty: track whatever appears.
+      WATCHDOG_DATASETS: ${WATCHDOG_DATASETS?}
+      # Slack/Teams-compatible webhook. Empty: log lines and /healthz only.
+      WATCHDOG_WEBHOOK_URL: ${WATCHDOG_WEBHOOK_URL?}
+    volumes: ["./certs:/certs:ro"]
+    ports: ["8446:8446"]
+    mem_limit: 256m
+    depends_on:
+      kafka: {condition: service_healthy}
+      idp: {condition: service_healthy}
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request;urllib.request.urlopen('http://localhost:8446/healthz')"]
+      interval: 60s
+      timeout: 5s
+      retries: 3
+      start_period: 60s
 
   # ── Warehouse ────────────────────────────────────────────────────────────
   postgres:
@@ -154,16 +247,16 @@ services:
     image: postgres:16-alpine
     container_name: pl-postgres
     environment:
-      POSTGRES_DB: ${POSTGRES_DB:-analytics}
-      POSTGRES_USER: ${POSTGRES_USER:-pipeline}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-pipeline-dev-password}
+      POSTGRES_DB: ${POSTGRES_DB:?}
+      POSTGRES_USER: ${POSTGRES_USER:?}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?}
     ports: ["5433:5432"]
     mem_limit: 1g
     volumes:
       - pg_data:/var/lib/postgresql/data
       - ./docker/init-warehouse.sql:/docker-entrypoint-initdb.d/10-warehouse.sql:ro
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-pipeline} -d ${POSTGRES_DB:-analytics}"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:?} -d ${POSTGRES_DB:?}"]
       interval: 5s
       timeout: 3s
       retries: 20
@@ -177,7 +270,7 @@ services:
     environment:
       POSTGRES_DB: metastore
       POSTGRES_USER: hive
-      POSTGRES_PASSWORD: ${HIVE_METASTORE_PASSWORD:-hive-dev-password}
+      POSTGRES_PASSWORD: ${HIVE_METASTORE_PASSWORD:?}
     mem_limit: 512m
     volumes: [hive_meta_data:/var/lib/postgresql/data]
     healthcheck:
@@ -199,7 +292,7 @@ services:
         -Djavax.jdo.option.ConnectionDriverName=org.postgresql.Driver
         -Djavax.jdo.option.ConnectionURL=jdbc:postgresql://hive-metastore-db:5432/metastore
         -Djavax.jdo.option.ConnectionUserName=hive
-        -Djavax.jdo.option.ConnectionPassword=${HIVE_METASTORE_PASSWORD:-hive-dev-password}
+        -Djavax.jdo.option.ConnectionPassword=${HIVE_METASTORE_PASSWORD:?}
     ports: ["9083:9083"]
     mem_limit: 1200m
     depends_on:
@@ -209,8 +302,7 @@ services:
       - ./docker/postgresql-jdbc.jar:/opt/hive/lib/postgresql.jar:ro
       # The external table LOCATION is an absolute /data/... path written by
       # the mask stage, and Hive resolves it inside ITS OWN container -- so
-      # /data must exist here too, at the same path, or the DDL fails with
-      # "not a directory or unable to create one".
+      # /data must exist here too, at the same path.
       - ./data:/data:rw
 
   hiveserver2:
@@ -227,10 +319,6 @@ services:
     depends_on: [hive-metastore]
     volumes:
       - ./data/hive:/opt/hive/data/warehouse
-      # The external table LOCATION is an absolute /data/... path written by
-      # the mask stage, and Hive resolves it inside ITS OWN container -- so
-      # /data must exist here too, at the same path, or the DDL fails with
-      # "not a directory or unable to create one".
       - ./data:/data:rw
 
   # ── Spark ────────────────────────────────────────────────────────────────
@@ -259,6 +347,7 @@ services:
     build: {context: ., dockerfile: docker/Dockerfile.spark}
     command: /opt/spark/bin/spark-class org.apache.spark.deploy.worker.Worker spark://spark-master:7077
     environment:
+      <<: *tls
       SPARK_NO_DAEMONIZE: "true"
       SPARK_WORKER_CORES: "2"
       SPARK_WORKER_MEMORY: 1g
@@ -266,15 +355,13 @@ services:
       IDP_URL: https://idp:8443
       CRYPTO_URL: https://crypto:8444
       PIPELINE_CA_BUNDLE: /opt/pipeline/certs/ca.crt
-      CLIENT_SECRET_SPARK_JOB: ${CLIENT_SECRET_SPARK_JOB:-dev-spark-secret}
+      CLIENT_SECRET_SPARK_JOB: ${CLIENT_SECRET_SPARK_JOB:?}
     mem_limit: 1500m
     depends_on:
       spark-master: {condition: service_healthy}
     # Executors write the Parquet themselves, so /data must resolve to the
     # SAME path here as in the driver container -- Spark passes an absolute
-    # output path across, not a relative one. Without this the tasks fail with
-    # "Mkdirs failed to create file:/data/..." and the stage silently falls
-    # back to pyarrow.
+    # output path across, not a relative one.
     volumes:
       - ./:/opt/pipeline:rw
       - ./data:/data:rw
@@ -289,99 +376,63 @@ services:
     container_name: pl-airflow
     command: standalone
     environment:
+      <<: [*tls, *kafka-client]
       # Deliberately NOT setting AIRFLOW__API__BASE_URL to the host-mapped
       # localhost:8085: task subprocesses inherit that as
-      # execution_api_server_url (base_url + /execution/) and use it to phone
-      # home from inside the container, where 8085 doesn't exist -- only the
-      # container's own 8080 does. Leaving base_url unset keeps the internal
-      # default (http://localhost:8080), which is correct for both the task
-      # subprocess and the in-container healthcheck; 8085 is purely the
-      # host-side port mapping for browser access.
+      # execution_api_server_url and use it to phone home from inside the
+      # container, where 8085 doesn't exist -- only the container's own 8080.
       AIRFLOW__API__PORT: "8080"
       PIPELINE_DATA_ROOT: /data
       IDP_URL: https://idp:8443
       CRYPTO_URL: https://crypto:8444
       # Encrypt stage runs on the real Spark cluster. Unset this and
       # spark_encrypt falls back to pyarrow -- correct output either way, but
-      # the trace then reports engine=pyarrow, which is the honest signal that
-      # Spark did not run.
+      # the verdict then reports a degradation, which is the honest signal.
       SPARK_MASTER_URL: spark://spark-master:7077
       # The driver runs in THIS container and the executors run in the worker
-      # containers, so the workers must be able to reach back to the driver by
-      # a resolvable name. Without this Spark advertises the container's
-      # hostname, which the workers cannot resolve, and every task times out.
+      # containers, so the workers must be able to reach back to the driver.
       SPARK_DRIVER_HOST: pl-airflow
       # The executor interpreter is selected by the driver and shipped to the
-      # workers; the Spark image's own ENV does not decide it. Must match this
-      # container's Python minor version or PySpark refuses to run.
+      # workers; must match this container's Python minor version.
       PYSPARK_PYTHON: /usr/bin/python3.12
-      # Hive registration over JDBC, replacing the old `docker exec` path.
       HIVE_JDBC_URL: jdbc:hive2://hiveserver2:10000
-      # Kafka. Two topics, one publisher: the encrypted sensitive fields go to
-      # one, the non-sensitive business columns to the other. NOTHING sensitive
-      # is ever published in the clear -- see TRUST-BOUNDARY.md 2.9.
-      KAFKA_BOOTSTRAP: ${KAFKA_BOOTSTRAP:-kafka:9092}
-      KAFKA_TOPIC_ENCRYPTED: ${KAFKA_TOPIC_ENCRYPTED:-rpos_encrypted}
-      KAFKA_TOPIC_PUBLIC: ${KAFKA_TOPIC_PUBLIC:-rpos_flat}
       # The publisher authenticates as `pipeline`, which ACLs allow to WRITE
-      # both topics and to read neither -- a compromised publisher cannot
-      # drain the topics it feeds.
-      KAFKA_SASL_USERNAME: ${KAFKA_SASL_USERNAME:-pipeline}
-      KAFKA_SASL_PASSWORD: ${KAFKA_SASL_PASSWORD:-pipeline-dev-password}
-      KAFKA_SECURITY_PROTOCOL: ${KAFKA_SECURITY_PROTOCOL:-SASL_PLAINTEXT}
-      KAFKA_SASL_MECHANISM: ${KAFKA_SASL_MECHANISM:-PLAIN}
-      # Every pipeline client verifies the service certs against this CA.
-      # Unset it and the clients fall back to the system trust store, which
-      # does NOT contain the dev CA -- calls then fail closed, by design.
-      PIPELINE_CA_BUNDLE: /certs/ca.crt
-      # postgres_load defaults to localhost:5433, which is the HOST-side port
-      # mapping. From inside this container the warehouse is postgres:5432 on
-      # the compose network; without these the load stage hangs in connect
-      # rather than failing, because there is nothing on localhost:5433 here.
+      # the topics and to read none -- a compromised publisher cannot drain
+      # the topics it feeds.
+      KAFKA_SASL_USERNAME: pipeline
+      KAFKA_SASL_PASSWORD: ${KAFKA_PIPELINE_PASSWORD:?}
+      # The consumer DAG's trigger reads the control topic as `consumer`.
+      # An Airflow Connection, supplied by the environment: the Kafka provider
+      # reads the confluent client config from `extra`.
+      AIRFLOW_CONN_KAFKA_CONTROL: '{"conn_type":"kafka","extra":{"bootstrap.servers":"${KAFKA_BOOTSTRAP:?}","group.id":"airflow-verdict-listener","security.protocol":"SASL_PLAINTEXT","sasl.mechanism":"PLAIN","sasl.username":"consumer","sasl.password":"${KAFKA_CONSUMER_PASSWORD:?}","auto.offset.reset":"latest","enable.auto.commit":"false"}}'
+      # postgres_load defaults to localhost:5433, the HOST-side mapping. From
+      # inside this container the warehouse is postgres:5432.
       POSTGRES_HOST: postgres
       POSTGRES_PORT: "5432"
-      POSTGRES_DB: ${POSTGRES_DB:-analytics}
-      POSTGRES_USER: ${POSTGRES_USER:-pipeline}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-pipeline-dev-password}
-      CLIENT_SECRET_EXTRACT_JOB: ${CLIENT_SECRET_EXTRACT_JOB:-dev-extract-secret}
-      CLIENT_SECRET_SPARK_JOB: ${CLIENT_SECRET_SPARK_JOB:-dev-spark-secret}
-      CLIENT_SECRET_HIVE_JOB: ${CLIENT_SECRET_HIVE_JOB:-dev-hive-secret}
-      CLIENT_SECRET_POSTGRES_JOB: ${CLIENT_SECRET_POSTGRES_JOB:-dev-postgres-secret}
-      CLIENT_SECRET_REPORT_JOB: ${CLIENT_SECRET_REPORT_JOB:-dev-report-secret}
-      GOOGLE_APPLICATION_CREDENTIALS: ${GOOGLE_APPLICATION_CREDENTIALS:-/secrets/gcp-sa.json}
-      # NO default project: a fresh clone must not inherit whoever built
-      # this. Unset, EXTRACT_MODE=auto falls through to the offline fixture
-      # instead of failing against someone else's GCP project.
-      GCP_PROJECT_ID: ${GCP_PROJECT_ID:-}
-      # Retail point-of-sale transactions joined to customer records: real
-      # PII (names, emails, street addresses) is the point -- it is what the
-      # encrypt and mask stages exist to protect. ~24 MB scanned per run,
-      # well under BQ_MAX_BYTES_BILLED. `auto` uses BigQuery only when
-      # GCP_PROJECT_ID is set, and the offline fixture otherwise -- so a clone
-      # with no credentials runs end to end rather than erroring.
-      EXTRACT_MODE: ${EXTRACT_MODE:-auto}
-      BQ_DATASET: ${BQ_DATASET:-bigquery-public-data.thelook_ecommerce}
-      BQ_TABLE: ${BQ_TABLE:-order_items}
-      BQ_DATASET_NAME: ${BQ_DATASET_NAME:-rpos_transactions}
-      BQ_SQL_FILE: ${BQ_SQL_FILE:-/opt/pipeline/config/bq/rpos_transactions_cards.sql}
-      # The 4-hour window maps into this range. Deliberately NOT the table's
-      # full span: thelook_ecommerce has ~1-2 orders/day in 2019 versus ~100+
-      # in 2025, so a 4-hour slice of the early data is almost always empty
-      # and the extract fails closed. This window is dense enough that any
-      # slot yields a full 100 rows, and reading recent transactions is what a
-      # POS pipeline would actually do.
-      BQ_DATA_START: ${BQ_DATA_START:-2025-01-01}
-      BQ_DATA_END: ${BQ_DATA_END:-2026-08-31}
-      # A 4-hour slice of ~100 orders/day yields ~15-20 rows, not 100. 24h
-      # fills the 100-row cap on most slots. The cap still binds in the SQL --
-      # this widens the window, it does not raise the limit.
-      BQ_WINDOW_HOURS: ${BQ_WINDOW_HOURS:-24}
-      # If BigQuery fails BQ_ATTEMPTS times in a row, the extract stage falls
-      # back to this CSV rather than failing the run. Distinct from
-      # CSV_SOURCE_PATH, which would bypass BigQuery entirely.
-      BQ_ATTEMPTS: ${BQ_ATTEMPTS:-3}
-      CSV_FALLBACK_PATH: ${CSV_FALLBACK_PATH:-/data/csv/BLM_CO_Q2_2026_Oil_and_Gas_Lease_Sale_-2400573660170243848.csv}
-      BQ_MAX_BYTES_BILLED: ${BQ_MAX_BYTES_BILLED:-314572800}
+      POSTGRES_DB: ${POSTGRES_DB:?}
+      POSTGRES_USER: ${POSTGRES_USER:?}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?}
+      CLIENT_SECRET_EXTRACT_JOB: ${CLIENT_SECRET_EXTRACT_JOB:?}
+      CLIENT_SECRET_SPARK_JOB: ${CLIENT_SECRET_SPARK_JOB:?}
+      CLIENT_SECRET_HIVE_JOB: ${CLIENT_SECRET_HIVE_JOB:?}
+      CLIENT_SECRET_POSTGRES_JOB: ${CLIENT_SECRET_POSTGRES_JOB:?}
+      CLIENT_SECRET_REPORT_JOB: ${CLIENT_SECRET_REPORT_JOB:?}
+      CLIENT_SECRET_ORCHESTRATOR_JOB: ${CLIENT_SECRET_ORCHESTRATOR_JOB:?}
+      GOOGLE_APPLICATION_CREDENTIALS: ${GOOGLE_APPLICATION_CREDENTIALS:?}
+      # Empty: EXTRACT_MODE=auto falls through to the offline fixture instead
+      # of failing against someone else's GCP project.
+      GCP_PROJECT_ID: ${GCP_PROJECT_ID?}
+      EXTRACT_MODE: ${EXTRACT_MODE:?}
+      BQ_DATASET: ${BQ_DATASET:?}
+      BQ_TABLE: ${BQ_TABLE:?}
+      BQ_DATASET_NAME: ${BQ_DATASET_NAME:?}
+      BQ_SQL_FILE: ${BQ_SQL_FILE:?}
+      BQ_DATA_START: ${BQ_DATA_START:?}
+      BQ_DATA_END: ${BQ_DATA_END:?}
+      BQ_WINDOW_HOURS: ${BQ_WINDOW_HOURS:?}
+      BQ_ATTEMPTS: ${BQ_ATTEMPTS:?}
+      CSV_FALLBACK_PATH: ${CSV_FALLBACK_PATH:?}
+      BQ_MAX_BYTES_BILLED: ${BQ_MAX_BYTES_BILLED:?}
     ports: ["8085:8080"]
     mem_limit: 3g
     depends_on:
@@ -394,18 +445,16 @@ services:
       - ./data:/data:rw
       - ./dags:/opt/pipeline/dags:ro
       - ./certs:/certs:ro
-      # Finished PDFs are filed here by the report stage. Separate from
-      # ./data so the deliverables are not mixed in with pipeline scratch.
+      # Finished PDFs are filed here by the report stage.
       - ./pipeline-reports:/opt/pipeline/pipeline-reports:rw
-      # GCP service account key. Read-only, and secrets/ is gitignored --
-      # this is a live credential that bills a real project.
+      # GCP service account key. Read-only, and secrets/ is gitignored.
       - ./secrets:/secrets:ro
-      # pipeline/ and config/ are mounted rather than only baked into the
-      # image so a code or policy change takes effect on the next task run
-      # instead of needing a rebuild. config/ is writable because the mask
-      # stage GENERATES a Ranger policy for a dataset it has not seen before,
-      # and that file has to land in the repo where a human can review it.
+      # Mounted rather than only baked in so a code, contract or policy change
+      # takes effect on the next task run. config/ is writable because the
+      # pipeline GENERATES a Ranger policy and a data contract for a dataset it
+      # has not seen before, and those must land where a human can review them.
       - ./pipeline:/opt/pipeline/pipeline:ro
+      - ./contracts:/opt/pipeline/contracts:ro
       - ./config:/opt/pipeline/config:rw
       - airflow_home:/opt/airflow
     healthcheck:
@@ -414,6 +463,33 @@ services:
       timeout: 5s
       retries: 20
       start_period: 60s
+
+  # ── Jenkins (opt in with --profile ci) ───────────────────────────────────
+  # Local CI: two stages, service tier then platform tier, both plain make
+  # targets. Seeded from docker/jenkins/casc.yaml; the repo is the git remote
+  # over a read-only bind mount. No docker socket. docs/DECISIONS.md D11.
+  jenkins:
+    <<: *common
+    profiles: [ci]
+    build: {context: ., dockerfile: docker/Dockerfile.jenkins}
+    container_name: pl-jenkins
+    environment:
+      CASC_JENKINS_CONFIG: /var/jenkins_casc/casc.yaml
+      JAVA_OPTS: -Djenkins.install.runSetupWizard=false -Xmx768m
+      JENKINS_ADMIN_USER: ${JENKINS_ADMIN_USER:?}
+      JENKINS_ADMIN_PASSWORD: ${JENKINS_ADMIN_PASSWORD:?}
+    ports: ["8095:8080"]
+    mem_limit: 1200m
+    volumes:
+      - jenkins_home:/var/jenkins_home
+      - ./docker/jenkins/casc.yaml:/var/jenkins_casc/casc.yaml:ro
+      - ./:/opt/pipeline:ro
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:8080/login >/dev/null"]
+      interval: 15s
+      timeout: 5s
+      retries: 20
+      start_period: 90s
 
   # ── Apache Ranger (heavy; opt in with --profile ranger) ──────────────────
   ranger-db:
@@ -424,7 +500,7 @@ services:
     environment:
       POSTGRES_DB: ranger
       POSTGRES_USER: ranger
-      POSTGRES_PASSWORD: ${RANGER_DB_PASSWORD:-ranger-dev-password}
+      POSTGRES_PASSWORD: ${RANGER_DB_PASSWORD:?}
     mem_limit: 512m
     volumes: [ranger_db_data:/var/lib/postgresql/data]
     healthcheck:
@@ -452,8 +528,8 @@ services:
       RANGER_DB_HOST: ranger-db
       RANGER_DB_NAME: ranger
       RANGER_DB_USER: ranger
-      RANGER_DB_PASSWORD: ${RANGER_DB_PASSWORD:-ranger-dev-password}
-      RANGER_ADMIN_PASSWORD: ${RANGER_ADMIN_PASSWORD:-rangerR0cks!}
+      RANGER_DB_PASSWORD: ${RANGER_DB_PASSWORD:?}
+      RANGER_ADMIN_PASSWORD: ${RANGER_ADMIN_PASSWORD:?}
       RANGER_AUDIT_SOLR_URLS: http://ranger-solr:8983/solr/ranger_audits
     ports: ["6080:6080"]
     mem_limit: 3g
@@ -471,3 +547,4 @@ volumes:
   ranger_db_data:
   ranger_solr_data:
   airflow_home:
+  jenkins_home:

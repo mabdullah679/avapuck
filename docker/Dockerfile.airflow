@@ -78,6 +78,7 @@ WORKDIR /opt/pipeline
 COPY pipeline/   /opt/pipeline/pipeline/
 COPY services/   /opt/pipeline/services/
 COPY config/     /opt/pipeline/config/
+COPY contracts/  /opt/pipeline/contracts/
 COPY dags/       /opt/pipeline/dags/
 
 ENV PYTHONPATH=/opt/pipeline \

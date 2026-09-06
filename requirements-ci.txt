@@ -1,0 +1,14 @@
+# What the test suite and the contract checks need, and nothing else.
+# Installed into the Jenkins image (docker/Dockerfile.jenkins). Versions match
+# requirements.txt so CI tests the bytes the Airflow image runs.
+pytest==9.1.1
+jsonschema==4.24.0
+pyarrow==25.0.1
+PyJWT==2.10.1
+cryptography==42.0.8
+fastapi==0.115.12
+httpx==0.27.0
+requests==2.32.3
+pydantic==2.11.5
+python-multipart==0.0.20
+kafka-python==3.0.11

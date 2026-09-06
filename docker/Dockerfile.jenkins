@@ -1,0 +1,28 @@
+# Jenkins controller that is also the build agent.
+#
+# Python and the test requirements are baked in so the built-in node runs
+# `make ci` directly. No docker socket, no docker-in-docker: mounting the
+# socket is root on the host, which has no place in a repo whose subject is
+# trust boundaries (docs/DECISIONS.md D11).
+FROM jenkins/jenkins:lts-jdk21
+
+USER root
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        python3 python3-venv python3-pip make git curl \
+    && rm -rf /var/lib/apt/lists/* \
+    # The repo is bind-mounted with the host user's uid; git refuses
+    # "dubious ownership" otherwise.
+    && git config --system --add safe.directory '*'
+
+COPY requirements-ci.txt /tmp/requirements-ci.txt
+RUN python3 -m venv /opt/ci-venv \
+    && /opt/ci-venv/bin/pip install --no-cache-dir -r /tmp/requirements-ci.txt \
+    && chown -R jenkins:jenkins /opt/ci-venv
+
+# Plugins, pinned by name; jenkins-plugin-cli resolves compatible versions
+# for this LTS line.
+COPY docker/jenkins/plugins.txt /usr/share/jenkins/ref/plugins.txt
+USER jenkins
+RUN jenkins-plugin-cli --plugin-file /usr/share/jenkins/ref/plugins.txt
+
+ENV PYTHON=/opt/ci-venv/bin/python

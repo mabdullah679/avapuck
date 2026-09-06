@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
-# One-command setup for the BigQuery → Spark → Hive → Postgres → PDF pipeline.
+# One-command setup for the BigQuery → Spark → Kafka → Hive → Postgres → PDF pipeline.
 #
 #   ./setup.sh              bring everything up and run the pipeline once
 #   ./setup.sh --no-run     set up only, do not run the pipeline
+#   ./setup.sh --ci         also start local Jenkins (the `ci` profile)
 #   ./setup.sh --rebuild    force a rebuild of the locally-built images
 #   ./setup.sh --down       stop the stack (keeps data volumes)
 #   ./setup.sh --clean      stop the stack AND delete its data volumes
@@ -10,34 +11,64 @@
 # Works on Linux and macOS, x86_64 and arm64. Needs Docker with the Compose
 # plugin, and nothing else -- no Python, no Java, no Kafka client on the host.
 #
-# Every path here is relative to the repository root, which is derived from
-# this script's own location. The repo can therefore live anywhere.
+# Every value the stack needs comes from .env.local, which this script creates
+# from .env.example on first run. That file is the single place a value lives
+# (docs/DECISIONS.md D12); compose has no built-in defaults.
 set -euo pipefail
 
-# Anchor to the repo root regardless of where this was invoked from. Every
-# subsequent path in this script is relative to that.
+# Anchor to the repo root regardless of where this was invoked from.
 cd "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 RUN_PIPELINE=1
 REBUILD=0
 RECREATE=0
-COMPOSE_ARGS="--profile core"
-
-for arg in "$@"; do
-  case "$arg" in
-    --no-run)  RUN_PIPELINE=0 ;;
-    --rebuild) REBUILD=1 ;;
-    --down)    docker compose $COMPOSE_ARGS down; exit 0 ;;
-    --clean)   docker compose $COMPOSE_ARGS down -v; exit 0 ;;
-    -h|--help) sed -n '2,12p' "$0" | cut -c3-; exit 0 ;;
-    *) echo "unknown option: $arg (try --help)" >&2; exit 2 ;;
-  esac
-done
+PROFILES="--profile core"
 
 say()  { printf '\n\033[1m==> %s\033[0m\n' "$*"; }
 ok()   { printf '    \033[32m✔\033[0m %s\n' "$*"; }
 warn() { printf '    \033[33m!\033[0m %s\n' "$*"; }
 die()  { printf '\n\033[31m✖ %s\033[0m\n' "$*" >&2; exit 1; }
+
+for arg in "$@"; do
+  case "$arg" in
+    --no-run)  RUN_PIPELINE=0 ;;
+    --ci)      PROFILES="$PROFILES --profile ci" ;;
+    --rebuild) REBUILD=1 ;;
+    --down|--clean) ;;   # handled after the env file exists
+    -h|--help) sed -n '2,14p' "$0" | cut -c3-; exit 0 ;;
+    *) echo "unknown option: $arg (try --help)" >&2; exit 2 ;;
+  esac
+done
+
+# ─────────────────────────────────────────────────────────────────────────
+say "Environment file"
+if [ ! -f .env.local ]; then
+  cp .env.example .env.local
+  chmod 600 .env.local
+  ok "created .env.local from .env.example with DEV defaults"
+  warn "every password in it is a dev default; change them before anywhere shared"
+else
+  ok ".env.local present"
+fi
+# A variable the template declares but .env.local lacks would fail `up` with
+# a compose error naming one variable at a time. Name them all now instead.
+MISSING=$(comm -23 \
+  <(grep -E '^[A-Z0-9_]+=' .env.example | cut -d= -f1 | sort) \
+  <(grep -E '^[A-Z0-9_]+=' .env.local   | cut -d= -f1 | sort) || true)
+if [ -n "$MISSING" ]; then
+  warn ".env.local is missing variables that .env.example declares:"
+  echo "$MISSING" | sed 's/^/        /'
+  die "add them to .env.local (copy the lines from .env.example) and re-run"
+fi
+COMPOSE="docker compose --env-file .env.local $PROFILES --profile ci --profile ranger"
+COMPOSE_UP="docker compose --env-file .env.local $PROFILES"
+
+for arg in "$@"; do
+  case "$arg" in
+    --down)  $COMPOSE down; exit 0 ;;
+    --clean) $COMPOSE down -v; exit 0 ;;
+  esac
+done
 
 # ─────────────────────────────────────────────────────────────────────────
 say "Checking prerequisites"
@@ -59,11 +90,8 @@ docker info >/dev/null 2>&1 || die \
 ok "docker $(docker version --format '{{.Server.Version}}' 2>/dev/null || echo present)"
 ok "compose $(docker compose version --short 2>/dev/null || echo present)"
 
-# Memory. The core profile's caps total ~13.5 GB, but a cap is a ceiling, not
-# a reservation: measured working set across a full run is about 4.2 GB. What
-# actually matters is leaving enough that a JVM heap spike in Spark, Hive or
-# Kafka is not OOM-killed -- that surfaces as a stage failing for no visible
-# reason rather than as an obvious out-of-memory error.
+# Memory. The core profile's caps total ~15 GB, but a cap is a ceiling, not
+# a reservation: measured working set across a full run is about 4.7 GB.
 MEM_MB=$(docker info --format '{{.MemTotal}}' 2>/dev/null | awk '{printf "%d", $1/1048576}')
 if [ -n "${MEM_MB:-}" ] && [ "$MEM_MB" -gt 0 ]; then
   if   [ "$MEM_MB" -lt 5000 ]; then
@@ -82,9 +110,8 @@ DISK_AVAIL=$(df -Pm . | awk 'NR==2 {print $4}')
   || ok "disk: ${DISK_AVAIL} MiB free"
 
 # ── Platform detection ───────────────────────────────────────────────────
-# Not cosmetic: WSL2 has two failure modes that do not exist on native Linux
-# or macOS, and both are silent -- the stack starts and then behaves badly
-# rather than erroring.
+# WSL2 has two failure modes that do not exist on native Linux or macOS, and
+# both are silent -- the stack starts and then behaves badly.
 PLATFORM="$(uname -s)"
 IS_WSL=0
 if grep -qi microsoft /proc/version 2>/dev/null; then
@@ -94,21 +121,12 @@ fi
 ok "platform: $PLATFORM on $(uname -m)"
 
 if [ "$IS_WSL" = "1" ]; then
-  # 1. Repo location. A checkout under /mnt/c (the Windows filesystem) goes
-  #    through the 9p translation layer, where bind-mount I/O is roughly an
-  #    order of magnitude slower. Spark and Hive write thousands of small
-  #    files, so this turns a 30-second stage into minutes -- and it looks
-  #    like the pipeline is broken rather than the disk being slow.
   case "$(pwd -P)" in
     /mnt/*)
       warn "this repo lives on the Windows filesystem ($(pwd -P))."
       warn "Bind-mount I/O there is ~10x slower and Spark/Hive will crawl."
       warn "Move it into the Linux filesystem and re-run:"
       warn "    cp -r \"$(pwd -P)\" ~/avapuck && cd ~/avapuck && ./setup.sh"
-      # No TTY (CI, or a piped run): do not block, and do not silently
-      # proceed into a setup that will be painfully slow -- say why and stop.
-      # /dev/tty EXISTS even with no terminal attached, so test whether it can
-      # actually be opened rather than whether the file is there.
       if { : </dev/tty; } 2>/dev/null; then
         printf '    continue anyway? [y/N] '
         read -r reply </dev/tty || reply=n
@@ -120,11 +138,6 @@ if [ "$IS_WSL" = "1" ]; then
       ;;
     *) ok "repo is on the Linux filesystem (fast bind mounts)" ;;
   esac
-
-  # 2. Memory. WSL2 takes half the host RAM by default, which on a 16 GB
-  #    machine leaves 8 GB -- below what Spark and Hive need together.
-  #    Raising it needs a .wslconfig on the WINDOWS side and `wsl --shutdown`,
-  #    so tell the user exactly what to write.
   WSL_MEM=$(awk '/MemTotal/ {printf "%d", $2/1024}' /proc/meminfo 2>/dev/null || echo 0)
   if [ "${WSL_MEM:-0}" -gt 0 ] && [ "$WSL_MEM" -lt 11000 ]; then
     warn "WSL2 has ${WSL_MEM} MiB of RAM; this stack wants 12 GB+."
@@ -138,18 +151,13 @@ fi
 
 # ─────────────────────────────────────────────────────────────────────────
 say "Generating TLS certificates"
-# No private keys are committed, so every machine generates its own local CA.
 if [ -f certs/ca.crt ]; then
   ok "certs/ already present (delete it or run scripts/gen_certs.sh --force to regenerate)"
 else
   ./scripts/gen_certs.sh >/dev/null
   ok "wrote a local CA and the idp/crypto server certificates into certs/"
-  # Containers bind-mount certs/ and read it at startup. If any were already
-  # running when this directory was recreated, they hold a handle to the OLD
-  # (now deleted) directory inode and see an empty /certs -- every TLS call
-  # then fails closed, which is correct behaviour with a baffling symptom.
-  # Flag it and let the normal `up -d` below recreate them in dependency
-  # order; recreating a subset here races with the services still starting.
+  # Containers that were running when certs/ was recreated hold the OLD
+  # directory inode and see an empty /certs; recreate them in dependency order.
   if docker ps --format '{{.Names}}' 2>/dev/null | grep -q '^pl-'; then
     warn "the stack was running while certificates were regenerated"
     warn "recreating every service so the new CA is actually mounted"
@@ -158,11 +166,15 @@ else
 fi
 
 # ─────────────────────────────────────────────────────────────────────────
-say "Preparing directories"
-# Bind-mount targets must exist before compose starts, or Docker creates them
-# root-owned and the containers cannot write to them.
+say "Preparing directories and git hooks"
 mkdir -p data/csv data/parquet data/hive data/reports data/cards pipeline-reports secrets
 ok "data/, pipeline-reports/ and secrets/ ready"
+
+if [ -d .git ]; then
+  install -m 0755 scripts/git-hooks/pre-push .git/hooks/pre-push
+  install -m 0755 scripts/git-hooks/post-commit .git/hooks/post-commit
+  ok "git hooks installed: pre-push runs make ci; post-commit pokes Jenkins"
+fi
 
 if [ -f secrets/gcp-sa.json ]; then
   ok "found secrets/gcp-sa.json — live BigQuery is available"
@@ -176,11 +188,11 @@ fi
 say "Building and starting the stack"
 warn "First run pulls and builds several images. Expect 10-20 minutes."
 
-[ "$REBUILD" = "1" ] && docker compose $COMPOSE_ARGS build --no-cache
+[ "$REBUILD" = "1" ] && $COMPOSE_UP build --no-cache
 if [ "$RECREATE" = "1" ]; then
-  docker compose $COMPOSE_ARGS up -d --build --force-recreate
+  $COMPOSE_UP up -d --build --force-recreate
 else
-  docker compose $COMPOSE_ARGS up -d --build
+  $COMPOSE_UP up -d --build
 fi
 
 # ─────────────────────────────────────────────────────────────────────────
@@ -201,14 +213,14 @@ wait_healthy() {
 }
 
 FAILED=0
-for c in pl-idp pl-crypto pl-postgres pl-kafka pl-spark-master pl-airflow; do
+for c in pl-idp pl-crypto pl-postgres pl-kafka pl-spark-master pl-airflow pl-kafka-ui pl-watchdog; do
   wait_healthy "$c" 72 || FAILED=1
 done
+case "$PROFILES" in *ci*) wait_healthy pl-jenkins 72 || warn "Jenkins did not come up; the pipeline runs without it" ;; esac
 
 # HiveServer2 has no healthcheck; it is ready when a Hive client can list
-# databases. Probing with /dev/tcp does NOT work here -- that is a bash
-# feature and this image's /bin/sh is dash, so the probe always "failed" and
-# reported a healthy Hive as down.
+# databases. Probing with /dev/tcp does NOT work here -- this image's /bin/sh
+# is dash.
 printf '    %-22s ' "pl-hiveserver2"
 i=0
 HS2_READY=0
@@ -220,30 +232,27 @@ while [ $i -lt 60 ]; do
   fi
   printf '.'; sleep 5; i=$((i+1))
 done
-[ "$HS2_READY" = "0" ] && printf '\033[33mnot ready (Hive registration will skip; the rest still runs)\033[0m\n'
+[ "$HS2_READY" = "0" ] && printf '\033[33mnot ready (Hive registration will be reported as degraded; the rest still runs)\033[0m\n'
 
 [ "$FAILED" = "1" ] && die \
   "one or more services did not come up.
-   Look at: docker compose $COMPOSE_ARGS logs --tail 50 <service>"
+   Look at: $COMPOSE_UP logs --tail 50 <service>"
 
 say "Creating Kafka topics and ACLs"
-# Idempotent: --if-not-exists on the topics, and re-adding an existing ACL is
-# a no-op. Reports the resulting topic list rather than only new creations, so
-# a second run does not look like it did nothing.
-docker compose $COMPOSE_ARGS up kafka-init >/dev/null 2>&1 || \
-  warn "topic setup reported an error; check: docker compose $COMPOSE_ARGS logs kafka-init"
+$COMPOSE_UP up kafka-init >/dev/null 2>&1 || \
+  warn "topic setup reported an error; check: $COMPOSE_UP logs kafka-init"
 docker exec pl-kafka /opt/kafka/bin/kafka-topics.sh \
-  --bootstrap-server kafka:9092 --command-config /etc/kafka/admin.properties \
+  --bootstrap-server kafka:9092 --command-config /tmp/admin.properties \
   --list 2>/dev/null | sed 's/^/    /' | grep . || warn "no topics found"
 
 # ─────────────────────────────────────────────────────────────────────────
 if [ "$RUN_PIPELINE" = "1" ]; then
-  say "Running the pipeline end to end"
-  RUN_DATE=$(date -u +%Y-%m-%d)
-  # Airflow emits each line twice (its own handler plus the task handler);
-  # keep one copy, and strip the timestamp prefix so the stage flow reads
-  # cleanly. The full logs are in the UI and in `docker compose logs`.
-  docker exec pl-airflow airflow dags test trips_pipeline "$RUN_DATE" 2>&1 \
+  # The run slot is the current hour, UTC. Airflow schedules in UTC and every
+  # date on the PDF and in the verdict is UTC with a Z suffix -- after 20:00
+  # Eastern the slot date is already tomorrow, and that is correct.
+  RUN_SLOT=$(date -u +%Y-%m-%dT%H:00:00)
+  say "Running the pipeline end to end for slot ${RUN_SLOT}Z"
+  docker exec pl-airflow airflow dags test trips_pipeline "$RUN_SLOT" 2>&1 \
     | grep -oE "(▶ START|✔ SUCCESS|✖ [A-Z]+) +[A-Z_]+( in [0-9.]+s)?" \
     | awk '!seen[$0]++' | sed 's/^/    /' || true
 
@@ -253,6 +262,9 @@ if [ "$RUN_PIPELINE" = "1" ]; then
   else
     warn "no PDF in pipeline-reports/ — check the stage output above"
   fi
+  printf '    verdict: '
+  curl -sf http://localhost:8446/status 2>/dev/null \
+    | sed -E 's/.*"healthy": ?(true|false).*/watchdog healthy=\1/' || echo "(watchdog not reachable)"
 fi
 
 # ─────────────────────────────────────────────────────────────────────────
@@ -260,10 +272,14 @@ say "Ready"
 cat <<'EOF'
     Airflow UI     http://localhost:8085   (user: admin)
     password       docker exec pl-airflow cat /opt/airflow/simple_auth_manager_passwords.json.generated
+    Kafka UI       http://localhost:8090   (login: KAFKA_UI_LOGIN_USER / _PASSWORD in .env.local)
+    Watchdog       http://localhost:8446/status
     Spark UI       http://localhost:8080
-    reports        pipeline-reports/
+    Jenkins        http://localhost:8095   (./setup.sh --ci; login: JENKINS_ADMIN_* in .env.local)
+    reports        pipeline-reports/       one PDF per run slot, UTC
 
-    Run again      docker exec pl-airflow airflow dags test trips_pipeline 2026-09-13
+    Run again      docker exec pl-airflow airflow dags test trips_pipeline 2026-09-13T04:00:00
+    Tests + CI     make ci
     Stop           ./setup.sh --down
     Stop + wipe    ./setup.sh --clean
 EOF

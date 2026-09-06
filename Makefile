@@ -1,27 +1,48 @@
-.PHONY: help check-auth secrets-bootstrap secrets-sync secrets-verify secrets-drift test
+.PHONY: help test ci ci-service ci-platform hooks run up down check-auth
+
+# The repo's venv when present, else whatever python3 is on PATH. Jenkins sets
+# PYTHON to its own venv (docker/Dockerfile.jenkins).
+PYTHON ?= $(if $(wildcard .venv/bin/python),.venv/bin/python,python3)
+# The platform tier diffs contracts against this git ref.
+CI_BASE_REF ?= main
+COMPOSE = docker compose --env-file .env.local --profile core
 
 help:
-	@echo "check-auth         verify GCP credentials work before running anything"
-	@echo "secrets-bootstrap  create the pipeline's secrets in GCP Secret Manager (once)"
-	@echo "secrets-sync       resolve .env.local's SM_* refs -> .env.local.resolved"
-	@echo "secrets-verify     check every declared secret exists in Secret Manager"
-	@echo "secrets-drift      compare literal *_VALUE entries against Secret Manager"
-	@echo "test               run the test suite (includes secret hygiene)"
-
-check-auth:
-	@.venv/bin/python scripts/check_gcp_auth.py
-
-secrets-bootstrap:
-	@set -a; [ -f .env.local ] && . ./.env.local; set +a; ./scripts/secrets_bootstrap.sh
-
-secrets-sync:
-	@python3 scripts/secrets_sync.py
-
-secrets-verify:
-	@python3 scripts/secrets_sync.py --verify
-
-secrets-drift:
-	@python3 scripts/secrets_sync.py --check-drift
+	@echo "test          run the test suite"
+	@echo "ci            both CI tiers, exactly what Jenkins and the pre-push hook run"
+	@echo "ci-service    tests + contract examples"
+	@echo "ci-platform   envelope embedding + backward compatibility vs $(CI_BASE_REF)"
+	@echo "hooks         install the pre-push and post-commit hooks into .git/hooks"
+	@echo "run           run the pipeline for the current hour without Airflow"
+	@echo "up / down     start / stop the compose stack (core profile)"
+	@echo "check-auth    verify GCP credentials work before running live"
 
 test:
-	@python3 -m pytest tests/ -q
+	@$(PYTHON) -m pytest tests/ -q
+
+ci: ci-service ci-platform
+
+ci-service:
+	@$(PYTHON) -m pytest tests/ -q
+	@$(PYTHON) scripts/ci/contracts_check.py examples
+
+ci-platform:
+	@$(PYTHON) scripts/ci/contracts_check.py platform --base $(CI_BASE_REF)
+
+hooks:
+	@test -d .git || { echo "not a git checkout; nothing to install"; exit 1; }
+	@install -m 0755 scripts/git-hooks/pre-push .git/hooks/pre-push
+	@install -m 0755 scripts/git-hooks/post-commit .git/hooks/post-commit
+	@echo "installed .git/hooks/pre-push and .git/hooks/post-commit"
+
+run:
+	@$(PYTHON) -m pipeline.run_pipeline
+
+up:
+	@$(COMPOSE) up -d --build
+
+down:
+	@$(COMPOSE) down
+
+check-auth:
+	@$(PYTHON) scripts/check_gcp_auth.py

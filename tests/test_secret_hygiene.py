@@ -35,10 +35,40 @@ def test_no_secret_files_staged_or_tracked():
     assert not offenders, f"credential files are tracked by git: {offenders}"
 
 
-def test_env_file_not_tracked():
-    r = subprocess.run(["git", "ls-files", ".env"], cwd=ROOT,
-                       capture_output=True, text=True)
-    assert not r.stdout.strip(), ".env is tracked by git; it may hold secrets"
+def test_env_files_not_tracked():
+    """.env.local is the one place values live; it must never be committed."""
+    r = subprocess.run(["git", "ls-files", ".env", ".env.local", ".env.*.local"],
+                       cwd=ROOT, capture_output=True, text=True)
+    assert not r.stdout.strip(), f"an env file is tracked by git: {r.stdout.split()}"
+
+
+def test_only_one_env_template_is_committed():
+    """One .env.example; a second template is where values start to drift."""
+    r = subprocess.run(["git", "ls-files", "--cached", "--others", "--exclude-standard"],
+                       cwd=ROOT, capture_output=True, text=True)
+    templates = [f for f in r.stdout.split() if f.startswith(".env") and f != ".env.example"]
+    assert templates == [], f"extra env templates: {templates}"
+
+
+def test_compose_has_no_builtin_secret_defaults():
+    """`${VAR:-default}` in compose is a second place a secret can live."""
+    import re
+    text = (ROOT / "docker-compose.yml").read_text()
+    defaults = re.findall(r"\$\{([A-Z0-9_]+):-[^}]*\}", text)
+    assert defaults == [], f"compose carries built-in defaults for: {sorted(set(defaults))}"
+
+
+def test_every_compose_variable_is_in_the_template():
+    """A variable compose requires must be declared in .env.example, or a
+    fresh clone fails `up` with no way to know what to add."""
+    import re
+    compose = "\n".join(l for l in (ROOT / "docker-compose.yml").read_text().splitlines()
+                        if not l.strip().startswith("#"))
+    required = set(re.findall(r"\$\{([A-Z0-9_]+)\??:?\?", compose))
+    template = (ROOT / ".env.example").read_text()
+    declared = set(re.findall(r"^([A-Z0-9_]+)=", template, flags=re.M))
+    missing = sorted(required - declared)
+    assert missing == [], f"compose requires variables .env.example does not declare: {missing}"
 
 
 # Shapes that indicate a real credential rather than a placeholder.

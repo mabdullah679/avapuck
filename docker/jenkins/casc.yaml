@@ -1,0 +1,46 @@
+# Jenkins Configuration as Code. Everything Jenkins knows is in this file and
+# the Jenkinsfile; nothing is clicked together in the UI.
+jenkins:
+  systemMessage: "avapuck local CI. Two tiers: service, then platform. See docs/DECISIONS.md D11."
+  numExecutors: 1
+  mode: NORMAL
+  securityRealm:
+    local:
+      allowsSignup: false
+      users:
+        - id: "${JENKINS_ADMIN_USER}"
+          password: "${JENKINS_ADMIN_PASSWORD}"
+  authorizationStrategy:
+    loggedInUsersCanDoAnything:
+      allowAnonymousRead: false
+  crumbIssuer:
+    standard:
+      excludeClientIPFromCrumb: true
+
+unclassified:
+  location:
+    url: "http://localhost:8095/"
+
+jobs:
+  - script: >
+      pipelineJob('avapuck') {
+        description('Service tier (tests + contract examples), then platform tier (envelope embedding + backward compatibility against main). Both are plain make targets; `make ci` gives the same answer without Jenkins.')
+        logRotator { numToKeep(30) }
+        triggers {
+          // The repo is a read-only bind mount; poll it, and let the
+          // post-commit hook poke /git/notifyCommit for instant builds.
+          scm('H/2 * * * *')
+        }
+        definition {
+          cpsScm {
+            scm {
+              git {
+                remote { url('file:///opt/pipeline') }
+                branch('*/main')
+              }
+            }
+            scriptPath('Jenkinsfile')
+            lightweight(false)
+          }
+        }
+      }

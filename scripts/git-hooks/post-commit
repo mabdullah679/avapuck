@@ -1,0 +1,6 @@
+#!/usr/bin/env bash
+# Poke local Jenkins so it polls the repo now rather than in up to two minutes.
+# Harmless when Jenkins is not running. The git plugin's notifyCommit endpoint
+# needs no credentials: it only asks jobs watching that URL to poll.
+JENKINS_URL="${JENKINS_URL:-http://localhost:8095}"
+curl -fsS --max-time 2 "${JENKINS_URL}/git/notifyCommit?url=file:///opt/pipeline" >/dev/null 2>&1 || true

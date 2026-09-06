@@ -45,13 +45,13 @@ id_ed25519.*
 *.ppk
 
 # ── Environment files ─────────────────────────────────────────────────────
-# Real values live in .env; the committed examples carry placeholders only.
+# Real values live in .env.local, the ONE place a value lives (docs/DECISIONS.md
+# D12); the committed .env.example carries dev defaults only.
 .env
 .env.*
 .env.local
 .env.local.resolved
 !.env.example
-!.env.local.example
 
 # ═══════════════════════════════════════════════════════════════════════════
 # PIPELINE DATA — regenerated every run, and some of it is sensitive.

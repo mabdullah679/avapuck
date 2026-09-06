@@ -1,0 +1,17 @@
+#!/usr/bin/env bash
+# Refuse a push that fails the same two checks Jenkins runs.
+#
+# Installed by setup.sh (or `make hooks`) into .git/hooks/. This is the only
+# local gate: Jenkins shows history but cannot block a push on its own
+# (docs/DECISIONS.md D11). Skip once with SKIP_CI=1 git push, and know that
+# Jenkins will still go red.
+set -euo pipefail
+cd "$(git rev-parse --show-toplevel)"
+
+if [ "${SKIP_CI:-0}" = "1" ]; then
+  echo "pre-push: SKIP_CI=1, not running make ci" >&2
+  exit 0
+fi
+
+echo "pre-push: running make ci (SKIP_CI=1 to bypass once)" >&2
+make ci
