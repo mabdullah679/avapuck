@@ -1,9 +1,9 @@
 # Orchestration spec
 
-Answers to the seven orchestration questions, as the code actually is on
-`main` — not as it is aspirationally described. Where something is a stand-in
-or a known limitation it is marked, and `TRUST-BOUNDARY.md` carries the longer
-version.
+Answers to the orchestration questions, as the code actually is on `main` —
+not as it is aspirationally described. Where something is a stand-in or a
+known limitation it is marked, and `TRUST-BOUNDARY.md` carries the longer
+version. `docs/DECISIONS.md` carries the reasoning.
 
 ---
 
@@ -12,31 +12,40 @@ version.
 **Apache Airflow 3.0.2** — not 2.x. This matters more than a version bump
 usually does:
 
-- The DAG is written against `airflow.sdk` (`from airflow.sdk import DAG, task`),
-  the Airflow 3 Task SDK. Airflow 2 imports (`airflow.decorators`,
-  `airflow.models.DAG`) are not used and will not be a drop-in swap.
+- Both DAGs are written against `airflow.sdk` (`from airflow.sdk import DAG,
+  task, Asset, AssetWatcher`), the Airflow 3 Task SDK. Airflow 2 imports are
+  not used and will not be a drop-in swap.
 - `logical_date` is **not** guaranteed in the task context on Airflow 3. A run
-  triggered from the UI or `airflow dags trigger` does not supply it, while
-  `airflow dags test` does. `dags/trips_pipeline_dag.py :: logical_ts(ctx)`
-  resolves it through `logical_date → data_interval_start →
-  dag_run.logical_date → dag_run.run_after → now`. Reading
-  `ctx["logical_date"]` directly is a latent bug — there is a test asserting no
-  task does it.
+  triggered from the UI does not supply it, while `airflow dags test` does.
+  `logical_ts(ctx)` resolves it through `logical_date → data_interval_start →
+  dag_run.logical_date → dag_run.run_after → now`, always as aware UTC. A
+  test asserts no task reads `ctx["logical_date"]` directly.
+- The consumer DAG uses Airflow 3's **event-driven scheduling**: an `Asset`
+  with an `AssetWatcher` whose trigger is the common-messaging
+  `MessageQueueTrigger` backed by the Kafka provider.
 
 Pinned in `requirements.txt`:
 
 ```
 apache-airflow==3.0.2
-apache-airflow-core==3.0.2
 apache-airflow-task-sdk==1.0.2
 apache-airflow-providers-standard==1.2.0
+apache-airflow-providers-apache-kafka==1.16.0
+apache-airflow-providers-common-messaging==2.0.4
+confluent-kafka==2.15.0          # the provider's client (trigger side)
+kafka-python==3.0.11             # the publisher's client (producer side)
 ```
 
-**Executor:** LocalExecutor, running under `airflow standalone` (api-server +
-scheduler + triggerer + dag-processor in one container). That is a development
-topology, not a production one — see §7.
+Two Kafka clients, for two roles: the provider requires confluent-kafka; the
+publisher keeps kafka-python, which since 3.x supports the idempotent
+producer. `kafka-python-ng` was replaced because it did not.
 
-**Schedule:** `0 */4 * * *`, `catchup=False`, `max_active_runs=1`.
+**Executor:** LocalExecutor, under `airflow standalone` (api-server +
+scheduler + triggerer + dag-processor in one container). A development
+topology.
+
+**Schedule:** `0 */4 * * *`, `catchup=False`, `max_active_runs=1`,
+`dagrun_timeout=3h`.
 
 ---
 
@@ -46,60 +55,37 @@ topology, not a production one — see §7.
 the Spark driver: it builds a `SparkSession` in-process and connects to a
 standalone Spark 4.0.0 cluster over `spark://spark-master:7077`.
 
-```python
-# pipeline/transform/spark_encrypt.py
-SparkSession.builder
-    .appName("pipeline-encrypt")
-    .master(os.environ["SPARK_MASTER_URL"])      # spark://spark-master:7077
-    .config("spark.driver.host", "pl-airflow")   # executors must resolve the driver
-    .config("spark.driver.bindAddress", "0.0.0.0")
-    .config("spark.pyspark.python", "/usr/bin/python3.12")
-    .config("spark.sql.shuffle.partitions", "2")
-    .config("spark.driver.memory", "900m")
-```
+Three constraints that fail *by degrading* (the stage falls back to pyarrow,
+reports `engine: pyarrow`, and the verdict names it as a reason):
 
-Three constraints that are easy to get wrong and fail *silently* (the stage
-falls back to pyarrow and reports `engine: pyarrow` rather than erroring):
+1. **A JVM must exist in the Airflow image.** Java 21.
+2. **Executor Python must match the driver's minor version** (3.12), chosen
+   by `spark.pyspark.python` from the driver side.
+3. **`/data` must be mounted at the same path on the workers.**
 
-1. **A JVM must exist in the Airflow image.** PySpark needs a local JVM even to
-   reach a remote cluster. Java 21 — Spark 4 supports 17 and 21, rejects 25.
-2. **Executor Python must match the driver's minor version.** The executor
-   interpreter is chosen by `spark.pyspark.python` from the *driver* side; the
-   worker image's own `PYSPARK_PYTHON` does not decide it. Driver is 3.12, so
-   the Spark image carries a deadsnakes 3.12 alongside its stock 3.10.
-3. **`/data` must be mounted at the same path on the workers.** Spark passes an
-   absolute output path to executors, which write the Parquet themselves.
-   Without the mount, tasks die with `Mkdirs failed to create file:/data/...`.
-
-**Fallback is deliberate.** With `SPARK_MASTER_URL` unset — or if any of the
-above breaks — the stage runs the identical transformation through pyarrow and
-returns `engine: pyarrow`. At 100 rows/run Spark is genuine overhead; the
-fallback keeps the data path testable without a cluster. **Never assume which
-ran; read the stage result.**
-
-Not used, and would each be a real change: Databricks Jobs API, EMR, Glue, the
-`SparkKubernetesOperator`. The `k8s/` manifests contain an in-cluster
-`spark-submit` Job, but those manifests predate the current stack — §7.
+**Fallback is deliberate.** With `SPARK_MASTER_URL` unset the stage runs the
+identical transformation through pyarrow and the verdict is `complete`, not
+`degraded`, because no Spark was configured. **Never assume which ran; read
+the verdict.**
 
 ---
 
 ## 3. Task granularity
 
-**One Airflow task per pipeline stage, with the engine inside the task.** Not
-one task per Spark job — only one stage uses Spark at all.
-
-Every task is a `@task`-decorated Python function that imports a module from
-`pipeline/` and calls its `run()`. The task owns orchestration concerns
-(logical date, tracing, logging, XCom); the module owns the work and has no
-Airflow import. That split is what makes the pipeline modules unit-testable
-without Airflow, and `scripts/run_chain.py` runs the same stages outside it.
+**One Airflow task per pipeline stage, with the engine inside the task**, plus
+one terminal task for the verdict. Every task is a thin `@task` wrapper that
+calls `pipeline.stages.run_stage(name, env, events)`. The task owns
+orchestration (the run slot, XCom, UI logging); `pipeline/stages.py` owns
+which module does the work with which inputs; the module owns the work and
+has no Airflow import. `pipeline/run_pipeline.py` walks the same list.
 
 ---
 
 ## 4. The actual shape
 
-**One DAG, `trips_pipeline`, eight tasks, strictly linear.** No fan-out, no
-branching, no dynamic task mapping.
+**Two DAGs.**
+
+`trips_pipeline`: nine tasks, strictly linear, the last one always runs.
 
 ```
 extract_to_csv
@@ -108,78 +94,74 @@ split_card_numbers
      ↓
 encrypt_to_parquet          ← the only Spark stage
      ↓
-publish_kafka
+publish_kafka               ← rows to two topics, in the platform envelope
      ↓
 decrypt_and_mask
      ↓
-register_hive_table
+register_hive_table         ← non-fatal; reported
      ↓
-load_postgres
+load_postgres               ← stamped with run_slot
      ↓
-build_pdf
+build_pdf                   ← one per run
+     ↓
+emit_verdict                ← trigger_rule=all_done; signed; to pipeline_runs
 ```
 
-| Task | Module | What it does |
+`on_run_verdict`: one task, scheduled on the `pipeline_run_verdicts` asset.
+Wakes when the control topic carries a contract-valid `run.verdict` with
+`proceed=true`; verifies the signature, dedupes, records, stops.
+
+| Stage | Module | Event fields the verdict reads |
 |---|---|---|
-| `extract_to_csv` | `pipeline/extract/fixture.py` | 100 rows from BigQuery, a CSV source, or an offline fixture. 3 BigQuery attempts, then CSV fallback |
-| `split_card_numbers` | `pipeline/transform/card_split.py` | PAN → first-6 / encrypted-middle / last-4. No-op when the dataset has no card column |
-| `encrypt_to_parquet` | `pipeline/transform/spark_encrypt.py` | AES-256-GCM on every manifest-sensitive column, via the crypto service |
-| `publish_kafka` | `pipeline/publish/kafka_publish.py` | One producer → two topics: `rpos_encrypted` (ciphertext), `rpos_flat` (never-sensitive columns) |
-| `decrypt_and_mask` | `pipeline/transform/hive_mask.py` | Decrypt inside the boundary, apply Ranger policy JSON, write masked Parquet |
-| `register_hive_table` | `pipeline/transform/hive_register.py` | External table + partition in HiveServer2 over JDBC |
-| `load_postgres` | `pipeline/load/postgres_load.py` | Upsert on the manifest's primary key |
-| `build_pdf` | `pipeline/report/pdf_report.py` | Charted PDF, filed into `pipeline-reports/` |
+| `extract` | `pipeline/extract/fixture.py`, `metadata/contract.py` | `rows`, `mode`, `bq_attempts`, `fell_back_to_csv`, `window_*` |
+| `card_split` | `pipeline/transform/card_split.py` | `rows`, `cards` |
+| `encrypt` | `pipeline/transform/spark_encrypt.py` | `rows`, `engine`, `spark_configured` |
+| `publish` | `pipeline/publish/kafka_publish.py` | `rows`, `topic_encrypted`, `topic_public` |
+| `mask` | `pipeline/transform/hive_mask.py` | `rows`, `masked_by`, `policies` |
+| `hive_register` | `pipeline/transform/hive_register.py` | `registered`, `table`, `reason` |
+| `load` | `pipeline/load/postgres_load.py` | `inserted`, `updated`, `dataset` |
+| `report` | `pipeline/report/pdf_report.py` | `pdf`, `collected` |
 
-**Not a bronze/silver/gold medallion.** The layering is by *sensitivity state*
-rather than refinement: plaintext (transient, local) → ciphertext → masked →
-warehouse. Closest mapping if your agent needs one: `data/csv` ≈ bronze,
-`data/parquet` (encrypted) ≈ silver, `data/hive` (masked) + Postgres ≈ gold.
+The shape of each event is `contracts/stage_event.schema.json`.
 
-**No fan-out by source.** One dataset per run. Multiple sources would be
-separate DAG runs, distinguished by the manifest's `dataset` name, which
-already namespaces every output path, Hive table and Postgres table.
+**Not a medallion.** The layering is by *sensitivity state*: plaintext
+(transient, local) → ciphertext → masked → warehouse.
 
-**Everything is metadata-driven.** `pipeline/metadata/schema.py` infers each
-dataset's columns, sensitivity classes, primary key and special treatments
-(e.g. `card_split`) into a manifest. Every stage reads that manifest. **No
-stage names a column literally** — that is an invariant, not a style
-preference.
+**No fan-out by source.** One dataset per run, named by the manifest, which
+namespaces every output path, Hive table, Postgres table and Kafka envelope.
+
+**Everything is metadata-driven, and the metadata is a contract.** No stage
+names a column literally; the first run of a dataset commits its inferred
+schema and later runs are held to it.
 
 ---
 
 ## 5. Data handoff between tasks
 
 **Files on a shared volume, addressed by date-partitioned convention. XCom
-carries metadata only — never data.**
+carries the stage event only — never data.**
 
 ```
-data/csv/<dataset>_<YYYY-MM-DD>.csv                        extract  →  card_split, encrypt
-data/cards/<dataset>_card_info_<YYYY-MM-DD>.csv            card_split (terminal)
-data/parquet/dt=<YYYY-MM-DD>/<dataset>.parquet             encrypt  →  publish, mask
-data/hive/<dataset>/dt=<YYYY-MM-DD>/<dataset>_masked.parquet   mask →  register, load, report
-data/reports/<dataset>_report_<YYYY-MM-DD>.pdf             report (terminal)
-pipeline-reports/<same>.pdf                                delivery copy
+data/csv/<dataset>_<YYYY-MM-DD>.csv                          extract  →  card_split, encrypt
+data/cards/<dataset>_card_info_<YYYY-MM-DD>.csv              card_split (terminal)
+data/parquet/dt=<YYYY-MM-DD>/<dataset>.parquet               encrypt  →  publish, mask
+data/hive/<dataset>/dt=<YYYY-MM-DD>/<dataset>_masked.parquet mask     →  register, load, report
+data/reports/<dataset>_report_<YYYYMMDDTHHMM>Z.pdf           report (terminal)
+pipeline-reports/<same>.pdf                                  delivery copy
 ```
 
-A downstream task locates its input with a glob on the logical date
-(`_find(DATA / "parquet" / f"dt={d}", "*.parquet", "publish")`) rather than
-pulling a path from XCom. Two consequences worth knowing:
+A downstream task locates its input with a glob on the run's date
+(`find_input(...)`) and verifies it exists, rather than trusting the previous
+task. Six slots a day share the intermediate file paths; the warehouse and
+the PDF distinguish slots by `run_slot`.
 
-- Re-running one stage by hand works without touching XCom.
-- **Each stage verifies its input exists** rather than trusting that the
-  previous task succeeded. Those are different guarantees.
+**Between systems**, the handoff is the Kafka envelope: `event_id`,
+`idempotency_key`, `run_slot`, `trace_id`, `dataset`, `key`, and a payload
+whose schema the `event_type` selects. `contracts/`.
 
-**Not Delta Lake.** Plain Parquet, plus a hidden `.<name>.schema.json` sidecar
-manifest beside each artifact. The leading dot is load-bearing: Hive reads
-every file in a partition directory and fails parsing JSON as Parquet.
-
-**Not S3/GCS.** A local bind mount (`./data`), shared across the Airflow and
-Spark containers at the same absolute path. The k8s manifests use a
-`ReadWriteMany` hostPath, which works on single-node minikube only.
-
-XCom holds the `stage_event` dict per task — `trace_id`, `stage`, row counts,
-`engine`, `registered`, `bq_attempts`, `fell_back_to_csv`. Diagnostics, not
-payload.
+**Not Delta Lake, not S3/GCS.** Plain Parquet with a hidden
+`.<name>.schema.json` sidecar (the dot keeps Hive from reading it), on a
+local bind mount shared across containers at the same absolute path.
 
 ---
 
@@ -187,55 +169,37 @@ payload.
 
 ```
 dags/
-  trips_pipeline_dag.py        the only DAG; thin tasks that call pipeline/
+  trips_pipeline_dag.py        the run; thin tasks over pipeline/stages.py
+  verdict_listener_dag.py      the reference consumer
 pipeline/
+  stages.py     THE stage list; RunEnv; run_stage; emit_verdict
+  verdict.py    the verdict: pure, tested hardest
+  messaging/    envelope.py, contracts.py, dedupe.py, signing.py, listen.py
   common/       auth.py (JWT), trace.py (correlation id + UI logging)
-  metadata/     schema.py (inference → manifest), policy_gen.py (Ranger JSON)
+  metadata/     schema.py (inference), contract.py (dataset contracts), policy_gen.py
   extract/      bigquery_extract.py, csv_source.py, fixture.py
   transform/    card_split.py, spark_encrypt.py, hive_mask.py, hive_register.py
-  publish/      kafka_publish.py
+  publish/      kafka_publish.py (rows + verdict)
   load/         postgres_load.py
   mask/         ranger.py
   report/       pdf_report.py, profile.py, collect.py
-services/       idp/ (JWT issuer), crypto/ (AES-256-GCM) — FastAPI, run as containers
-config/
-  bq/           BigQuery SQL, selected by BQ_SQL_FILE
-  ranger/       masking policy JSON, one file per dataset
-  datasets/     per-dataset sensitivity overrides
-docker/         Dockerfiles + Kafka init/JAAS
-scripts/        gen_certs.sh, collect_report.sh, run_chain.py
-tests/          79 tests, no Airflow import needed
-setup.sh        one-command bring-up
+  run_pipeline.py   the same stages, no Airflow
+services/       idp/ (JWT issuer + verdict signer) · crypto/ · watchdog/
+contracts/      *.schema.json + examples/
+config/         bq/ · datasets/ (contracts + overrides) · ranger/
+docker/         Dockerfiles · kafka-entrypoint.sh · kafka-init.sh · jenkins/
+scripts/        gen_certs.sh · ci/contracts_check.py · git-hooks/
+tests/          make test
+Jenkinsfile     make ci-service, then make ci-platform
 ```
 
-**How the DAG reaches the job code:** a plain Python import, not a submitted
-artifact.
-
-```python
-ROOT = Path(__file__).resolve().parents[1]
-if str(ROOT) not in sys.path:
-    sys.path.insert(0, str(ROOT))
-
-from pipeline.common.trace import stage_event, trace_from_context
-```
-
-The repo is bind-mounted into the Airflow container at `/opt/pipeline`, with
-`PYTHONPATH=/opt/pipeline` and `AIRFLOW__CORE__DAGS_FOLDER=/opt/pipeline/dags`.
-Task-level imports (`from pipeline.transform.card_split import run` *inside*
-the task function) keep DAG parse time low and stop a heavy dependency from
-breaking DAG collection.
-
-The Spark image mounts the same repo at the same path, so executors import the
-same modules the driver does — no packaging or `--py-files` step.
-
-**All paths are relative to the repo root**, derived from the file's own
-location. The checkout can live anywhere.
+**How the DAG reaches the job code:** a plain Python import. The repo is
+bind-mounted into the Airflow container at `/opt/pipeline` with
+`PYTHONPATH=/opt/pipeline`. Task-level imports keep DAG parse time low.
 
 ---
 
 ## 7. Local dev story
-
-**Everything runs on a laptop. There is no cluster-only path.**
 
 ```bash
 git clone https://github.com/mabdullah679/avapuck.git
@@ -243,44 +207,34 @@ cd avapuck
 ./setup.sh
 ```
 
-Docker is the only host prerequisite — no Python, Java, Spark or Kafka client.
-`setup.sh` checks prerequisites, generates the machine's own TLS certificates,
-starts the stack, creates Kafka topics and ACLs, runs the pipeline, and reports
-where the PDF landed. Linux, macOS and WSL2; x86_64 and arm64.
+Docker is the only host prerequisite. `setup.sh` creates `.env.local` from
+`.env.example`, generates certificates, installs the git hooks, starts the
+stack, creates topics and ACLs, runs the current slot, and reports the PDF
+and the watchdog's view.
 
-**What runs locally:** eleven long-running containers — Airflow, IdP, crypto
-service, Postgres, Kafka (KRaft, SASL + ACLs), Spark master + 2 workers, Hive
-metastore + metastore DB, HiveServer2 — plus a one-shot `kafka-init` that
-creates topics and ACLs then exits. Measured working set across a full run is
-about **4.2 GB**; caps total 13.5 GB. Give Docker 8 GB.
+**What runs locally:** fourteen containers on the `core` profile — Airflow,
+IdP, crypto, Postgres, Kafka (KRaft, SASL + ACLs), Kafka UI, watchdog, Spark
+master + 2 workers, Hive metastore + its DB, HiveServer2 — plus a one-shot
+`kafka-init`. `--profile ci` adds Jenkins; `--profile ranger` adds Ranger
+admin. Measured working set of the earlier eleven-container stack was 4.2 GB;
+the three additions are capped at 768m, 256m and 1200m. Give Docker 8 GB.
 
-**What is genuinely real locally**, verified rather than assumed:
-- Encryption runs on the Spark cluster (confirmed against the master's own
-  completed-application list, not the stage's log line).
-- Hive tables are created and queryable through HiveServer2's Tez engine.
-- Kafka enforces SASL auth and per-topic ACLs.
-- TLS certificate verification is enforced; a client without the CA fails closed.
+**Configuration:** `.env.local` and nothing else. Compose substitutes
+`${VAR:?}` for every value; a missing one fails `up` by name.
 
-**What is a stand-in locally** — full list in `TRUST-BOUNDARY.md`:
-- **Apache Ranger admin is not deployed.** Policy JSON is real Ranger format;
-  the engine applying it is local unless you start the `ranger` profile. Every
-  masked row records `masked_by` so the two are distinguishable.
-- **The IdP is a local FastAPI service** with dev client registrations.
-- **The TLS CA is self-signed** and its private key sits beside the certs it signs.
-- **Kafka is single-node**, `replication-factor 1`, SASL_PLAINTEXT
-  (authentication, not wire encryption).
-- **BigQuery is optional.** With no `GCP_PROJECT_ID` the extract stage uses an
-  offline fixture, so the full chain runs with no cloud account. Live BigQuery
-  needs a service-account key with `roles/bigquery.jobUser`; ~30 MB scanned per
-  run, about $0.0002.
+**What is genuinely real locally**, verified rather than assumed
+(`TRUST-BOUNDARY.md` §6): encryption on the Spark cluster; Hive tables
+through Tez; Kafka SASL and ACLs for `pipeline` and `consumer`; TLS
+verification enforced; the IdP signing and verifying verdicts.
 
-**Without Airflow at all:** `scripts/run_chain.py` runs the same stage
-functions in sequence. `tests/` (79 tests) imports the pipeline modules
-directly and needs no Airflow and no running stack.
+**What is a stand-in or unverified locally** — full list in
+`TRUST-BOUNDARY.md` §0 and §9: Ranger admin not deployed; the IdP is a local
+FastAPI service; the CA is self-signed; Kafka is single-node SASL_PLAINTEXT;
+BigQuery is optional; **the consumer DAG, watchdog, Kafka UI and Jenkins were
+built without Docker running and have not been exercised against the stack.**
 
-**The k8s manifests under `k8s/` are stale.** They predate TLS, the card-split
-stage, Kafka and the single-DAG consolidation. Docker Compose is the verified
-path; treat `k8s/` as a starting point, not a deployment.
+**Without Airflow at all:** `python -m pipeline.run_pipeline --slot …`.
+`make test` needs no stack.
 
 ---
 
@@ -288,8 +242,10 @@ path; treat `k8s/` as a starting point, not a deployment.
 
 | Area | Status |
 |---|---|
-| Airflow topology | `airflow standalone` + LocalExecutor. No HA, no separate workers, SQLite-free but single-process |
-| Scale | Hard-capped at 100 rows/run, enforced in SQL and asserted after. The row cap is an invariant, not a config default |
-| Repair semantics | One DAG chained by `>>`; re-running `mask` alone does **not** cascade to `load`. An earlier asset-scheduled version did — the trade is recorded in the DAG docstring |
-| Card splitting | Only ~6 digits of a 16-digit PAN end up encrypted, one of them a derivable Luhn check digit. Fine for the published test PANs used here; not for live cardholder data |
-| Secrets | Dev defaults in `docker-compose.yml` and `docker/kafka-jaas.conf`. Fine locally, unacceptable anywhere shared |
+| Airflow topology | `airflow standalone` + LocalExecutor. No HA. |
+| Scale | Hard-capped at 100 rows/run; an invariant, not a default. |
+| Repair semantics | Re-running `mask` alone does **not** cascade to `load`. Clear downstream tasks too. The asset cascade exists only at the team boundary (the consumer DAG). |
+| Verdict rule | Hive registration failing is `degraded`, not `failed`. Change it in `pipeline/verdict.py` with a test. |
+| Card splitting | ~6 digits of a 16-digit PAN encrypted. Not for live cardholder data. |
+| Secrets | Dev values in `.env.example`. Fine locally, unacceptable anywhere shared. |
+| Kubernetes | Removed. Compose is the deployment. |

@@ -10,154 +10,157 @@ Status: **STUB** (named interface, no real implementation) · **SYNTHETIC**
 (fabricated data) · **ASSUMED** (decision taken without confirmation) ·
 **UNVERIFIED** (built but not proven under real conditions)
 
-Last updated: 2026-08-30
+Last updated: 2026-09-06
 
 ---
 
-## 1. BigQuery — now live and verified
+## 0. What the 2026-09-06 platform change did and did not verify
+
+The envelope, verdict, signing, contracts, consumer DAG, watchdog, Kafka UI,
+Jenkins and single-env-file work landed in one change. **Docker was not
+running on the machine that made it.** So:
+
+| Verified | How |
+|---|---|
+| The test suite (227 tests) | `make test` on the host |
+| Both CI tiers | `make ci` on the host |
+| Both DAGs parse under Airflow 3.0.2 | imported with the pinned Airflow in the venv |
+| The Kafka and messaging providers resolve against Airflow 3.0.2 | `pip` resolution and import |
+| The IdP `/sign` endpoint and verdict verification | FastAPI test client, real RS256 keys |
+| `docker-compose.yml` renders with `.env.example` | `docker compose config` |
+
+| **UNVERIFIED** | What would verify it |
+|---|---|
+| The full stack starting with the strict env file | `./setup.sh` |
+| The Kafka entrypoint rendering JAAS and the ACLs for `ui` and `watchdog` | `kafka-init` output |
+| Kafbat UI logging in and reading `rpos_flat` and `pipeline_runs` | open <http://localhost:8090> |
+| The watchdog consuming, verifying and turning unhealthy | `curl localhost:8446/status` after a run and after 4h30m of silence |
+| The consumer DAG waking from the `MessageQueueTrigger` on a real verdict | `consumer.received_verdicts` gaining a row |
+| The per-run PDF against a live Postgres with `run_slot` | a run producing `<dataset>_report_<slot>Z.pdf` |
+| The Jenkins image building and the seeded job going green | `./setup.sh --ci` |
+| `demo/report.pdf` | still the OLD per-day layout; regenerate after a live run |
+
+Until each row above moves to the first table, describe the corresponding
+feature as **built and unit-tested, not exercised**.
+
+## 1. BigQuery — live and verified (2026-08-30)
 
 | # | Item | Status |
 |---|---|---|
-| 1.1 | **Live BigQuery extraction** | **WORKS.** Verified 2026-08-30 against `bigquery-public-data.austin_bikeshare.bikeshare_trips` with a real service-account credential. 100 rows returned, 232.00 MiB billed, job id recorded. All five DAGs run green in `EXTRACT_MODE=live`. |
-| 1.2 | Cost per run | **MEASURED, not estimated.** 232.00 MiB billed per run — matching the dry-run estimate of 231.68 MiB. ~6.8 GiB/month at one run/day, about 0.7% of the 1 TiB monthly free tier. |
-| 1.3 | **The table is NOT partitioned** | **CORRECTED ASSUMPTION.** The original design assumed a date predicate would prune partitions. It does not — there are none. Measured: `SELECT *` 252.06 MiB, 9 named columns 231.68 MiB, 9 columns **plus a date predicate** 231.68 MiB. The predicate changes the bill by exactly zero. Column selection is the only lever, and every run is a full scan. |
-| 1.4 | The cap now sits at 300 MiB, not 50 | **DELIBERATE.** The original 50 MiB cap was set against the wrong cost model and would have refused every real query. A cap below the only achievable cost is not a safety control, it is a permanent outage. 300 MiB still catches a `SELECT *` regression on a larger table. |
-| 1.5 | **The dataset is a frozen archive** | **STATED.** It ends **2024-06-30**. A daily pipeline reading "yesterday" returns zero rows forever while still being billed for the scan. The extractor therefore maps each logical date deterministically onto a day inside the archive span (2013-12-12 … 2024-06-30), so consecutive schedule days read consecutive archive days and re-runs stay idempotent. **The dates in the reports are logical, not the dates the data is from** — `window_date` on every extract result records which archive day was actually read. |
-| 1.6 | Empty results | **NOW FATAL.** An extract returning 0 rows raises rather than writing an empty CSV. Being billed for a scan that yields nothing, silently, is the worst of both outcomes. |
-| 1.7 | Column names were guessed and wrong | **FIXED.** The schema was written from memory as `bikeid`; the real column is `bike_id`. BigQuery rejected the query. The column list is now verified against the live schema, with a comment saying not to edit it from memory. |
-| 1.8 | `gcloud` CLI | **STILL DENIED** in `.claude/settings.json`, so `make secrets-bootstrap` / `make secrets-sync` have never run. Secret Manager integration remains written and unexercised. Credentials reached the pipeline via the key file instead. |
-| 1.9 | Report dates vs data dates | **KNOWN COSMETIC GAP.** The PDF header shows the logical date (e.g. 2026-08-27) while the data is from the mapped archive day (e.g. 2016-02-08). Not misleading about the numbers, but a reader would reasonably assume otherwise. The mapping is recorded in `window_date` but not yet surfaced on the page. |
+| 1.1 | **Live BigQuery extraction** | **WORKS.** Verified 2026-08-30 with a real service-account credential. 100 rows returned, bytes billed recorded, job id recorded. |
+| 1.2 | Cost per run | **MEASURED.** About 24 MiB scanned against `thelook_ecommerce`, roughly $0.0002. |
+| 1.3 | **The source table is not partitioned** | **CORRECTED ASSUMPTION.** A date predicate prunes nothing; column selection is the only lever, and every run is a full scan of the named columns. |
+| 1.4 | The byte cap is 300 MiB | **DELIBERATE.** Catches a `SELECT *` regression without refusing every real query. |
+| 1.5 | **Frozen archives** | **STATED.** The extractor maps each run slot deterministically onto a day inside `BQ_DATA_START..END`, so re-runs stay idempotent against data that never changes. |
+| 1.6 | Empty results | **FATAL.** An extract returning 0 rows raises rather than writing an empty CSV. |
+| 1.7 | Report dates vs data dates | **CLOSED (2026-09-06).** The PDF now prints the run slot, the generation time and the data window actually read, all UTC, each labelled with its source. The window is derived from the archive mapping (BigQuery), from a declared `event_time_column` (CSV), or is the run date and says so. |
+| 1.8 | `gcloud` CLI | **DENIED** in `.claude/settings.json`. The Secret Manager integration that depended on it was removed on 2026-09-06 (D12); credentials reach the pipeline via the key file and `.env.local`. |
 
 ## 2. Security
 
 | # | Item | Status |
 |---|---|---|
-| 2.1 | AES-256-GCM encryption | **WORKS.** Verified: round-trip, tamper detection, AAD field-binding, nonce uniqueness. |
-| 2.2 | **Key management** | **STUB.** The crypto service holds one master key from an env var. No KMS, no HSM, no rotation, no envelope encryption, no key hierarchy. A restart without `CRYPTO_MASTER_KEY` set generates a new key and **all prior ciphertext becomes permanently unreadable**. |
-| 2.3 | JWT auth | **WORKS.** RS256, verified by signature + issuer + audience + expiry + nbf against the IdP's JWKS. Algorithm pinned, so `alg:none` and HMAC-confusion attacks fail. Audience grants and scopes enforced. |
-| 2.4 | The IdP itself | **STUB.** A local FastAPI service with hardcoded client registrations and dev secrets in `docker-compose.yml`. Not a real identity provider — no user directory, no MFA, no revocation, no refresh tokens, no audit trail. |
-| 2.5 | **TLS** | **ENABLED, with a self-signed dev CA.** The IdP and crypto service serve HTTPS (uvicorn `--ssl-certfile`), and every client verifies against `PIPELINE_CA_BUNDLE`; `verify_tls=False` no longer appears anywhere in the tree, and a call without the CA fails closed. What is *not* production-grade: the CA is generated by `scripts/gen_certs.sh` and **its private key sits in `certs/` next to the certs it signs**, so this trust root is worth exactly as much as the laptop holding it. Certs are untrusted by any real client, expire in 825 days, and there is no rotation or revocation path. Replace `certs/*` with company-issued material for any real deployment. Traffic to Postgres, Hive and Spark is still plain TCP — only the two HTTPS services are covered. |
-| 2.6 | Blind indexes | **WORKS, with a stated tradeoff.** Deterministic HMAC-SHA256 lets Hive join on encrypted columns. Determinism *leaks equality*: anyone reading the index can tell which rows share a value, and on a low-cardinality column (`subscriber_type` has 7 values) that enables a dictionary attack. Keyed to prevent offline precomputation, and applied only to `bikeid` and `start_station_name`. |
-| 2.8 | **Card split (stage 02)** | **WORKS, with a stated and serious limit.** PANs are split into first-6 / middle / last-4; only the middle is AES-256-GCM encrypted, prefix and suffix are stored in the clear. First-6/last-4 is the maximum PCI-DSS permits in the clear, and the stage never widens it — but because the middle is ENCRYPTED rather than DISCARDED, the full PAN stays recoverable, and for a 16-digit card only **6 digits** are protected, the last of which is a Luhn check digit derivable from the rest. The effective guessing space is ~10^5: **brute-forceable offline in seconds by anyone holding the table.** This is acceptable for a demo on published test PANs (`4111…`, `5555…`) and **not acceptable for live cardholder data** — for that, discard the middle entirely and keep a separately-sealed full-PAN token. Which columns are split comes from the manifest (`TREATMENT_CARD_SPLIT`), never a column name, so a renamed or additional card column is handled identically. |
-| 2.9 | **Kafka topics** | **WORKS, and deliberately narrower than the request.** The publish stage sends each row to two topics from one producer: `rpos_encrypted` carries the sensitive fields **as ciphertext**, `rpos_flat` carries the columns that were never sensitive (price, category, status, timestamps). The requirement was phrased as "the encrypted value to one topic and the unencrypted value to the other"; **taken literally that would put real names, emails, street addresses and card numbers into a durable, replicated, retained log** — a larger exposure than the warehouse, and a direct breach of invariant 1. The client chose the narrower reading. Which columns go where comes from the manifest, and `_assert_no_plaintext_published` refuses the send if a sensitive column is ever routed to the flat topic. |
-| 2.9a | **Kafka auth (SASL) and ACLs** | **ENABLED and verified.** Both client listeners require SASL/PLAIN, the StandardAuthorizer is on, and `allow.everyone.if.no.acl.found=false` — a principal with no matching ACL gets nothing. Least privilege is real, not nominal: `pipeline` may WRITE both topics and **cannot read either** (a compromised publisher cannot drain what it feeds); `consumer` may read `rpos_flat` only. Verified by four tests: an unauthenticated client is disconnected, `pipeline` reading is refused `Not authorized`, `consumer` reads `rpos_flat` successfully, and `consumer` reading `rpos_encrypted` gets `TopicAuthorizationException`. **What is NOT production-grade:** (a) SASL_PLAINTEXT is *authentication, not encryption* — credentials are validated but message bytes travel unencrypted; wire encryption needs `SASL_SSL` and broker certs, **not done**. (b) PLAIN, not SCRAM: passwords sit in `docker/kafka-jaas.conf` as dev defaults and are readable by anything that can read the repo. (c) `User:ANONYMOUS` is a super user because the single-node controller listener is PLAINTEXT; on a multi-node cluster that listener must get its own SASL identity instead. (d) Single broker, `replication-factor 1` — no durability guarantee beyond one disk. |
-| 2.10 | **BigQuery retry and CSV fallback** | **WORKS.** The extract stage tries BigQuery `BQ_ATTEMPTS` times (default 3) and then falls back to `CSV_FALLBACK_PATH`. Retrying inside the task rather than via Airflow's task retries is deliberate — an Airflow retry re-runs the whole task, including the fallback, so there would be no way to express "three BigQuery attempts, then switch". **The fallback is never silent:** every failed attempt is logged with its exception, and the stage result records `mode`, `bq_attempts` and `fell_back_to_csv`, so the Airflow UI shows that a run did not read BigQuery. With no `CSV_FALLBACK_PATH` set, the stage re-raises rather than inventing data. |
-| 2.7 | Dev secrets in compose | **INSECURE BY DESIGN.** `docker-compose.yml` has literal fallback secrets (`dev-spark-secret` etc.) for local runs. Fine locally, unacceptable anywhere else. |
+| 2.1 | AES-256-GCM encryption | **WORKS.** Round-trip, tamper detection, AAD field-binding, nonce uniqueness verified. |
+| 2.2 | **Key management** | **STUB.** One master key from an env var. No KMS, no HSM, no rotation, no envelope encryption. A restart without `CRYPTO_MASTER_KEY` generates a new key and **all prior ciphertext becomes permanently unreadable**. The same is true of `IDP_SIGNING_KEY` for previously signed verdicts. |
+| 2.3 | JWT auth | **WORKS.** RS256, verified by signature + issuer + audience + expiry + nbf against the IdP's JWKS. Algorithm pinned. Audience grants and scopes enforced. |
+| 2.4 | The IdP itself | **STUB.** A local FastAPI service with hardcoded client registrations. No user directory, no MFA, no revocation, no refresh tokens, no audit trail. |
+| 2.5 | **TLS** | **ENABLED, self-signed dev CA.** Every client verifies against `PIPELINE_CA_BUNDLE`; `verify_tls=False` appears nowhere. The CA's private key sits in `certs/` beside the certs it signs. Postgres, Hive, Spark and Kafka traffic is plain TCP. |
+| 2.6 | Blind indexes | **WORKS, with a stated tradeoff.** Deterministic HMAC-SHA256 leaks equality; on a low-cardinality column that enables a dictionary attack. |
+| 2.7 | Dev secrets | **INSECURE BY DESIGN, in one place.** `.env.example` carries dev passwords for every service; `.env.local` is the only place a value lives; compose has no defaults (test-enforced). Change every value before anywhere shared. |
+| 2.8 | **Card split** | **WORKS, with a serious limit.** Only the middle ~6 digits of a 16-digit PAN are encrypted, one of them a Luhn check digit: brute-forceable offline in seconds. Fine for the published test PANs used here; **not for live cardholder data**. |
+| 2.9 | **Kafka topics** | **WORKS, deliberately narrower than the request.** `rpos_encrypted` carries ciphertext, `rpos_flat` carries never-sensitive columns. `_assert_no_plaintext_published` and `contracts/row_flat.schema.json` both refuse anything else. |
+| 2.9a | **Kafka auth (SASL) and ACLs** | **ENABLED, verified for `pipeline` and `consumer` (2026-09-03); UNVERIFIED for the `ui` and `watchdog` principals added 2026-09-06.** SASL_PLAINTEXT authenticates but does not encrypt the wire; PLAIN, not SCRAM; `User:ANONYMOUS` is a super user because the controller listener is PLAINTEXT; single broker, replication factor 1. |
+| 2.10 | **BigQuery retry and CSV fallback** | **WORKS.** Three attempts inside the task, then `CSV_FALLBACK_PATH`. Never silent: the stage event carries `fell_back_to_csv` and the verdict names it as a reason. |
+| 2.11 | **Signed verdicts** | **BUILT and unit-tested; UNVERIFIED against the running stack.** The orchestrator obtains a token as `orchestrator-job` (audience `idp`, scope `verdict.sign`) and the IdP returns an RS256 JWS over the payload digest; `VerdictVerifier` checks signature, issuer, audience, subject and digest. Verified end to end with the real IdP app under a test client. No key rotation: a `kid` change invalidates nothing old, because the JWKS is refetched on a `kid` miss, but there is only ever one key. |
+| 2.12 | **Envelope and dedupe** | **BUILT and unit-tested.** Two deterministic ids per message; `dedupe.accept` drops a repeated `event_id` and flags a replayed `idempotency_key`. The Postgres-backed store's SQL is tested against a fake cursor, **not a live database**. Producer idempotence (`enable_idempotence=True`) is configured, not observed under broker retries. |
 
 ## 3. Apache Ranger
 
 | # | Item | Status |
 |---|---|---|
-| 3.1 | Masking policy format | **REAL.** `config/ranger/hive_masking_policies.json` is genuine Ranger policy JSON in the shape the Ranger REST API accepts. |
-| 3.2 | **Policy enforcement** | **STUB in every run so far.** `LocalPolicyProvider` reads that JSON and applies Ranger's documented masking semantics locally. The real `RangerAdminProvider` is written and **has never been exercised** — the `ranger` compose profile has not been started (it needs Solr + a Ranger DB + several minutes of startup). Every masked row carries `masked_by = "local-policy-engine"`, which is the distinction being kept honest: query that column to see which engine ran. |
-| 3.3 | Ranger Hive plugin | **NOT INSTALLED.** Real Ranger enforces masking *at query time* inside Hive. This pipeline masks *before writing*, which is a stronger guarantee at rest but a different mechanism. A query-time policy change would not retroactively alter already-written rows. |
+| 3.1 | Masking policy format | **REAL.** Genuine Ranger policy JSON in the shape the REST API accepts. |
+| 3.2 | **Policy enforcement** | **STUB in every run so far.** `LocalPolicyProvider` applies Ranger's documented masking semantics locally. `RangerAdminProvider` is written and **has never been exercised**. Every masked row carries `masked_by` so the two are distinguishable. |
+| 3.3 | Ranger Hive plugin | **NOT INSTALLED.** This pipeline masks before writing, which is stronger at rest but a different mechanism from query-time masking. |
 
-## 4. Hive and Spark
-
-| # | Item | Status |
-|---|---|---|
-| 4.1 | Hive tables | **WORKS.** HiveServer2 4.0.0 runs against a Postgres metastore. The external table is created, `MSCK REPAIR` picks up partitions, and `SELECT` returns masked rows through Tez. Verified: 200 rows across 2 partitions. Registration is wired into the mask DAG and is **non-fatal if Hive is down**, because the Parquet is already written and correct. |
-| 4.2 | Spark | **WORKS — the Airflow container now submits to the cluster directly.** A real Spark 4.0.0 standalone cluster (1 master, 2 workers, 4 cores) runs the encrypt stage, verified by `pipeline-encrypt` applications reaching `FINISHED` in the master's own `/json/` app list — not merely by the stage's own log line. Three things had to be true and none was: the Airflow image needed a JVM (added, Java 21 — Spark 4 rejects 25); the executors needed Python matching the 3.12 driver (deadsnakes 3.12 added to the Spark image, selected via `spark.pyspark.python`, since the WORKER image's own env does not choose it); and the workers needed `/data` mounted at the same path as the driver, or the tasks die with `Mkdirs failed`. When `SPARK_MASTER_URL` is unset — or any of the above breaks — the stage falls back to pyarrow and **says so** (`engine: pyarrow`). At 100 rows Spark is genuine overhead; the fallback exists so the data path stays testable without a cluster. |
-| 4.2b | **Hive table registration** | **WORKS over JDBC.** The mask stage's output is registered as an external table in HiveServer2 and is queryable — `SELECT count(*)` returns 100 through Hive's own Tez engine. Previously this always skipped: the code checked for a `docker` binary and reported `no beeline in this container`, which was doubly wrong — there is no docker in the container, and the `beeline` on PATH is **pyspark's**, which calls `spark-class` and cannot reach HiveServer2. It now talks JDBC via jaydebeapi using the jar set copied from `apache/hive:4.0.0` (the `hive-jdbc` standalone jar alone is missing Hadoop and commons-logging classes needed at connect time). Two consequences worth knowing: schema manifests are now written as **hidden** `.…schema.json` sidecars, because Hive reads every file in a partition directory and choked on the JSON; and because `CREATE TABLE IF NOT EXISTS` never updates an existing table, registration reconciles the live schema with `ALTER TABLE ADD COLUMNS`. Hive does not backfill added columns into **pre-existing partitions** — those read NULL for a column added later, while partitions written afterwards are correct. |
-| 4.3 | Which engine ran | **RECORDED, NOT ASSUMED.** Every encrypt result carries `engine`; every masked row carries `masked_by`. Neither is inferred. |
-| 4.4 | Scale | **UNVERIFIED.** 100 rows/day. Nothing here has been run at volume, and the batched-per-column crypto calls are sized for this, not for millions of rows. |
-
-## 4b. The Airflow scheduler does not run on this host
+## 4. Hive, Spark, Airflow
 
 | # | Item | Status |
 |---|---|---|
-| 4b.1 | **`airflow scheduler` crashes on macOS** | **BLOCKED, not a pipeline defect.** Airflow 3 removed `SequentialExecutor` and silently substitutes `LocalExecutor`, which forks worker processes. On macOS a forked child that touches CoreFoundation -- which the Google auth libraries do, via keychain lookups -- dies with `SIGSEGV`. Observed 279-502 segfaults per scheduler start. `AIRFLOW__CORE__MP_START_METHOD=spawn` and `OBJC_DISABLE_INITIALIZE_FORK_SAFETY=YES` did not fix it. |
-| 4b.2 | What this means | The **DAGs are correct**: `airflow dags test <dag_id>` executes every stage successfully, and the asset wiring is registered and visible in `airflow assets list`. What cannot be demonstrated on this host is the scheduler *automatically* propagating assets between DAGs. On Linux (or Docker) the scheduler runs normally and no code changes. |
-| 4b.3 | The workaround | `scripts/run_chain.py` reproduces the asset semantics exactly -- run a stage, verify its output asset materialised, only then run the consumer -- calling the **same stage functions the DAGs call**, so there is no parallel implementation that could drift. This is what has been used to verify the chain end to end. |
-
-## 4c. Kubernetes deployment
-
-| # | Item | Status |
-|---|---|---|
-| 4c.1 | **The full chain runs in Kubernetes** | **VERIFIED 2026-08-31.** 9/9 pods Running on minikube; a Job executed all five stages *as they existed then* against live BigQuery and produced a PDF (the card-split stage was added later and has NOT been run in-cluster). Trace `trips-20260831T1200-bcee78`. 10/10 checks in `scripts/verify_cluster.sh` pass; a second run reported `0 inserted / 100 updated`, confirming idempotency in-cluster. |
-| 4c.1b | **The encrypt stage runs on the real Spark cluster** | **VERIFIED.** `k8s/jobs/21-spark-encrypt-job.yaml` submits via `spark-submit` from the Spark image and reports `ENCRYPT 100 rows via spark`. Note the default CronJob path uses the pipeline image, which has no JVM and therefore falls back to pyarrow — reported as `engine=pyarrow`, never silently. Run the Spark Job explicitly when you want the cluster path. |
-| 4c.2 | Orchestration in-cluster is a **CronJob**, not Airflow | **DELIBERATE.** The CronJob runs `scripts/run_chain.py`, which enforces the same asset semantics the DAGs do. Airflow's scheduler is unreliable on macOS (§4b) and adds a scheduler database for no gain here. The DAGs remain in `dags/` and are the reference for lineage; the CronJob is what actually runs. |
-| 4c.3 | Shared data volume is `ReadWriteMany` on **hostPath** | **WORKS ON MINIKUBE ONLY.** Stages hand work to each other through files, so RWX is required. minikube's `standard` StorageClass is hostPath and supports RWX because every pod lands on the same node. **On a multi-node cluster this breaks** — you need a real RWX backend (NFS, CephFS, EFS) or object storage. |
-| 4c.4 | **NetworkPolicy is declared but NOT enforced** | **DOCUMENTATION, not a control, on default minikube.** The default CNI ignores NetworkPolicy. Start with `--cni=calico` to make the policies real. Declared so the intent is reviewable and so they work unchanged on a real cluster. |
-| 4c.5 | **TLS in-cluster: NOT enabled** | The Compose stack now serves HTTPS (see 2.5), but the Kubernetes manifests were **not** updated to mount the CA or the server certs. In-cluster traffic is still plain HTTP, including the calls carrying plaintext to the crypto service. Porting 2.5 to k8s means a Secret for the keypair, a ConfigMap for the CA, and the same env wiring — not done. |
-| 4c.6 | Secrets are Kubernetes Secrets | **base64, not encrypted at rest** unless the cluster has encryption-at-rest configured (minikube does not). Generated at deploy time by `k8s/make-secrets.sh` and never written to a file in the repo, which is a real improvement over a committed manifest — but a cluster-admin can read them. |
-| 4c.7 | Single replica for every stateful service | Postgres, Hive metastore and the crypto service each run one pod. No HA, no failover. A node restart is an outage. |
-
-### Containerization defects found and fixed
-
-Each of these was a real failure, not a hypothetical:
-
-| Symptom | Cause |
-|---|---|
-| `spark-master` CrashLoopBackOff, `NumberFormatException` | Kubernetes injects `SPARK_MASTER_PORT=tcp://…` from the same-named Service; Spark parses it as an int. Fixed by setting the port explicitly. |
-| `ClassNotFoundException: org.postgresql.Driver` | stock `apache/hive:4.0.0` ships no Postgres JDBC driver. Baked into `docker/Dockerfile.hive.k8s`. |
-| `Read-only file system: '/opt/pipeline/data'` | code hardcoded `ROOT/data`, ignoring the mounted volume. Now honours `PIPELINE_DATA_ROOT`. |
-| `FileNotFoundError: 'docker'` | Spark and Hive stages shelled out to `docker exec`; no docker binary in a pod. Native cluster path now preferred in-cluster. |
-| `JAVA_GATEWAY_EXITED` | pyspark needs a **local JVM** even to reach a remote cluster. The Spark stage therefore runs from the Spark image, not the pipeline image. |
-| `Initial job has not accepted any resources` (forever) | `SPARK_MASTER_HOST=0.0.0.0` binds fine but is advertised verbatim, so workers register with `spark://0.0.0.0:7077` and executors cannot call home. Setting it to the Service DNS name instead causes a `BindException`, because a pod cannot bind an address it does not own. **The pod IP is the only value that is both bindable and routable**, injected via `fieldRef: status.podIP`. The same split applies to the driver: `spark.driver.bindAddress=0.0.0.0` plus `spark.driver.host=$(POD_IP)`. This one cost three deploy cycles. |
-| `Mkdirs failed to create file:/data/parquet/...` | The pipeline image runs as uid 10001 and the Spark image as uid 185 (upstream's choice). Directories created by one were not writable by the other on the shared volume. Fixed with a **shared `fsGroup: 2000`** across every pod that touches the volume — not by making it world-writable. Pre-existing directories need a one-off `chgrp` from a root pod; `make -f Makefile.k8s fix-volume-perms`. |
+| 4.1 | Hive tables | **WORKS** (verified 2026-09-03). External table over masked Parquet, `MSCK REPAIR`, queryable through Tez. Registration is non-fatal when Hive is down and the verdict reports it as degraded. Hive does not backfill added columns into pre-existing partitions. |
+| 4.2 | Spark | **WORKS** (verified 2026-09-03). The Airflow container is the driver against a real Spark 4.0.0 cluster. Three things must align (JVM in the Airflow image, executor Python 3.12, `/data` on the workers) or it degrades to pyarrow and the verdict says so. |
+| 4.3 | Which engine ran | **RECORDED, NOT ASSUMED.** `engine` and `spark_configured` on the encrypt event; `masked_by` on every row. |
+| 4.4 | Scale | **UNVERIFIED.** 100 rows/run. Nothing has been run at volume. |
+| 4.5 | Airflow topology | `airflow standalone`, LocalExecutor, one container. No HA. Fine for a laptop. |
+| 4.6 | **Event-driven consumer DAG** | **BUILT; UNVERIFIED against a broker.** Uses `AssetWatcher` + `MessageQueueTrigger` (providers `apache-kafka 1.16.0`, `common-messaging 2.0.4`, resolved against Airflow 3.0.2 by pip and imported successfully). The trigger runs `pipeline.messaging.listen.accept_verdict` in the triggerer; the message reaches the DAG as `asset_event.extra["payload"]` (confirmed in Airflow's source, not observed live). |
+| 4.7 | Kubernetes | **REMOVED 2026-09-06.** The manifests predated TLS, card split, Kafka and the single DAG and were never updated. The last commit containing them is `f7d9375`. Docker Compose is the only deployment path. |
 
 ## 5. Assumptions taken without confirmation
 
 | # | Assumption |
 |---|---|
-| 5.1 | **The build account's GCP project ID (`avapuck`) and project number (58996819807) appear in this repository's git history** and are therefore public. Neither is a credential — both are useless without IAM access — but they identify the account this was built on. A client running their own copy supplies their own `GCP_PROJECT_ID`; there is no default, so a clone with no credentials falls through to the offline fixture rather than failing against someone else's project. |
-| 5.2 | Dataset choice: `bigquery-public-data.austin_bikeshare.bikeshare_trips`. Picked for size, partition-friendliness and having genuinely maskable fields. Not requested by name. |
-| 5.3 | Which columns are "sensitive". For trips, station names and bike IDs are treated as PII/quasi-identifiers. For any other dataset this is now **inferred by heuristic** — see §7. Defensible either way, but a real classification exercise would involve a data steward. |
-| 5.4 | The warehouse serves the `analyst` group. The `data_steward` policy path exists in the Ranger config but no run has used it. |
-| 5.5 | Stages are **seven tasks in one DAG** (`trips_pipeline`), chained by `>>` and scheduled `0 */4 * * *`. An earlier version ran six separate DAGs scheduled on Airflow Assets, so a manual repair cascaded downstream on its own; that was traded for a single graph that triggers and backfills once. **The cost is real:** re-running `mask` by hand no longer makes `load` follow automatically — clear the downstream tasks too. |
-| 5.6 | The archive window mapping gives each 4-hour run its own slice. Six runs/day therefore read six different windows and produce genuinely new rows, rather than re-reading one day six times. |
+| 5.1 | The build account's GCP project id appears in git history. Not a credential; a client supplies their own `GCP_PROJECT_ID`. |
+| 5.2 | Dataset choice for the fixture (`austin_bikeshare` shape) and for live runs (`thelook_ecommerce`). Not requested by name. |
+| 5.3 | Which columns are "sensitive" is inferred by heuristic (§7) and now frozen per dataset by the contract (§10). A real classification exercise would involve a data steward. |
+| 5.4 | The warehouse serves the `analyst` group; the `data_steward` policy path exists and is unused. |
+| 5.5 | Hive registration failing is `degraded`, not `failed`, so downstream proceeds. Confirmed by the owner (D4); still an assumption about what downstream needs. |
+| 5.6 | The reference consumer uses the pipeline's own Postgres role. A real consumer gets its own. |
+| 5.7 | The watchdog's deadline is interval + 30 minutes of grace. Chosen, not measured against real run durations. |
 
 ## 6. What was actually verified
 
-**Live, end to end, on real Austin bikeshare data (2026-08-30):**
-- Real BigQuery query executed: 100 rows, 232.00 MiB billed
-- All 5 DAGs `state=success` with `EXTRACT_MODE=live`
-- Real station names and bike ids encrypted, masked, and loaded
-- No real plaintext in Parquet or Postgres — verified by direct search
+**Live, end to end, on real data (2026-08-30 and 2026-09-03):** real BigQuery
+query executed; real PII encrypted, masked and loaded; no plaintext in Parquet
+or Postgres by direct search; tampered ciphertext rejected; ciphertext moved
+between columns fails to decrypt; unauthenticated and wrong-audience requests
+refused; load idempotent (0 inserted / 100 updated); Spark cluster genuinely
+executes the encrypt stage; Hive returns masked rows via Tez; Kafka enforces
+SASL and per-topic ACLs; a dataset the pipeline had never seen ran end to end
+with its schema inferred and its policy generated.
 
-
-Stated plainly so the unverified items above are not read as covering everything:
-
-- All 6 Airflow DAGs execute to `state=success` via `airflow dags test`
-- Full chain produces CSV → Parquet → masked Parquet → Postgres → PDF
-- **No plaintext in Parquet** — asserted programmatically before every write
-- **No plaintext in Postgres** — verified by direct query
-- Tampered ciphertext is rejected (GCM authentication)
-- Ciphertext moved between columns fails to decrypt (AAD binding)
-- Unauthenticated and wrong-audience requests are refused
-- Load is idempotent: re-running a date gives 0 inserted / 100 updated
-- 54 tests pass
-- **A dataset the pipeline had never seen ran end to end**: a BLM Colorado oil
-  and gas lease export (15 columns, none in common with trips) produced
-  CSV → Parquet → masked Parquet → `warehouse.blm_co_q2_2026_oil_and_gas_lease_sale`
-  → PDF, with its schema inferred, its Ranger policy generated, and its
-  re-run giving 0 inserted / 100 updated
-- Spark cluster genuinely executes the encrypt stage (`engine: spark`)
-- Hive returns masked rows via beeline/Tez (`SELECT count(*)` = 200)
-- macOS bind-mount hazard found and fixed: `chown -R` inside a container
-  silently empties the mount view; recreating the container restores it
+**On the host, 2026-09-06:** 227 tests pass; both CI tiers pass; both DAGs
+parse under Airflow 3.0.2; compose renders with the example env. See §0 for
+what that does not cover.
 
 ## 7. Schema inference — what it is and is not
 
-The pipeline accepts arbitrary CSVs by inferring each dataset's schema,
-sensitivity and key (`pipeline/metadata/schema.py`). That inference is a
-**heuristic**, and the following are its known limits. None of them are
-hypothetical; each is a way it can be wrong in practice.
+Inference (`pipeline/metadata/schema.py`) is a heuristic. Its known limits:
 
 | # | Limitation |
 |---|---|
-| 7.1 | **Sensitivity is a guess.** Classification is by column-name pattern and value shape. A sensitive column with an opaque name (`f_7`, `code_3`) and an unremarkable value shape will be classified `public` and land **unencrypted**. Every verdict carries its reason in the manifest, and `config/datasets/<name>.json` overrides it — but nothing forces a human to look. |
-| 7.2 | **It over-classifies by design.** A `name`, `county`, or `parcel` column is treated as a quasi-identifier even when it identifies nothing. The cost is wasted crypto calls and a masked column in the report; the opposite bias would leak, which is why it errs this way. |
-| 7.3 | **Type inference reads 500 rows.** A column that is integral in the sample and free text at row 900 is typed `BIGINT`, and the load then fails on the offending row rather than silently truncating. Loud, but still a failure. |
-| 7.4 | **A synthetic key hashes the whole row.** When no unique column exists, the key is `sha256(row + logical_date)`. Two genuinely identical rows in the same run therefore collapse into one — an upsert of a row onto itself. Row *counts* can be lower than the source for datasets with true duplicates. |
-| 7.5 | **Generated Ranger policy is a starting point, not a review.** `pipeline/metadata/policy_gen.py` writes a policy the first time a dataset is seen, defaulting to `MASK_HASH`/`MASK_SHOW_LAST_4` by class. It is never regenerated, so edits survive — but the first run masks under a *guessed* policy, which is not the same as an authored one. Generated policies are marked `"_generated": true`. |
-| 7.6 | **Trips is unaffected.** Inference independently reproduces the six columns that were previously hardcoded, and the hand-authored `hive_masking_policies.json` still governs masking for `trips` — `ensure_policy` detects existing coverage and generates nothing. Verified by test. |
-| 7.7 | **A sensitive primary key is keyed on its blind index.** Keying on the plaintext would undo the encryption, so the row is keyed on the deterministic blind index instead. This is enforced by `assert_no_plaintext`, which now permits the key column only when its value is demonstrably not the plaintext. |
+| 7.1 | **Sensitivity is a guess.** A sensitive column with an opaque name and an unremarkable value shape is classified `public` and lands unencrypted. Every verdict carries its reason; `config/datasets/<name>.json` overrides it; the contract (§10) freezes it so at least it cannot change silently. |
+| 7.2 | **It over-classifies by design.** The opposite bias would leak. |
+| 7.3 | **Type inference reads 500 rows.** A later value that does not fit fails the load loudly. With the contract, a changed inferred type now fails at extract instead. |
+| 7.4 | **A synthetic key hashes the whole row.** Two identical rows collapse into one. |
+| 7.5 | **Generated Ranger policy is a starting point.** Marked `_generated`; never regenerated. |
+| 7.6 | **Trips is unaffected.** Inference reproduces the hand-authored sensitive set; verified by test. |
+| 7.7 | **A sensitive primary key is keyed on its blind index**, checked by `assert_no_plaintext`. |
 
 ## 8. Not built at all
 
-Backfill tooling · data quality framework (Great Expectations etc.) · lineage
-tracking · monitoring and alerting · CI · Kerberos for Hive · HDFS (local
-filesystem instead) · multi-tenancy · GDPR erasure workflow · report delivery
-(the PDF is written to disk and goes nowhere)
+Backfill tooling · data quality framework · lineage tracking · Prometheus /
+Alertmanager (the watchdog is the whole of monitoring) · a schema registry
+(`contracts/` is the whole of contract management) · Kafka wire encryption
+(SASL_SSL) · SCRAM · multi-broker Kafka · KMS / key rotation for the crypto
+master key and the IdP signing key · Kerberos for Hive · HDFS · multi-tenancy
+· GDPR erasure workflow · report delivery beyond the `pipeline-reports/`
+folder · GitHub status integration for Jenkins (the pre-push hook is the only
+gate) · a consumer that does anything with a verdict beyond recording it.
+
+## 9. Consumer, watchdog, UI
+
+| # | Item | Status |
+|---|---|---|
+| 9.1 | Reference consumer DAG | **BUILT, UNVERIFIED live** (4.6). Records the verdict and stops, by decision (D7). |
+| 9.2 | Watchdog | **BUILT, UNVERIFIED live.** Verifies every verdict's signature, tracks the latest slot per dataset, 503 when late or negative, webhook optional. Starts from the earliest offset so a restart replays history. Its own liveness is the compose healthcheck plus restart policy; a dead Docker host is out of scope. |
+| 9.3 | Kafbat UI | **UNVERIFIED.** `ghcr.io/kafbat/kafka-ui:v1.5.0`, read-only flag plus a read-only principal, login form. Configured from documentation, not from a run. |
+
+## 10. Contracts and CI
+
+| # | Item | Status |
+|---|---|---|
+| 10.1 | Message contracts | **WORKS** (unit-tested). Every message is validated before send and on parse. Examples validate in CI. |
+| 10.2 | Stage-event contract | **WORKS** (unit-tested). The verdict task validates every event; a malformed one yields `proceed=false` and a red task. |
+| 10.3 | Dataset contracts | **WORKS** (unit-tested). First sight writes `schema` into `config/datasets/<name>.json`; drift fails the extract. `config/datasets/trips.json` is committed from the fixture. The BLM dataset's contract is written on its next run. |
+| 10.4 | Backward-compatibility check | **NARROW BY DESIGN.** Catches removed required fields, changed types, narrowed enums and consts, walking `properties` and `allOf`. Does not reason about `oneOf`, `pattern` tightening, or `additionalProperties`. |
+| 10.5 | Jenkins | **UNVERIFIED.** Image, plugins, CasC seed and Jenkinsfile written from documentation. `make ci` on the host is verified and is the same two targets. |
+| 10.6 | Push gate | **LOCAL ONLY.** The pre-push hook is the whole gate; `SKIP_CI=1` bypasses it. No GitHub status integration. |

@@ -1,93 +1,66 @@
 ---
 name: pipeline-run
-description: Bring up the BigQuery → Spark → Hive → Postgres → PDF stack and run the pipeline end to end. Use when asked to start, run, rebuild, verify or demo this pipeline, or to check that a change still produces a PDF.
+description: Bring up the BigQuery → Spark → Kafka → Hive → Postgres → PDF stack and run the pipeline end to end. Use when asked to start, run, rebuild, verify or demo this pipeline, to check that a change still produces a PDF and a verdict, or to run the local CI.
 ---
 
 # Running this pipeline
 
-One DAG, `trips_pipeline`, eight tasks:
-`extract → card_split → encrypt → publish → mask → register → load → report`.
-Each step logs its own start, status and duration to the Airflow UI.
+One DAG, `trips_pipeline`, eight stages and a verdict:
+`extract → card_split → encrypt → publish → mask → register → load → report → emit_verdict`.
+Each step logs its own start, status and duration to the Airflow UI. The
+default path costs nothing and needs no cloud account.
 
-The default path costs nothing and needs no cloud account.
+Every `docker compose` invocation needs `--env-file .env.local`.
 
-## 1. Certificates (first time only)
-
-No private keys are committed. Generate a local CA and the two service certs:
+## 1. Bring the stack up
 
 ```bash
-./scripts/gen_certs.sh
+./setup.sh --no-run      # first time: creates .env.local, certs, hooks; builds; starts
+./setup.sh               # the same, then runs the current hour's slot
+./setup.sh --ci          # also Jenkins
 ```
 
-Refuses to overwrite; pass `--force` to regenerate (invalidates anything
-trusting the old CA).
-
-## 2. Bring the stack up
+By hand:
 
 ```bash
-docker compose --profile core up -d
+docker compose --env-file .env.local --profile core up -d --build
+docker compose --env-file .env.local --profile core ps
 ```
 
-Twelve containers (including a Kafka broker and a one-shot topic creator).
-First run builds three images and pulls Hive/Spark/Postgres/Kafka —
-allow 10–20 minutes and ≥12 GB of Docker memory. Wait for health:
+Wait until `pl-airflow`, `pl-idp`, `pl-crypto`, `pl-postgres`, `pl-kafka`,
+`pl-spark-master`, `pl-kafka-ui` and `pl-watchdog` read `healthy`. Hive has no
+healthcheck; `setup.sh` probes it with beeline.
+
+## 2. Run it
 
 ```bash
-docker compose ps          # pl-airflow, pl-idp, pl-crypto, pl-postgres,
-                           # pl-spark-master should read (healthy)
+docker exec pl-airflow airflow dags test trips_pipeline 2026-09-13T04:00:00
 ```
 
-`pl-hive-metastore` and `pl-hiveserver2` have no healthcheck; confirm with
-`nc -z 127.0.0.1 10000`.
+UTC. The slot names the PDF in `pipeline-reports/` and the verdict on
+`pipeline_runs`. To force a CSV: `-e CSV_SOURCE_PATH=/data/csv/<file>.csv`.
+For live BigQuery, set `GCP_PROJECT_ID` and `EXTRACT_MODE=live` in `.env.local`
+and put the key at `secrets/gcp-sa.json`.
 
-## 3. Run it
+## 3. Verify it actually did the work
 
-```bash
-docker exec pl-airflow airflow dags test trips_pipeline 2026-09-13
-```
-
-The PDF lands in `pipeline-reports/` on the host.
-
-**Offline (no GCP account)** — the default when `GCP_PROJECT_ID` is unset.
-To force a specific CSV:
+Degradations are reported, not hidden. Read the verdict rather than assuming:
 
 ```bash
-docker exec -e CSV_SOURCE_PATH=/data/csv/<file>.csv \
-  pl-airflow airflow dags test trips_pipeline 2026-09-13
-```
+# The verdict, and whether it arrived on time:
+curl -s http://localhost:8446/status | python3 -m json.tool
 
-**Live BigQuery** — put a service-account key (role: BigQuery Job User) at
-`secrets/gcp-sa.json`, then:
+# The message itself (Kafka UI: http://localhost:8090, topic pipeline_runs), or:
+docker exec pl-kafka /opt/kafka/bin/kafka-console-consumer.sh \
+  --bootstrap-server kafka:9092 --topic pipeline_runs --from-beginning \
+  --max-messages 1 --timeout-ms 15000 --consumer.config /tmp/admin.properties
 
-```bash
-printf 'GCP_PROJECT_ID=your-project\nEXTRACT_MODE=live\n' > .env
-docker compose --profile core up -d airflow
-```
+# The reference consumer recorded it:
+docker exec pl-postgres psql -U pipeline -d analytics -c \
+  "select dataset, run_slot, proceed, status, replay from consumer.received_verdicts order by received_at desc limit 3"
 
-~30 MB scanned per run, about $0.0002. Capped by `BQ_MAX_BYTES_BILLED`.
-
-## 4. Verify it actually did the work
-
-Several stages degrade silently but *report* it. Check, don't assume:
-
-```bash
-# Spark really ran (else engine=pyarrow):
+# Spark really ran (else the verdict says 'encrypt ran on pyarrow'):
 curl -s http://localhost:8080/json/ | grep -c pipeline-encrypt
-
-# Hive table is real and queryable:
-docker exec pl-airflow python -c "
-import os; from pathlib import Path; import jaydebeapi
-jars=sorted(str(j) for d in os.environ['HIVE_JDBC_CLASSPATH'].split(':') if d
-            for j in Path(d).glob('*.jar'))
-c=jaydebeapi.connect('org.apache.hive.jdbc.HiveDriver',
-                     'jdbc:hive2://hiveserver2:10000',['',''],jars)
-cur=c.cursor(); cur.execute('SHOW TABLES IN trips_warehouse'); print(cur.fetchall())"
-
-# Kafka got both topics (encrypted + flat). Kafka requires SASL, so every
-# client command needs a credentials file:
-docker exec pl-kafka /opt/kafka/bin/kafka-get-offsets.sh \
-  --bootstrap-server kafka:9092 --topic rpos_encrypted \
-  --command-config /etc/kafka/admin.properties
 
 # Nothing sensitive reached the warehouse:
 docker exec pl-postgres psql -U pipeline -d analytics -c "\d warehouse.<table>"
@@ -95,15 +68,14 @@ docker exec pl-postgres psql -U pipeline -d analytics -c "\d warehouse.<table>"
 
 Every column holding sensitive data must end `_masked` or `_blind_index`.
 
-## 5. Tests
+## 4. Tests and CI
 
 ```bash
-docker run --rm --entrypoint python -v "$PWD:/w" -w /w \
-  -e PIPELINE_DATA_ROOT=/w/data -e PYTHONPATH=/w \
-  avapuck-airflow -m pytest tests/ -q
+make test          # the suite; no stack needed
+make ci            # what the pre-push hook and Jenkins run
 ```
 
-63 pass. `tests/test_secret_hygiene.py` needs `git`, so run it on the host.
+`tests/test_secret_hygiene.py` needs `git`, so run on the host.
 
 ## Airflow UI
 
@@ -113,22 +85,20 @@ docker run --rm --entrypoint python -v "$PWD:/w" -w /w \
 docker exec pl-airflow cat /opt/airflow/simple_auth_manager_passwords.json.generated
 ```
 
-Regenerated whenever that file is lost — re-read it rather than assuming.
-
 ## When something fails
 
 | Symptom | Cause |
 |---|---|
-| `engine=pyarrow` in the trace | Spark unreachable — check `SPARK_MASTER_URL`, worker `/data` mount, executor Python 3.12 |
-| `registered=false` | HiveServer2 down, or the JDBC jars missing |
+| compose fails naming a variable | `.env.local` lacks it; `setup.sh` lists all missing |
+| verdict reason `encrypt ran on pyarrow` | Spark unreachable: `SPARK_MASTER_URL`, worker `/data` mount, executor Python 3.12 |
+| verdict reason `hive table not registered` | HiveServer2 down, or the JDBC jars missing |
+| verdict reason `fell back to CSV` | BigQuery failed `BQ_ATTEMPTS` times; the run used `CSV_FALLBACK_PATH` |
+| `no longer matches its contract` | the dataset changed shape; `python -m pipeline.metadata.contract accept` if intended |
 | `CERTIFICATE_VERIFY_FAILED` | `PIPELINE_CA_BUNDLE` unset, or certs regenerated without recreating containers |
 | `0 rows for window …` | `BQ_DATA_START`/`END` do not match the source table's real span |
-| `no Ranger masking policy for [...]` | A new sensitive column — policy is appended on the next run; re-run the stage |
-| `fell_back_to_csv=True` in the trace | BigQuery failed `BQ_ATTEMPTS` times; the run used `CSV_FALLBACK_PATH` and did **not** read BigQuery |
-| DAG triggered from the UI sits in `up_for_retry` | Was `KeyError: 'logical_date'` — the UI Run button does not supply it on Airflow 3, unlike `dags test`. Fixed by `logical_ts(ctx)`; if it returns, a new task is reading `ctx["logical_date"]` directly |
-| `NoBrokersAvailable` | Kafka not up, or `KAFKA_BOOTSTRAP` wrong — topics are not auto-created, so a typo fails rather than making a third topic |
-| `TopicAuthorizationException` | The principal has no ACL for that topic. `pipeline` can write but not read; `consumer` can read `rpos_flat` only. This is the design, not a fault |
-| Kafka CLI hangs then disconnects | Missing `--command-config` / `--consumer.config` — the broker requires SASL and drops unauthenticated clients |
+| watchdog unhealthy | no verdict within interval + grace, or the last one said no; `/status` says which |
+| DAG triggered from the UI sits in `up_for_retry` | a task reads `ctx["logical_date"]` directly; use `logical_ts(ctx)` |
+| `TopicAuthorizationException` | the principal has no ACL for that topic; that is the design |
 
 Failing closed is the designed behaviour in every one of these. Do not work
 around them by disabling a check.

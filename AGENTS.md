@@ -5,7 +5,9 @@ payment card numbers**. Most design decisions here exist to protect that data,
 and several look like extra work until you know why. This file is the why.
 
 Read `TRUST-BOUNDARY.md` next. It is the difference between describing this
-system accurately and overselling it.
+system accurately and overselling it. Read `docs/DECISIONS.md` for the
+reasoning behind the platform layer (envelope, verdict, contracts, watchdog,
+Jenkins, secrets).
 
 ---
 
@@ -14,37 +16,45 @@ system accurately and overselling it.
 | Read | For |
 |---|---|
 | `TRUST-BOUNDARY.md` | What is real vs. stubbed. **Never claim a stub works.** |
+| `docs/DECISIONS.md` | Every platform decision, the alternative rejected, and why |
 | `README.md` | Setup, credentials, running it |
 | `docs/ORCHESTRATION-SPEC.md` | Orchestrator, Spark submission, task graph, data handoff, local dev |
 | `docs/ARCHITECTURE.md` | Why the data flows this way |
 | `docs/EXECUTION-FLOW.md` | One run end to end, with the trace |
 | `docs/RUNBOOK.md` | Operating it, and failures actually hit |
-| `docs/AGENTS.md` | Longer-form background on the invariants |
+| `docs/CONSUMING.md` | How a downstream team reacts to a verdict |
+| `contracts/README.md` | The message and stage-event contracts, and the two CI tiers |
 
 ---
 
 ## The shape of it
 
-**One DAG, `trips_pipeline`, eight tasks:**
+**One DAG, `trips_pipeline`, eight stages and a verdict:**
 
 ```
-extract → card_split → encrypt → publish → mask → register → load → report
+extract → card_split → encrypt → publish → mask → register → load → report → emit_verdict
+                                                                              (all_done)
 ```
+
+**The stage list lives in `pipeline/stages.py`**, and both the DAG and
+`pipeline/run_pipeline.py` walk it. Add a stage there; `tests/test_stages.py`
+fails until the DAG chain matches. Do not describe the pipeline a second time
+anywhere in code.
 
 Every task brackets itself with `stage_start` / `stage_end` on the
-`airflow.task` logger, so the UI shows each step's status and duration while a
-run is in flight — not only after it finishes.
-
-Chained by `>>`; each task consumes what the previous one wrote. An earlier
-version ran six asset-scheduled DAGs — that history is in
-`docs/EXECUTION-FLOW.md`, and the trade is recorded in the DAG's docstring.
+`airflow.task` logger, and returns a **stage event** that
+`contracts/stage_event.schema.json` describes. The verdict consumes those
+events; a stage that stops reporting a field fails the contract, not the
+verdict silently.
 
 **Everything is metadata-driven.** `pipeline/metadata/schema.py` infers each
-dataset's columns, sensitivity, primary key and special treatments into a
-manifest, and every stage reads that manifest. **No stage names a column
-literally.** If you catch yourself writing `if col == "card_info"`, stop — that
-is the design leaving the building. Add it to the classifier instead, so it
-holds for any dataset.
+dataset's columns, sensitivity, primary key and treatments into a manifest;
+`pipeline/metadata/contract.py` holds later runs to it. **No stage names a
+column literally.** If you catch yourself writing `if col == "card_info"`,
+stop — add it to the classifier instead.
+
+**Every Kafka message is `{envelope, payload, signature?}`**, built and parsed
+only through `pipeline/messaging/`. Do not construct a message dict by hand.
 
 ---
 
@@ -53,92 +63,94 @@ holds for any dataset.
 ### 1. Plaintext must never land
 Sensitive values may exist in exactly two places: `data/csv/` (extract output,
 local and transient) and inside the mask task's memory between decrypt and
-mask. Everywhere else is ciphertext or masked.
-`spark_encrypt.py :: assert_no_plaintext` refuses to write otherwise.
+mask. `spark_encrypt.py :: assert_no_plaintext` refuses to write otherwise.
 **Do not weaken it to make a test pass.**
 
 ### 2. Tokens are verified, never decoded
 `pipeline/common/auth.py` pins RS256 and requires signature, issuer, audience,
-expiry, not-before. `jwt.decode(..., verify_signature=False)` is worse than no
-auth, because it looks like auth in review.
-
-Each stage has its own identity and scope: `spark-job` encrypts and **cannot
-decrypt**; `hive-job` is the reverse. Enforced by the IdP, not by convention.
+expiry, not-before. Each stage has its own identity: `spark-job` encrypts and
+**cannot decrypt**; `hive-job` is the reverse; `orchestrator-job` may sign a
+verdict and nothing else. `pipeline/messaging/signing.py :: VerdictVerifier`
+applies the same rules to verdicts, plus a payload digest check.
 
 ### 3. Masking lives in Ranger policy JSON
 `config/ranger/*.json` is real Apache Ranger policy. A sensitive column with no
-policy covering it **fails the run** rather than being written unmasked.
-Generation is authoring: a generated file is never regenerated over an edit,
-but a dataset that gains a column gets policy *appended* for the uncovered
-column only.
-
-Never express a masking rule in Python.
+policy **fails the run**. Generation is authoring: a generated file is never
+regenerated over an edit. Never express a masking rule in Python.
 
 ### 4. Cost is capped, and the cap is measured
-BigQuery bills **bytes scanned, not rows returned** — `LIMIT 100` reduces the
-bill by exactly zero. What controls cost: naming columns (never `SELECT *`)
-and `maximum_bytes_billed`, which makes BigQuery *refuse* an over-budget query.
-A custom `BQ_SQL_FILE` must reference `@row_limit`; the extractor rejects one
-that does not.
+BigQuery bills **bytes scanned, not rows returned**. Name columns, never
+`SELECT *`; `maximum_bytes_billed` makes BigQuery refuse an over-budget query.
+A custom `BQ_SQL_FILE` must reference `@row_limit`.
 
 ### 5. Nothing sensitive is published in the clear
-The `publish` stage sends ciphertext to `rpos_encrypted` and never-sensitive
-columns to `rpos_flat`. Kafka is durable, replicated and retained — plaintext
-there is a larger exposure than the warehouse ever was.
-`_assert_no_plaintext_published` refuses the send if the manifest's sensitive
-columns are ever routed to the flat topic. **Do not "simplify" that away.**
+`row.encrypted` carries ciphertext; `row.flat` carries never-sensitive
+columns. `_assert_no_plaintext_published` refuses the send otherwise, and
+`contracts/row_flat.schema.json` rejects any `_encrypted` or `_masked` key.
+**Do not "simplify" that away.**
 
 ### 6. Re-running replaces, never duplicates
-Every stage keys off the logical timestamp; the warehouse upserts on the
-manifest's key. Verify by re-running a slice and expecting `0 inserted /
-N updated`.
+Every stage keys off the run slot; the warehouse upserts on the manifest's key;
+the envelope carries `idempotency_key` (per unit of work) and `event_id` (per
+emission). A consumer drops a repeated `event_id` and upserts on the
+`idempotency_key`. That rule lives in `pipeline/messaging/dedupe.py` and
+nowhere else.
+
+### 7. The verdict is always emitted, and is the only predicate
+`emit_verdict` runs with `trigger_rule=all_done`. `pipeline/verdict.py` is
+pure and decides everything; consumers read `proceed` and nothing else. If you
+need downstream to behave differently, change that function and its tests.
+Never add a condition to a consumer.
+
+### 8. One place for every value
+`.env.local` is the single source of configuration and secrets. Never add a
+`${VAR:-default}` to `docker-compose.yml`; `tests/test_secret_hygiene.py`
+fails if you do, and also if a compose variable is missing from `.env.example`.
 
 ---
 
 ## Things that will surprise you
 
-**TLS is on, and verification is enforced.** `verify_tls=False` appears nowhere.
-A client without `certs/ca.crt` fails closed — that is correct, not a bug to
-work around. `PyJWKClient` fetches over urllib, not requests, so it needs its
-own SSL context (`_jwks_ssl_context`).
+**TLS is on, and verification is enforced.** `verify_tls=False` appears
+nowhere. A client without `certs/ca.crt` fails closed. `PyJWKClient` fetches
+over urllib, so it needs its own SSL context (`_jwks_ssl_context`).
 
-**Both fallbacks are silent by design, and reported.** The encrypt stage falls
-back to pyarrow if Spark is unreachable (`engine: pyarrow`), and Hive
-registration skips if HiveServer2 is down (`registered: false`). Both say so in
-the stage result. **Never assume which ran — read the trace.**
+**Degradations are reported, never hidden.** Spark unreachable → `engine:
+pyarrow`; HiveServer2 down → `registered: false`; BigQuery failing thrice →
+`fell_back_to_csv: true`; delivery copy failing → `collected: <reason>`. The
+verdict names each as a reason and still proceeds. **Never assume which ran —
+read the verdict.**
 
-**Spark needs three things aligned.** A JVM in the Airflow image (Java 21 —
-Spark 4 rejects 25); executor Python matching the 3.12 driver, chosen by
-`spark.pyspark.python` from the *driver* side; and `/data` mounted at the same
-path on the workers. Break any one and it silently degrades to pyarrow.
+**A dataset's first run writes its contract.** `config/datasets/<name>.json`
+gains a `schema` block; the next run whose inference disagrees stops with the
+differences listed. Accept a change with
+`python -m pipeline.metadata.contract accept <dataset> <landed csv>` and commit.
 
-**The `beeline` on PATH is pyspark's**, calls `spark-class`, and cannot reach
-HiveServer2. Hive registration talks JDBC through jaydebeapi with the jar set
-copied from `apache/hive:4.0.0`.
+**Dates are UTC everywhere.** The run slot names the PDF and the verdict. The
+data window the extract actually read is a different thing and is printed
+separately.
 
-**Schema manifests are hidden files** (`.<name>.schema.json`). Hive reads every
-file in a partition directory and chokes parsing JSON as Parquet. The leading
-dot is load-bearing.
+**Spark needs three things aligned.** A JVM in the Airflow image (Java 21);
+executor Python matching the 3.12 driver; `/data` mounted at the same path on
+the workers. Break any one and it degrades to pyarrow, reported.
 
-**Frozen-archive datasets.** `BQ_DATA_START`/`BQ_DATA_END` bound the window a
-logical date maps into, and they are a property of the *source table*. Point
-`BQ_DATASET` elsewhere without moving them and the window lands on an empty day
-— the extract then fails closed, which is correct.
+**The `beeline` on PATH is pyspark's**; Hive registration talks JDBC through
+jaydebeapi with the jar set copied from `apache/hive:4.0.0`.
+
+**Schema manifests are hidden files** (`.<name>.schema.json`) because Hive
+reads every file in a partition directory.
 
 ---
 
 ## Before you open a PR
 
 ```bash
-docker run --rm --entrypoint python -v "$PWD:/w" -w /w \
-  -e PIPELINE_DATA_ROOT=/w/data -e PYTHONPATH=/w \
-  avapuck-airflow -m pytest tests/ -q
+make ci
 ```
 
-63 tests must pass. If you added a stub or a shortcut, add it to
-`TRUST-BOUNDARY.md` **in the same change**. That file is maintained as work
-happens, not reconstructed at the end, and it is what makes this repository
-safe to hand to someone else.
+That is the pre-push hook and the Jenkins pipeline, verbatim. If you added a
+stub or a shortcut, add it to `TRUST-BOUNDARY.md` **in the same change**. If
+you took a decision that has an alternative, add it to `docs/DECISIONS.md`.
 
 ---
 
@@ -146,13 +158,14 @@ safe to hand to someone else.
 
 **True:** AES-256-GCM with the key held in a separate service. Masked under
 Ranger policy JSON. JWT verified by signature, issuer, audience and expiry.
-TLS enabled with certificate verification enforced. Encryption runs on a real
-Spark cluster. Hive tables are real and queryable.
+TLS with certificate verification enforced. Encryption on a real Spark
+cluster. Real, queryable Hive tables. A signed, always-emitted run verdict,
+with a watchdog for its absence. Machine-checked contracts on every message.
 
-**Also true, and must be said alongside it:** the TLS CA is self-signed and its
-private key sits beside the certs it signs. The Ranger *admin service* is not
-deployed — policy JSON is real, the engine applying it is local unless you
-deployed Ranger. Card splitting leaves only ~6 digits encrypted.
+**Also true, and must be said alongside it:** the TLS CA is self-signed and
+its key sits beside the certs. The Ranger admin service is not deployed. Card
+splitting leaves ~6 digits encrypted. One master key, no KMS. SASL
+authenticates Kafka but does not encrypt the wire. Single broker.
 
 **Do not say:** "production-ready", "PCI compliant", "audited". No compliance
 review has happened. See `TRUST-BOUNDARY.md`.

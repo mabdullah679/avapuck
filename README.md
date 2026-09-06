@@ -1,132 +1,30 @@
-# Trips Data Pipeline
+# avapuck
 
-A daily-batch data pipeline that pulls from a Google BigQuery public dataset,
-encrypts sensitive fields with AES-256-GCM through an HTTPS service, masks them
-under Apache Ranger policy at the Hive boundary, loads a Postgres warehouse, and
-emits a PDF report with charts.
-
-Runs on Kubernetes (minikube) or locally with Docker Compose.
+A privacy-first data platform, small enough to run on a laptop: pull 100 rows
+per run from a BigQuery public dataset (or any CSV), encrypt sensitive fields
+with AES-256-GCM through an HTTPS service, publish to Kafka, mask under Apache
+Ranger policy at the Hive boundary, load a Postgres warehouse, emit a PDF, and
+then publish one **signed verdict** that tells downstream teams whether to
+proceed.
 
 ```
-BigQuery/CSV ──▶ CSV ──▶ [card split] ──▶ [encrypt] ──▶ Parquet
-                          prefix/mid/sfx     AES-256-GCM
-                                                            │
-                                              [decrypt + mask] ──▶ Hive
-                                                                    │
-                                          PDF ◀── Postgres ◀────────┘
+BigQuery/CSV ─▶ card split ─▶ encrypt ─▶ publish ─▶ decrypt+mask ─▶ Hive ─▶ Postgres ─▶ PDF ─▶ verdict
+   plaintext,      6·enc·4    AES-256-GCM  2 topics    Ranger policy               per run     signed,
+   transient                              (envelope)                              slot, UTC   always
 ```
 
-One Airflow DAG, `trips_pipeline`, with eight tasks chained in order:
-`extract` → `card_split` → `encrypt` → `publish` → `mask` → `register` →
-`load` → `report`. Scheduled every 4 hours; each task consumes what the
-previous one wrote, and logs its own start, status and duration to the
-Airflow UI.
+One Airflow DAG, `trips_pipeline`, eight stages plus a terminal `emit_verdict`
+task that runs even when a stage failed. Every four hours. Each stage consumes
+what the one before it wrote and logs its own start, status and duration to
+the Airflow UI.
 
-`publish` sends each row to two Kafka topics from one producer:
-`rpos_encrypted` (sensitive fields as ciphertext) and `rpos_flat`
-(non-sensitive business columns). **No sensitive value is published in the
-clear** — see `TRUST-BOUNDARY.md` §2.9.
-
-Kafka requires SASL authentication and enforces per-topic ACLs: the
-`pipeline` user may write both topics and read neither; `consumer` may read
-`rpos_flat` only. Note that SASL_PLAINTEXT authenticates but does **not**
-encrypt the connection — see §2.9a.
-
-If BigQuery fails 3 times (`BQ_ATTEMPTS`), the extract stage falls back to
-`CSV_FALLBACK_PATH` rather than failing the run, and says so in the UI.
+**Read `docs/DECISIONS.md` for why it is shaped this way, and
+`TRUST-BOUNDARY.md` for what is stubbed.** Nothing in this repository should
+be described as production-ready without reading the second one.
 
 ---
 
-## ⚠️ Read this before you start
-
-**`TRUST-BOUNDARY.md` is not an appendix.** It states exactly what is
-production-grade, what is stubbed, and what has never been verified. Two
-examples that will matter to you on day one:
-
-- **TLS is enabled locally, with a self-signed dev CA.** The IdP and crypto
-  service serve real HTTPS and every client verifies against `certs/ca.crt`.
-  But the CA's private key sits in `certs/` beside the certs it signs, so this
-  trust root is worth exactly as much as the machine holding it. The Kubernetes
-  manifests were **not** updated and are still plain HTTP.
-- **Card splitting protects only ~6 digits.** See §2.8 — fine for the published
-  test PANs in the sample data, not for live cardholder data.
-- **Apache Ranger's admin service is not deployed.** Masking uses genuine Ranger
-  policy JSON, applied by a local engine implementing Ranger's semantics. Every
-  masked row records `masked_by` so you can always tell which ran.
-
-Do not present anything from this repository as production-ready without
-reading that file first.
-
----
-
-## For AI coding agents
-
-**`AGENTS.md` in the repository root is the working agreement** — invariants
-that must not be broken, the things that will surprise you, and how to describe
-this system honestly. Read it before changing anything.
-
-A `pipeline-run` skill in `.claude/skills/` covers bringing the stack up,
-running the pipeline, and verifying that Spark and Hive actually did the work
-rather than silently falling back.
-
-
-
-If you are an agent working on this repository, read these in order **before
-changing anything**:
-
-| Read | For |
-|---|---|
-| `AGENTS.md` (root) | **Start here.** Working agreement, invariants, how to describe this honestly |
-| `docs/AGENTS.md` | Longer-form background on the same invariants |
-| `TRUST-BOUNDARY.md` | What is real vs. stubbed. Never claim a stub works |
-| `docs/ORCHESTRATION-SPEC.md` | Orchestrator and version, Spark submission, task graph, data handoff, local dev story |
-| `docs/ARCHITECTURE.md` | Why the data flows this way; the security model |
-| `docs/EXECUTION-FLOW.md` | One run end to end, with the correlation-id trace |
-| `docs/RUNBOOK.md` | Operating it, and every failure we have actually hit |
-| `docs/DEPLOYMENT.md` | Kubernetes/minikube deployment, step by step |
-
-**Five invariants. Breaking any one is a defect, not a trade-off:**
-
-1. Plaintext sensitive data must never reach Parquet, Hive, Postgres, logs, or
-   the PDF.
-2. Every job authenticates with a JWT that is *verified* — signature, issuer,
-   audience, expiry — never merely decoded.
-3. Masking rules live in Ranger policy JSON. Never in transformation code.
-4. 100 rows per run, capped in SQL *and* by `maximum_bytes_billed`.
-5. Re-running a logical slice replaces its data. Never duplicates it.
-
----
-
-## Quick start — Kubernetes
-
-**Start with Docker Compose below unless you specifically need Kubernetes.**
-The Compose path is the one that has TLS enabled, runs encryption on the real
-Spark cluster, and registers real Hive tables; the k8s manifests predate all
-three (see `TRUST-BOUNDARY.md` §4c).
-
-Full detail in **`docs/DEPLOYMENT.md`**. The short version:
-
-```bash
-# 1. Prerequisites: docker, minikube, kubectl. Docker needs ≥ 20GB.
-make -f Makefile.k8s preflight
-
-# 2. Your GCP service-account key (this is the only credential you supply)
-gcloud iam service-accounts keys create secrets/gcp-sa.json \
-  --iam-account=<your-sa>@<your-project>.iam.gserviceaccount.com \
-  --project=<your-project>
-chmod 600 secrets/gcp-sa.json
-
-# 3. Bring up the cluster, build images, deploy, verify
-make -f Makefile.k8s up
-
-# 4. Run the pipeline once, now
-make -f Makefile.k8s run-now
-make -f Makefile.k8s logs
-```
-
-## Quick start — one command
-
-On a clean machine (tested on Ubuntu in a VM and on macOS):
+## Quick start
 
 ```bash
 git clone https://github.com/mabdullah679/avapuck.git
@@ -135,242 +33,198 @@ cd avapuck
 ./setup.sh
 ```
 
-`setup.sh` checks prerequisites, generates your own TLS certificates, creates
-the directories the containers bind-mount, builds and starts every service,
-creates the Kafka topics and ACLs, runs the pipeline once, and tells you where
-the PDF landed. It needs **only Docker** — no Python, Java or Kafka client on
-the host — and works on x86_64 and arm64.
+Docker with the Compose plugin is the only host prerequisite. `setup.sh`:
+
+1. creates `.env.local` from `.env.example` (dev defaults; edit it);
+2. generates a local TLS CA and the two service certificates;
+3. installs the git hooks (`pre-push` runs `make ci`; `post-commit` pokes Jenkins);
+4. builds and starts the stack, creates the Kafka topics and ACLs;
+5. runs the pipeline once for the current hour's slot, UTC;
+6. prints where the PDF landed and what the watchdog thinks.
 
 ```bash
-./setup.sh --no-run     # set up, but do not run the pipeline
-./setup.sh --rebuild    # force a rebuild of the locally-built images
-./setup.sh --down       # stop the stack, keep the data
-./setup.sh --clean      # stop the stack and delete its volumes
+./setup.sh --no-run     # set up, do not run
+./setup.sh --ci         # also start local Jenkins
+./setup.sh --rebuild    # rebuild the locally-built images
+./setup.sh --down       # stop, keep data
+./setup.sh --clean      # stop and delete volumes
 ```
 
-**Sizing:** the stack's measured working set across a full run is about
-**4.2 GB**; container caps total 13.5 GB, but a cap is a ceiling, not a
-reservation. Give Docker **8 GB** (6 GB minimum), 4 CPUs and 40 GB of disk.
-Below ~5 GB, Spark and Hive get OOM-killed mid-run and surface as a stage
-failing for no visible reason; `setup.sh` warns you before that happens.
+**Sizing.** Measured working set across a full run is about 4.7 GB; caps total
+about 15 GB. Give Docker 8 GB, 4 CPUs, 40 GB of disk. On Windows, run inside
+WSL2 from the Linux filesystem; `setup.sh` checks both.
 
-**On Windows:** run it inside WSL2 — `setup.sh` detects WSL and checks two
-things that silently ruin performance there: a repo checked out under `/mnt/c`
-(Windows filesystem, ~10× slower bind mounts) and WSL2's default memory
-allocation. It tells you exactly what to change.
+### What you get
 
-Everything below is the same thing done by hand.
-
-## Quick start — local Docker Compose
-
-This is the path to use if you just want to see the pipeline run. It works
-**without a Google Cloud account**: the CSV source path exercises every stage
-end to end using sample data in the repo.
-
-### 1. Prerequisites
-
-- Docker Desktop with **≥ 12 GB** allocated to Docker (Settings → Resources).
-  The stack runs Spark, Hive, two Postgres instances and Airflow.
-- `openssl` on your PATH (macOS and most Linux ship it).
-- No Python install needed on the host — everything runs in containers.
-
-### 2. Generate your own TLS certificates
-
-The repo does **not** ship private keys. Generate your own local CA and the
-two service certificates:
-
-```bash
-./scripts/gen_certs.sh
-```
-
-This writes `certs/{ca,idp,crypto}.{crt,key}`. The keys are gitignored. Re-run
-with `--force` to regenerate (this invalidates anything trusting the old CA).
-
-### 3. Start the stack
-
-```bash
-docker compose --profile core up -d
-```
-
-Wait for health: `docker compose ps` should show `pl-airflow`, `pl-idp`,
-`pl-crypto`, `pl-postgres` and `pl-spark-master` as `healthy`. First start
-pulls and builds images and can take several minutes.
-
-### 4. Run the pipeline end to end
-
-```bash
-docker exec pl-airflow airflow dags test trips_pipeline 2026-09-13
-```
-
-That is the whole pipeline: one DAG, seven tasks. With no GCP credentials
-configured it uses the bundled offline fixture, so this works on a fresh clone.
-
-To run it against a specific CSV instead:
-
-```bash
-CSV=/data/csv/BLM_CO_Q2_2026_Oil_and_Gas_Lease_Sale_-2400573660170243848.csv
-docker exec -e CSV_SOURCE_PATH=$CSV pl-airflow \
-  airflow dags test trips_pipeline 2026-09-13
-```
-
-The finished PDF lands in `pipeline-reports/` on your host.
-
-### 5. Open the Airflow UI (optional)
-
-<http://localhost:8085>. The generated admin password:
-
-```bash
-docker exec pl-airflow cat /opt/airflow/simple_auth_manager_passwords.json.generated
-```
-
-### 6. Verify it actually did the work
-
-Worth running, because several stages fall back silently if misconfigured:
-
-```bash
-# Encryption ran on the real Spark cluster (not the pyarrow fallback):
-curl -s http://localhost:8080/json/ | grep -o '"name":"pipeline-encrypt"' | head -1
-
-# The Hive table exists and is queryable:
-docker exec pl-airflow python -c "
-import os; from pathlib import Path; import jaydebeapi
-jars=sorted(str(j) for d in os.environ['HIVE_JDBC_CLASSPATH'].split(':') if d
-            for j in Path(d).glob('*.jar'))
-c=jaydebeapi.connect('org.apache.hive.jdbc.HiveDriver',
-                     'jdbc:hive2://hiveserver2:10000',['',''],jars)
-cur=c.cursor(); cur.execute('SHOW TABLES IN trips_warehouse'); print(cur.fetchall())"
-
-# Kafka received both topics:
-docker exec pl-kafka /opt/kafka/bin/kafka-console-consumer.sh \
-  --bootstrap-server kafka:9092 --topic rpos_flat \
-  --from-beginning --max-messages 1 --timeout-ms 15000
-
-# No plaintext card number reached the warehouse:
-docker exec pl-postgres psql -U pipeline -d analytics -t -c \
-  "select card_info_masked from warehouse.blm_co_q2_2026_oil_and_gas_lease_sale limit 3;"
-```
-
----
-
-## Credentials you must supply
-
-**Nothing sensitive is committed to this repository.** Everything below is
-generated locally or comes from your own account.
-
-| What | Where it goes | Required? | How to get it |
-|---|---|---|---|
-| **TLS CA + certs** | `certs/` | **Yes** | `./scripts/gen_certs.sh` — self-signed, local only |
-| **GCP service-account key** | `secrets/gcp-sa.json` | Only for live BigQuery | See below |
-| **GCP project id** | `GCP_PROJECT_ID` env or `.env` | Only for live BigQuery | The project **ID** string, not the number |
-| **Service secrets** | compose defaults | No | Dev fallbacks (`dev-spark-secret`, …) are fine locally, **not** anywhere shared |
-| **Postgres password** | compose default | No | `pipeline-dev-password` locally; override via `POSTGRES_PASSWORD` |
-| **Airflow admin password** | auto-generated | No | Read it from the container (step 5) |
-| **Kafka SASL users** | `docker/kafka-jaas.conf` | No | Dev defaults (`pipeline`, `consumer`, `admin`). Change all three before anywhere shared |
-
-### If you want live BigQuery
-
-1. In Google Cloud Console → **IAM & Admin → Service Accounts → Create**.
-2. Grant **BigQuery Job User** (`roles/bigquery.jobUser`). That is enough — the
-   pipeline only runs query jobs, and `bigquery-public-data` is readable by any
-   authenticated user. Do not grant broader roles than this.
-3. **Keys → Add key → JSON**, download it.
-4. Put it at `secrets/gcp-sa.json` and `chmod 600` it. That directory is
-   gitignored; **never commit this file** — it bills a real project.
-5. Set your project id and switch the extract mode:
-
-```bash
-cat > .env <<'ENV'
-GCP_PROJECT_ID=your-project-id
-GOOGLE_APPLICATION_CREDENTIALS=/secrets/gcp-sa.json
-EXTRACT_MODE=live
-ENV
-docker compose --profile core up -d airflow
-```
-
-The default live source is retail point-of-sale transactions joined to customer
-records (`bigquery-public-data.thelook_ecommerce`) — real names, emails and
-street addresses, which is what makes it a meaningful test of the encrypt and
-mask stages. ~30 MB scanned per run, about **$0.0002**.
-
-Two SQL files ship in `config/bq/`, selected with `BQ_SQL_FILE`:
-
-| File | What it adds |
+| Where | What |
 |---|---|
-| `rpos_transactions.sql` | Transactions + customer PII |
-| `rpos_transactions_cards.sql` | The same, plus a `card_info` column of **published Visa/Mastercard test PANs** — no BigQuery public dataset carries card numbers, so these are synthesised in SQL and assigned deterministically by transaction id |
+| <http://localhost:8085> | Airflow. Password: `docker exec pl-airflow cat /opt/airflow/simple_auth_manager_passwords.json.generated` |
+| <http://localhost:8090> | Kafka UI (Kafbat), read-only. Login from `KAFKA_UI_LOGIN_*` in `.env.local` |
+| <http://localhost:8446/status> | Watchdog: last verdict per dataset, healthy or not, and why |
+| <http://localhost:8080> | Spark master |
+| <http://localhost:8095> | Jenkins, with `--ci` |
+| `pipeline-reports/` | One PDF per run slot, e.g. `trips_report_20260906T0400Z.pdf` |
 
-To point at a different table entirely, set `BQ_SQL_FILE` to your own query and
-move `BQ_DATA_START`/`BQ_DATA_END` to that table's real span — the 4-hour window
-maps into that range, and a mismatch lands on an empty day. Your query **must**
-use `LIMIT @row_limit`; the extractor refuses one that does not, because the
-row cap is enforced in the SQL rather than merely asserted afterwards.
+### Run it again
 
-Cost control is already in place — 100 rows per run, capped in SQL and by
-`BQ_MAX_BYTES_BILLED` (default 300 MB) — but **you** are paying, so read
-`docs/DATASET-CHOICE.md` before pointing it at a large table.
+```bash
+docker exec pl-airflow airflow dags test trips_pipeline 2026-09-13T04:00:00
+```
 
-### Rotating or revoking
+Dates are UTC. The run slot names the PDF and the verdict; after 8pm Eastern
+the slot date is already tomorrow, which is correct.
 
-- TLS: re-run `./scripts/gen_certs.sh --force`, then
-  `docker compose --profile core up -d --force-recreate idp crypto airflow`.
-- GCP: delete the key in the Cloud Console; the file alone is the credential.
+Against a specific CSV instead of the configured source:
+
+```bash
+docker exec -e CSV_SOURCE_PATH=/data/csv/<file>.csv \
+  pl-airflow airflow dags test trips_pipeline 2026-09-13T04:00:00
+```
+
+Without Airflow at all (same stage list, same functions):
+
+```bash
+.venv/bin/python -m pipeline.run_pipeline --slot 2026-09-13T04:00Z
+```
 
 ---
 
-## What you must change for your environment
+## The five things that do not move
 
-Everything environment-specific is in **one** place. See
-`docs/DEPLOYMENT.md#configure-for-your-environment`.
+Numbered in `CLAUDE.md`; every design decision either serves one of these or
+is written down in `TRUST-BOUNDARY.md` as a known limit.
 
-| Setting | Where | Note |
+1. **Sensitive data is encrypted before it lands anywhere.** The only
+   plaintext window is inside the HTTPS crypto service. `assert_no_plaintext`
+   refuses every write that would break this.
+2. **Every job authenticates with a JWT from the IdP**, verified by signature,
+   issuer, audience and expiry, never merely decoded. The run verdict on Kafka
+   is signed the same way.
+3. **Masking policy is Apache Ranger policy JSON**, authored once, generated
+   for review when absent, never regenerated over an edit.
+4. **100 rows per run, hard-capped** in the SQL and asserted after.
+5. **Idempotent by run slot.** A re-run replaces its own partition; on Kafka
+   the envelope's idempotency key carries the same rule.
+
+---
+
+## What is in the box
+
+| Component | Where | Status |
 |---|---|---|
-| GCP project id | `k8s/base/02-config.yaml` → `GCP_PROJECT_ID` | the ID string, not the number |
-| Service-account email | same file | must hold `bigquery.jobUser` + `bigquery.dataViewer` |
-| Service-account key | `secrets/gcp-sa.json` | gitignored; never committed |
-| BigQuery dataset | same file → `BQ_DATASET` / `BQ_TABLE` | see `docs/DATASET-CHOICE.md` |
-| Byte cap | same file → `BQ_MAX_BYTES_BILLED` | **measure first**: `make -f Makefile.k8s cost` |
-| Schedule | `k8s/jobs/20-pipeline-cronjob.yaml` → `schedule` | default `0 */4 * * *` |
+| Orchestration | `dags/trips_pipeline_dag.py`, `pipeline/stages.py` | Airflow 3.0.2, one DAG. The plain runner walks the same stage list |
+| Identity | `services/idp/` | Local RS256 IdP, per-job clients and audience grants. **Stand-in** for a real IdP |
+| Encryption | `services/crypto/` | AES-256-GCM, field name as AAD, keyed blind indexes. **One master key, no KMS** |
+| Messaging | `pipeline/messaging/`, `contracts/` | Kafka with SASL and deny-by-default ACLs; platform envelope; three topics |
+| Verdict | `pipeline/verdict.py` | Pure function; always emitted; signed by the IdP |
+| Consumer | `dags/verdict_listener_dag.py` | Reference DAG, asset-scheduled on the control topic. See `docs/CONSUMING.md` |
+| Watchdog | `services/watchdog/` | Outside Airflow; unhealthy when a verdict is late or negative |
+| Masking | `config/ranger/`, `pipeline/mask/` | Real Ranger policy JSON, applied by a local engine. **Ranger admin not deployed** |
+| Data contracts | `config/datasets/`, `pipeline/metadata/contract.py` | Written once per dataset, gated on drift |
+| Warehouse | Hive 4 + Postgres 16 | External tables over masked Parquet; upsert keyed on the manifest |
+| Report | `pipeline/report/` | One PDF per run, UTC, printing the data window and the verdict's warnings |
+| CI | `Jenkinsfile`, `docker/jenkins/` | Local Jenkins, two tiers, both plain `make` targets |
+| Secrets | `.env.example` | One committed template; `.env.local` is the only place a value lives |
 
-All passwords and keys are **generated at deploy time** by `k8s/make-secrets.sh`
-and applied straight to the cluster. No secret is ever written to a file in this
-repository.
+---
+
+## Kafka
+
+Three topics, one producer, one envelope. Every message is
+`{envelope, payload, signature?}`; `contracts/` holds the schemas and
+`pipeline/messaging/` is the shared library every producer and consumer uses.
+
+| Topic | Carries | Who may read |
+|---|---|---|
+| `rpos_encrypted` | `row.encrypted`: sensitive fields **as ciphertext** plus blind indexes | nobody by default |
+| `rpos_flat` | `row.flat`: the never-sensitive business columns | `consumer`, `ui` |
+| `pipeline_runs` | `run.verdict`: one signed yes/no per run, always | `consumer`, `ui`, `watchdog` |
+
+No sensitive value is published in the clear. The requirement said "the
+encrypted value to one topic and the unencrypted value to the other"; taken
+literally that puts names, emails and card numbers into a durable, replicated
+log. The flat topic therefore carries the columns that were never sensitive,
+and the publisher refuses the send otherwise. `TRUST-BOUNDARY.md` 2.9.
+
+The `pipeline` principal writes and never reads. SASL/PLAIN authenticates;
+it does not encrypt the wire. 2.9a.
+
+---
+
+## Credentials and configuration
+
+**One file.** `.env.local` (gitignored) is the single place every value
+lives. `.env.example` (committed) lists every variable with its dev default.
+`docker-compose.yml` has no built-in defaults: a variable missing from
+`.env.local` fails `up` by name, and `setup.sh` lists all the missing ones at
+once. Wire your own secrets manager into `.env.local` however your
+organisation does it; nothing else needs to change. `docs/DECISIONS.md` D12.
+
+| What | Where | Required |
+|---|---|---|
+| Every password, secret, topic name, tuning value | `.env.local` | yes |
+| TLS CA and service certs | `certs/`, from `./scripts/gen_certs.sh` | yes, generated |
+| GCP service-account key | `secrets/gcp-sa.json` | only for live BigQuery |
+
+### Live BigQuery
+
+1. Create a service account with **BigQuery Job User** (`roles/bigquery.jobUser`).
+2. Download a JSON key to `secrets/gcp-sa.json` and `chmod 600` it. Never commit it.
+3. In `.env.local`, set `GCP_PROJECT_ID=<your project id>` and `EXTRACT_MODE=live`.
+4. `docker compose --env-file .env.local --profile core up -d airflow`
+
+The default live source is retail point-of-sale transactions joined to
+customer records (`bigquery-public-data.thelook_ecommerce`): real names,
+emails and street addresses, which is what makes it a meaningful test of the
+encrypt and mask stages. About 24 MB scanned per run, about $0.0002. Two SQL
+files ship in `config/bq/`; `rpos_transactions_cards.sql` adds a `card_info`
+column of published Visa/Mastercard test PANs. Your own query must use
+`LIMIT @row_limit`; the extractor refuses one that does not.
+
+---
+
+## Testing and CI
+
+```bash
+make test          # the suite, no stack needed
+make ci            # exactly what Jenkins and the pre-push hook run
+make ci-service    # tests + every contract example validates
+make ci-platform   # envelope embedding + backward compatibility vs main
+```
+
+`./setup.sh --ci` starts Jenkins at <http://localhost:8095>, seeded from
+`docker/jenkins/casc.yaml`, polling the repo over a read-only bind mount. It
+runs the same two targets. Nothing in this repo uses GitHub Actions.
 
 ---
 
 ## Repository layout
 
 ```
-pipeline/          the stages — extract, transform, mask, load, report
-  common/          JWT auth, correlation-id tracing
-  extract/         BigQuery client (+ an offline fixture)
-  transform/       Spark encrypt; Hive decrypt+mask
-  mask/            Ranger policy engine
-  load/            Postgres upsert
-  report/          PDF with charts
-services/          idp/ (JWT issuer) · crypto/ (AES-256-GCM)
-config/ranger/     masking policies — real Ranger policy JSON
-dags/              Airflow DAGs (asset-driven)
-k8s/               Kubernetes manifests
-  base/            namespace, quota, config, storage, network policy
-  components/      the services
-  jobs/            the 4-hourly CronJob
-docker/            Dockerfiles
-scripts/           run_chain.py, preflight and auth checks
-tests/             invariant tests — run these before you ship
-docs/              see the table above
+dags/              trips_pipeline_dag.py (the run), verdict_listener_dag.py (reference consumer)
+pipeline/
+  stages.py        THE stage list, walked by the DAG and by run_pipeline.py
+  verdict.py       the run verdict: one pure function, the heaviest tests
+  messaging/       envelope, contracts loader, dedupe, signing, trigger filter
+  metadata/        schema inference, dataset contracts, Ranger policy generation
+  extract/ transform/ mask/ load/ report/ publish/
+services/          idp/ · crypto/ · watchdog/
+contracts/         JSON Schema for every message and stage event, plus examples
+config/            bq/ SQL · datasets/ contracts + overrides · ranger/ policy JSON
+docker/            Dockerfiles, Kafka entrypoint and init, Jenkins seed
+scripts/           gen_certs.sh, ci/contracts_check.py, git-hooks/
+tests/             run them: make test
+docs/              DECISIONS, ORCHESTRATION-SPEC, ARCHITECTURE, EXECUTION-FLOW, RUNBOOK, CONSUMING
 ```
 
-## Testing
+## For AI coding agents
 
-```bash
-.venv/bin/python -m pytest tests/ -q          # 27 invariant tests
-make -f Makefile.k8s verify                   # in-cluster security checks
-```
+`AGENTS.md` in the root is the working agreement. Read it, then
+`TRUST-BOUNDARY.md`, before changing anything. A `pipeline-run` skill in
+`.claude/skills/` covers bringing the stack up and verifying it did the work.
 
-`tests/test_secret_hygiene.py` fails the suite if a credential is ever
-committed, an ignore rule is weakened, or a key file is world-readable.
+## Provenance
 
-## Licence and provenance
-
-Data is the public `bigquery-public-data.austin_bikeshare` dataset. No real
-customer data is used anywhere in this repository.
+Data is the public `bigquery-public-data` datasets named above and an
+offline fixture with the same shape. No real customer data is used anywhere
+in this repository.
