@@ -336,7 +336,7 @@ def extractor_from_env() -> BigQueryExtractor:
     if not project:
         raise RuntimeError(
             "GCP_PROJECT_ID is not set. Put the project ID (not the number) in "
-            ".env.local -- see docs/SECRETS.md.")
+            ".env.local -- see the 'Live BigQuery' section of README.md.")
     return BigQueryExtractor(
         project_id=project,
         dataset=os.environ.get("BQ_DATASET", "bigquery-public-data.austin_bikeshare"),

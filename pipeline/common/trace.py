@@ -1,20 +1,23 @@
-"""Correlation IDs — one traceable path per run, across five DAGs.
+"""Correlation IDs — one traceable path per run, across every hop.
 
-THE PROBLEM THIS SOLVES: five independently-scheduled DAGs mean five separate
-sets of logs. When a PDF looks wrong, "which BigQuery job produced these rows,
-which key version encrypted them, and which Ranger policy masked them?" has no
-answer unless the run carries an identifier that survives every hop.
+THE PROBLEM THIS SOLVES: a run touches Airflow logs, Kafka envelopes,
+warehouse rows, a PDF and a consumer's table. When a PDF looks wrong, "which
+BigQuery job produced these rows, which key version encrypted them, and which
+Ranger policy masked them?" has no answer unless the run carries an identifier
+that survives every hop.
 
-THE IDENTIFIER: derived deterministically from the logical timestamp rather
-than generated randomly. Two consequences that matter:
+THE IDENTIFIER: derived deterministically from the run slot rather than
+generated randomly. Two consequences that matter:
 
-  * A re-run of the same logical slice produces the SAME trace id, so a repair
-    is visibly the same logical unit of work rather than a new one.
-  * Any stage can compute it from its own context without being told, so it
-    survives asset-driven scheduling where stages do not talk to each other.
+  * A re-run of the same slot produces the SAME trace id, so a repair is
+    visibly the same logical unit of work rather than a new one. The Kafka
+    envelope's idempotency_key follows the same principle.
+  * Any stage, and any consumer, can compute it from the slot alone without
+    being told.
 
-Every stage stamps it on its output and logs it. The chain is then greppable
-end to end with a single string.
+Every stage stamps it on its event, every message carries it in the envelope,
+every warehouse row stores it. The chain is then greppable end to end with a
+single string.
 """
 from __future__ import annotations
 

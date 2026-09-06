@@ -1,4 +1,4 @@
-"""PDF report with charts, built from the Postgres warehouse.
+"""PDF report with charts, built from the Postgres warehouse. One per run.
 
 Every figure on the page comes from MASKED warehouse data. The report is a
 consumer of the warehouse like any other, with no privileged path back to
@@ -6,14 +6,22 @@ plaintext -- which is why a chart of "top stations" shows masked station names.
 That is the system working, not a rendering bug, and the report says so on the
 page rather than leaving the reader to wonder.
 
+DATES (docs/DECISIONS.md D13)
+The page is scoped to ONE run slot, never a whole day, so it pairs with exactly
+one verdict message. Three timestamps appear in the header and all three are
+UTC with a Z suffix: the run slot, the moment the page was generated, and the
+data window the extract actually read -- which for a frozen public archive is
+years before the run slot, and for a CSV is whatever its declared event-time
+column says. Printing the run date as if it were the data's date was the gap
+TRUST-BOUNDARY 1.9 recorded; this closes it.
+
 Charts use a validated colourblind-safe palette and label values directly, so
 the page reads correctly in greyscale and to a colourblind reader.
 """
 from __future__ import annotations
 
 import logging
-import os
-from datetime import date, datetime
+from datetime import date, datetime, timezone
 from io import BytesIO
 from pathlib import Path
 
@@ -23,9 +31,24 @@ log = logging.getLogger(__name__)
 # separation floors.
 BLUE, ORANGE, AQUA, YELLOW = "#2a78d6", "#eb6834", "#1baf7a", "#eda100"
 INK, MUTED, GRID = "#0b0b0b", "#6f6e6a", "#e6e5e1"
+STATUS_COLOUR = {"complete": "#1f7a4d", "degraded": "#a15c00", "failed": "#b23a2e"}
 
 
-def _fetch(conn, logical_date: date, dataset: str, primary_key: str) -> dict:
+def _utc(ts: datetime) -> datetime:
+    if ts.tzinfo is None:
+        return ts.replace(tzinfo=timezone.utc)
+    return ts.astimezone(timezone.utc)
+
+
+def _iso_z(ts: datetime) -> str:
+    return _utc(ts).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+def _slot_label(ts: datetime) -> str:
+    return _utc(ts).strftime("%Y%m%dT%H%MZ")
+
+
+def _fetch(conn, scope: tuple[str, object], dataset: str, primary_key: str) -> dict:
     """Collect the numbers for the page, for whatever columns this table has.
 
     The queries are built from the chart specs the profiler chose rather than
@@ -34,19 +57,17 @@ def _fetch(conn, logical_date: date, dataset: str, primary_key: str) -> dict:
     """
     from pipeline.report import profile
 
+    where, params = profile._where(scope)
     with conn.cursor() as cur:
         types = profile._column_types(cur, dataset)
         if not types:
             raise RuntimeError(
-                f"warehouse.{dataset} does not exist; run the load stage for "
-                f"{logical_date} first.")
+                f"warehouse.{dataset} does not exist; run the load stage first.")
 
-        tiles = profile.headline_metrics(cur, dataset, logical_date,
-                                         primary_key, types)
-        specs = profile.choose_charts(cur, dataset, logical_date, primary_key)
+        tiles = profile.headline_metrics(cur, dataset, scope, primary_key, types)
+        specs = profile.choose_charts(cur, dataset, scope, primary_key)
 
-        cur.execute(f"SELECT count(*) FROM warehouse.{dataset} "
-                    f"WHERE logical_date = %s", (logical_date,))
+        cur.execute(f"SELECT count(*) FROM warehouse.{dataset} WHERE {where}", params)
         count = cur.fetchone()[0]
 
         charts = []
@@ -55,28 +76,27 @@ def _fetch(conn, logical_date: date, dataset: str, primary_key: str) -> dict:
             if spec["kind"] == "by_hour":
                 cur.execute(
                     f"SELECT extract(hour from {col})::int AS hr, count(*) "
-                    f"FROM warehouse.{dataset} WHERE logical_date = %s "
-                    f"AND {col} IS NOT NULL GROUP BY hr ORDER BY hr",
-                    (logical_date,))
+                    f"FROM warehouse.{dataset} WHERE {where} "
+                    f"AND {col} IS NOT NULL GROUP BY hr ORDER BY hr", params)
                 spec["rows"] = cur.fetchall()
             elif spec["kind"] == "histogram":
                 lo, hi = spec["min"], spec["max"]
                 cur.execute(
                     f"SELECT width_bucket({col}, %s, %s, 6) AS b, count(*) "
-                    f"FROM warehouse.{dataset} WHERE logical_date = %s "
+                    f"FROM warehouse.{dataset} WHERE {where} "
                     f"AND {col} IS NOT NULL GROUP BY b ORDER BY b",
-                    (lo, hi, logical_date))
+                    (lo, hi, *params))
                 spec["rows"] = cur.fetchall()
             else:  # categories
                 cur.execute(
                     f"SELECT {col}, count(*) AS c FROM warehouse.{dataset} "
-                    f"WHERE logical_date = %s AND {col} IS NOT NULL "
-                    f"GROUP BY 1 ORDER BY c DESC LIMIT 6", (logical_date,))
+                    f"WHERE {where} AND {col} IS NOT NULL "
+                    f"GROUP BY 1 ORDER BY c DESC LIMIT 6", params)
                 spec["rows"] = cur.fetchall()
             charts.append(spec)
 
         cur.execute(f"SELECT masked_by, count(*) FROM warehouse.{dataset} "
-                    f"WHERE logical_date = %s GROUP BY 1", (logical_date,))
+                    f"WHERE {where} GROUP BY 1", params)
         provenance = cur.fetchall()
 
     return {"count": count, "tiles": tiles, "charts": charts,
@@ -114,7 +134,7 @@ def _chart_by_hour(spec) -> BytesIO:
     for h, c in zip(hours, counts):
         if c:
             ax.text(h, c, str(c), ha="center", va="bottom", fontsize=7.5, color=INK)
-    return _finish(plt, fig, ax, "hour of day")
+    return _finish(plt, fig, ax, "hour of day (UTC)")
 
 
 def _chart_histogram(spec) -> BytesIO:
@@ -168,9 +188,25 @@ _RENDERERS = {
 }
 
 
-def run(logical_date: date, out_dir: Path, conn=None,
+def _window_text(data_window: dict | None) -> str:
+    """The data window line, honest about where the dates came from."""
+    if not data_window or not data_window.get("start"):
+        return "data window: not recorded"
+    start, end, source = data_window["start"], data_window.get("end"), data_window.get("source")
+    span = start if not end or end == start else f"{start} .. {end}"
+    how = {
+        "archive_mapping": "archive window mapped from the run slot",
+        "event_time_column": "from the dataset's declared event-time column",
+        "logical_date": "the source carries no date of its own; this is the run date",
+    }.get(source, source or "unknown")
+    return f"data window: {span} ({how})"
+
+
+def run(run_slot: datetime | date, out_dir: Path, conn=None,
         dataset: str = "trips", primary_key: str = "trip_id",
-        title: str | None = None) -> dict:
+        title: str | None = None, *, trace_id: str | None = None,
+        status: str | None = None, reasons: list[str] | None = None,
+        data_window: dict | None = None) -> dict:
     from reportlab.lib import colors
     from reportlab.lib.pagesizes import A4
     from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
@@ -178,30 +214,37 @@ def run(logical_date: date, out_dir: Path, conn=None,
     from reportlab.platypus import (Image, Paragraph, SimpleDocTemplate, Spacer,
                                     Table, TableStyle)
 
+    # A bare date (a hand run) means the midnight slot of that day.
+    if not isinstance(run_slot, datetime):
+        run_slot = datetime.combine(run_slot, datetime.min.time(), tzinfo=timezone.utc)
+    run_slot = _utc(run_slot)
+    scope = ("run_slot", run_slot)
+
     owns = conn is None
     if owns:
         from pipeline.load.postgres_load import connection_from_env
         conn = connection_from_env()
     try:
-        data = _fetch(conn, logical_date, dataset, primary_key)
+        data = _fetch(conn, scope, dataset, primary_key)
     finally:
         if owns:
             conn.close()
 
     if data["count"] == 0:
         raise RuntimeError(
-            f"no rows in warehouse.{dataset} for {logical_date}; nothing to "
-            f"report. Run the load stage first.")
+            f"no rows in warehouse.{dataset} for run slot {_iso_z(run_slot)}; nothing "
+            f"to report. Run the load stage for this slot first.")
 
     out_dir.mkdir(parents=True, exist_ok=True)
-    pdf_path = out_dir / f"{dataset}_report_{logical_date.isoformat()}.pdf"
-    heading = title or f"{dataset.replace('_', ' ').title()} — Daily Report"
+    pdf_path = out_dir / f"{dataset}_report_{_slot_label(run_slot)}.pdf"
+    heading = title or f"{dataset.replace('_', ' ').title()} — Run Report"
+    generated = datetime.now(timezone.utc)
 
     styles = getSampleStyleSheet()
     h1 = ParagraphStyle("h1", parent=styles["Heading1"], fontSize=17,
                         textColor=colors.HexColor(INK), spaceAfter=2)
     sub = ParagraphStyle("sub", parent=styles["Normal"], fontSize=9,
-                         textColor=colors.HexColor(MUTED), spaceAfter=10)
+                         textColor=colors.HexColor(MUTED), spaceAfter=3)
     h2 = ParagraphStyle("h2", parent=styles["Heading2"], fontSize=11.5,
                         textColor=colors.HexColor(INK), spaceBefore=10, spaceAfter=4)
     body = ParagraphStyle("body", parent=styles["Normal"], fontSize=8.6,
@@ -210,13 +253,16 @@ def run(logical_date: date, out_dir: Path, conn=None,
     doc = SimpleDocTemplate(str(pdf_path), pagesize=A4,
                             leftMargin=18 * mm, rightMargin=18 * mm,
                             topMargin=16 * mm, bottomMargin=16 * mm,
-                            title=f"{dataset} report {logical_date}")
+                            title=f"{dataset} report {_iso_z(run_slot)}")
     story = [
         Paragraph(heading, h1),
         Paragraph(
-            f"Reporting date {logical_date.isoformat()} &nbsp;·&nbsp; "
-            f"generated {datetime.now().strftime('%Y-%m-%d %H:%M')} &nbsp;·&nbsp; "
-            f"source: masked warehouse", sub),
+            f"Run slot {_iso_z(run_slot)} &nbsp;·&nbsp; "
+            f"generated {_iso_z(generated)} &nbsp;·&nbsp; "
+            f"source: masked warehouse &nbsp;·&nbsp; all times UTC", sub),
+        Paragraph(_window_text(data_window)
+                  + (f" &nbsp;·&nbsp; trace {trace_id}" if trace_id else ""), sub),
+        Spacer(1, 6),
     ]
 
     tiles = [[f"{value}\n{label}" for value, label in data["tiles"]]]
@@ -238,6 +284,18 @@ def run(logical_date: date, out_dir: Path, conn=None,
         story += [Paragraph(spec["title"], h2),
                   Image(render(spec), width=170 * mm, height=height * mm)]
 
+    # ── Run status: the same verdict downstream receives, in words ──
+    if status:
+        colour = STATUS_COLOUR.get(status, MUTED)
+        status_line = (f"<font color='{colour}'><b>{status.upper()}</b></font> as of the "
+                       f"report stage. The signed verdict on the control topic is computed "
+                       f"after this page is filed and adds the report itself.")
+        story += [Paragraph("Run status", h2), Paragraph(status_line, body)]
+        for r in (reasons or []):
+            story.append(Paragraph(f"&bull; {r}", body))
+        if not reasons:
+            story.append(Paragraph("No degradations recorded.", body))
+
     masked_by = ", ".join(f"{m} ({c})" for m, c in data["provenance"]) or "n/a"
     masked_cols = [s["column"] for s in data["charts"]
                    if s["column"].endswith("_masked")]
@@ -258,4 +316,5 @@ def run(logical_date: date, out_dir: Path, conn=None,
 
     doc.build(story)
     log.info("wrote %s", pdf_path)
-    return {"pdf_path": str(pdf_path), "rows": data["count"]}
+    return {"pdf_path": str(pdf_path), "rows": data["count"],
+            "run_slot": _iso_z(run_slot), "generated_at": _iso_z(generated)}

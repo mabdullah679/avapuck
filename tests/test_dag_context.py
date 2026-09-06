@@ -21,9 +21,9 @@ def _logical_ts():
     """Import the helper without importing Airflow itself."""
     import importlib.util
     src = (ROOT / "dags" / "trips_pipeline_dag.py").read_text()
-    start = src.index("def logical_ts(ctx: dict):")
-    end = src.index("def _crypto(", start)
-    ns = {}
+    start = src.index("def logical_ts(ctx: dict) -> datetime:")
+    end = src.index("def run_env(", start)
+    ns = {"datetime": datetime, "timezone": timezone}
     exec(compile(src[start:end], "logical_ts", "exec"), ns)
     return ns["logical_ts"]
 

@@ -1,40 +1,17 @@
 -- Warehouse schema. Created at container init.
 --
 -- Design notes that matter:
---   * The natural key is (trip_id), and the load is an UPSERT keyed on it, so
---     re-running a logical date replaces rather than duplicates. Idempotency
---     is a property of the schema, not of the loader remembering to be careful.
+--   * Dataset tables are created at runtime by pipeline/load/postgres_load.py
+--     from each dataset's manifest, held to its contract. Only the shared
+--     tables live here.
+--   * Every load is an UPSERT keyed on the manifest's primary key, so
+--     re-running a slot replaces rather than duplicates. Idempotency is a
+--     property of the schema, not of the loader remembering to be careful.
 --   * Sensitive columns hold MASKED values. Plaintext PII never lands here.
---   * blind_index columns allow equality joins on values we cannot read.
+--   * Every row records the run_slot that loaded it, so the per-run PDF and
+--     the verdict refer to exactly one run (docs/DECISIONS.md D13).
 
 CREATE SCHEMA IF NOT EXISTS warehouse;
-
-CREATE TABLE IF NOT EXISTS warehouse.trips (
-    trip_id              TEXT PRIMARY KEY,
-    logical_date         DATE NOT NULL,
-
-    -- masked, per Ranger policy
-    bike_id_masked        TEXT,
-    subscriber_type_masked TEXT,
-    start_station_masked TEXT,
-    end_station_masked   TEXT,
-
-    -- deterministic handles for joins on unreadable values
-    bike_id_blind_index   TEXT,
-    start_station_blind_index TEXT,
-
-    -- non-sensitive, clear
-    start_time           TIMESTAMPTZ NOT NULL,
-    duration_minutes     INTEGER NOT NULL CHECK (duration_minutes > 0),
-
-    -- provenance: which policy engine masked this, and when
-    masked_by            TEXT NOT NULL,
-    loaded_at            TIMESTAMPTZ NOT NULL DEFAULT now()
-);
-
-CREATE INDEX IF NOT EXISTS idx_trips_logical_date ON warehouse.trips (logical_date);
-CREATE INDEX IF NOT EXISTS idx_trips_start_time   ON warehouse.trips (start_time);
-CREATE INDEX IF NOT EXISTS idx_trips_bike_id_bi    ON warehouse.trips (bike_id_blind_index);
 
 -- Per-run audit. Every load records what it did, so a re-run is traceable.
 CREATE TABLE IF NOT EXISTS warehouse.load_audit (
@@ -47,7 +24,42 @@ CREATE TABLE IF NOT EXISTS warehouse.load_audit (
     extract_mode     TEXT NOT NULL,
     masked_by        TEXT NOT NULL,
     started_at       TIMESTAMPTZ NOT NULL,
-    finished_at      TIMESTAMPTZ NOT NULL
+    finished_at      TIMESTAMPTZ NOT NULL,
+    run_slot         TIMESTAMPTZ,
+    trace_id         TEXT,
+    dataset          TEXT
 );
 
 CREATE INDEX IF NOT EXISTS idx_audit_logical_date ON warehouse.load_audit (logical_date);
+CREATE INDEX IF NOT EXISTS idx_audit_run_slot     ON warehouse.load_audit (run_slot);
+
+-- ── Consumer side ─────────────────────────────────────────────────────────
+-- The reference consumer DAG (dags/verdict_listener_dag.py) records the
+-- verdicts it accepted. Its dedupe ledger is created by the shared library
+-- (pipeline/messaging/dedupe.py) so every consumer's ledger has one shape.
+-- Same database user as the pipeline for the demo; a real consumer gets its
+-- own role. TRUST-BOUNDARY §9.
+CREATE SCHEMA IF NOT EXISTS consumer;
+
+CREATE TABLE IF NOT EXISTS consumer.consumed_events (
+    consumer         TEXT NOT NULL,
+    event_id         TEXT NOT NULL,
+    idempotency_key  TEXT NOT NULL,
+    consumed_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
+    PRIMARY KEY (consumer, event_id)
+);
+CREATE INDEX IF NOT EXISTS idx_consumed_unit ON consumer.consumed_events (consumer, idempotency_key);
+
+CREATE TABLE IF NOT EXISTS consumer.received_verdicts (
+    idempotency_key TEXT PRIMARY KEY,
+    event_id        TEXT NOT NULL,
+    dataset         TEXT NOT NULL,
+    run_slot        TIMESTAMPTZ NOT NULL,
+    trace_id        TEXT NOT NULL,
+    proceed         BOOLEAN NOT NULL,
+    status          TEXT NOT NULL,
+    reasons         TEXT[] NOT NULL,
+    signed_by       TEXT NOT NULL,
+    replay          BOOLEAN NOT NULL,
+    received_at     TIMESTAMPTZ NOT NULL DEFAULT now()
+);

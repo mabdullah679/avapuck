@@ -19,6 +19,12 @@ dataset gets the equivalent treatment for its own columns.
 
 Columns are capped and ranked so a 40-column export produces a readable page
 rather than 40 charts.
+
+SCOPE
+=====
+Every query is restricted to one run: `scope` is a (column, value) pair,
+normally ("run_slot", <timestamp>). The report is per run, not per day
+(docs/DECISIONS.md D13); the profiler does not know or care which.
 """
 from __future__ import annotations
 
@@ -55,18 +61,26 @@ def _is_timestamp(pg_type: str) -> bool:
 
 # Columns that describe the pipeline rather than the data. Charting them tells
 # the reader nothing about the dataset.
-_STRUCTURAL = {"logical_date", "loaded_at", "masked_by", "row_hash"}
+_STRUCTURAL = {"logical_date", "loaded_at", "masked_by", "row_hash", "run_slot", "trace_id"}
 
 
-def choose_charts(cur, dataset: str, logical_date, primary_key: str) -> list[dict]:
+def _where(scope: tuple[str, object]) -> tuple[str, tuple]:
+    col, value = scope
+    if col not in ("run_slot", "logical_date"):
+        raise ValueError(f"unsupported scope column {col!r}")
+    return f"{col} = %s", (value,)
+
+
+def choose_charts(cur, dataset: str, scope: tuple[str, object], primary_key: str) -> list[dict]:
     """Pick up to MAX_CHARTS specs, each a dict the renderer knows how to draw.
 
     Runs one cheap probe per candidate column rather than reasoning from the
     manifest alone, because what matters is the distribution actually present
-    for THIS date -- a column that is entirely null today cannot be charted
+    for THIS run -- a column that is entirely null today cannot be charted
     however promising its type looks.
     """
     types = _column_types(cur, dataset)
+    where, params = _where(scope)
     specs: list[dict] = []
 
     numeric, categorical, temporal = [], [], []
@@ -88,7 +102,7 @@ def choose_charts(cur, dataset: str, logical_date, primary_key: str) -> list[dic
     for col in temporal:
         cur.execute(
             f"SELECT count(*) FROM warehouse.{dataset} "
-            f"WHERE logical_date = %s AND {col} IS NOT NULL", (logical_date,))
+            f"WHERE {where} AND {col} IS NOT NULL", params)
         if cur.fetchone()[0] > 0:
             specs.append({"kind": "by_hour", "column": col,
                           "title": f"Records by hour of {_label(col)}"})
@@ -97,7 +111,7 @@ def choose_charts(cur, dataset: str, logical_date, primary_key: str) -> list[dic
     for col in numeric:
         cur.execute(
             f"SELECT count({col}), min({col}), max({col}) "
-            f"FROM warehouse.{dataset} WHERE logical_date = %s", (logical_date,))
+            f"FROM warehouse.{dataset} WHERE {where}", params)
         n, lo, hi = cur.fetchone()
         # A column with a single value has no distribution to show.
         if n and lo is not None and hi is not None and hi > lo:
@@ -115,7 +129,7 @@ def choose_charts(cur, dataset: str, logical_date, primary_key: str) -> list[dic
     for col in categorical:
         cur.execute(
             f"SELECT count(DISTINCT {col}) FROM warehouse.{dataset} "
-            f"WHERE logical_date = %s AND {col} IS NOT NULL", (logical_date,))
+            f"WHERE {where} AND {col} IS NOT NULL", params)
         distinct = cur.fetchone()[0]
         if MIN_CATEGORY_VALUES <= distinct <= MAX_CATEGORY_VALUES:
             ranked.append((distinct, col))
@@ -137,7 +151,7 @@ def _label(column: str) -> str:
     return column.replace("_", " ")
 
 
-def headline_metrics(cur, dataset: str, logical_date, primary_key: str,
+def headline_metrics(cur, dataset: str, scope: tuple[str, object], primary_key: str,
                      types: dict[str, str] | None = None) -> list[tuple[str, str]]:
     """The tiles across the top: row count, plus stats for one numeric column.
 
@@ -145,9 +159,9 @@ def headline_metrics(cur, dataset: str, logical_date, primary_key: str,
     a legitimate outcome for a dataset of codes and labels.
     """
     types = types if types is not None else _column_types(cur, dataset)
+    where, params = _where(scope)
 
-    cur.execute(f"SELECT count(*) FROM warehouse.{dataset} "
-                f"WHERE logical_date = %s", (logical_date,))
+    cur.execute(f"SELECT count(*) FROM warehouse.{dataset} WHERE {where}", params)
     tiles = [(f"{cur.fetchone()[0]:,}", "RECORDS")]
 
     for col, pg_type in sorted(types.items()):
@@ -158,7 +172,7 @@ def headline_metrics(cur, dataset: str, logical_date, primary_key: str,
         cur.execute(
             f"SELECT round(avg({col})::numeric, 1), round(max({col})::numeric, 1), "
             f"       round(sum({col})::numeric, 1) "
-            f"FROM warehouse.{dataset} WHERE logical_date = %s", (logical_date,))
+            f"FROM warehouse.{dataset} WHERE {where}", params)
         avg, mx, total_v = cur.fetchone()
         if avg is None:
             continue

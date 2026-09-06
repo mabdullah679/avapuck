@@ -1,0 +1,75 @@
+{
+  "schema": {
+    "_generated": true,
+    "primary_key": "trip_id",
+    "key_is_synthetic": false,
+    "columns": {
+      "trip_id": {
+        "source_name": "trip_id",
+        "sql_type": "TEXT",
+        "sensitivity": "public",
+        "treatment": ""
+      },
+      "bike_id": {
+        "source_name": "bike_id",
+        "sql_type": "BIGINT",
+        "sensitivity": "quasi_identifier",
+        "treatment": ""
+      },
+      "subscriber_type": {
+        "source_name": "subscriber_type",
+        "sql_type": "TEXT",
+        "sensitivity": "quasi_identifier",
+        "treatment": ""
+      },
+      "start_station_id": {
+        "source_name": "start_station_id",
+        "sql_type": "BIGINT",
+        "sensitivity": "quasi_identifier",
+        "treatment": ""
+      },
+      "start_station_name": {
+        "source_name": "start_station_name",
+        "sql_type": "TEXT",
+        "sensitivity": "quasi_identifier",
+        "treatment": ""
+      },
+      "end_station_id": {
+        "source_name": "end_station_id",
+        "sql_type": "BIGINT",
+        "sensitivity": "quasi_identifier",
+        "treatment": ""
+      },
+      "end_station_name": {
+        "source_name": "end_station_name",
+        "sql_type": "TEXT",
+        "sensitivity": "quasi_identifier",
+        "treatment": ""
+      },
+      "start_time": {
+        "source_name": "start_time",
+        "sql_type": "TIMESTAMP",
+        "sensitivity": "public",
+        "treatment": ""
+      },
+      "duration_minutes": {
+        "source_name": "duration_minutes",
+        "sql_type": "BIGINT",
+        "sensitivity": "public",
+        "treatment": ""
+      }
+    }
+  },
+  "_comment": [
+    "Data contract for dataset 'trips'.",
+    "",
+    "The `schema` block was GENERATED from inference the first time this",
+    "dataset was seen and is never regenerated. A later run whose inferred",
+    "schema differs FAILS naming the difference. To accept a change, edit",
+    "this block (or run `python -m pipeline.metadata.contract accept`) and",
+    "commit. `columns` above/below are sensitivity overrides fed INTO",
+    "inference; `schema` is what inference produced. Optional:",
+    "`event_time_column` names the column the PDF's data window is read from."
+  ],
+  "event_time_column": "start_time"
+}
