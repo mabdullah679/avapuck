@@ -24,7 +24,10 @@
           "fell_back_to_csv": {"type": "boolean"},
           "window_date": {"type": "string"},
           "window_end": {"type": "string"},
-          "window_source": {"type": "string", "enum": ["archive_mapping", "event_time_column", "logical_date"]}
+          "window_source": {"type": "string", "enum": ["archive_mapping", "event_time_column", "logical_date"]},
+          "source": {"type": "string", "enum": ["configured", "upload"], "description": "upload: a file from the console, uncapped by default."},
+          "source_file": {"type": ["string", "null"]},
+          "row_limit": {"type": ["integer", "null"], "description": "For uploads: 0 means uncapped."}
         }
       }
     },

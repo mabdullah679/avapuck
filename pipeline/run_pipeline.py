@@ -52,17 +52,25 @@ def main(argv=None) -> int:
     ap.add_argument("--date", dest="slot_alias", help=argparse.SUPPRESS)  # old spelling
     ap.add_argument("--stage", default="all", choices=["all", *stages.STAGE_NAMES],
                     help="run one stage instead of the whole chain")
-    ap.add_argument("--csv", help="ingest this CSV instead of the configured "
-                                  "extractor (sets CSV_SOURCE_PATH)")
+    ap.add_argument("--csv", help="ingest this CSV instead of the configured extractor, "
+                                  "uncapped, exactly as a console upload would")
+    ap.add_argument("--dataset", help="dataset name for --csv (default: derived from the file name)")
+    ap.add_argument("--row-limit", type=int, default=0,
+                    help="cap for --csv; 0 = uncapped (default)")
     ap.add_argument("--no-verdict", action="store_true",
                     help="do not publish the run verdict to Kafka")
     ap.add_argument("--run-id", help="identifier for this emission (default: manual__<slot>)")
     args = ap.parse_args(argv)
 
+    conf = {}
     if args.csv:
-        os.environ["CSV_SOURCE_PATH"] = args.csv
+        conf = {"csv_path": str(Path(args.csv).resolve()), "row_limit": args.row_limit,
+                "source": "upload"}
+        if args.dataset:
+            conf["dataset"] = args.dataset
 
-    env = stages.RunEnv.build(DATA, parse_slot(args.slot or args.slot_alias), run_id=args.run_id)
+    env = stages.RunEnv.build(DATA, parse_slot(args.slot or args.slot_alias),
+                              run_id=args.run_id, conf=conf)
     log.info("run slot %s  trace %s  run_id %s", env.run_slot.isoformat(), env.trace_id, env.run_id)
 
     events: dict[str, dict | None] = {}

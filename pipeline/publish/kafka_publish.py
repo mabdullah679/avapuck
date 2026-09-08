@@ -134,20 +134,22 @@ def _jsonable(row: dict) -> dict:
 
 def publish_rows(ctx: RunContext, parquet_path: Path | str, publisher: Publisher | None = None,
                  topics: dict[str, str] | None = None) -> dict:
-    """Publish every row of the encrypted Parquet as row.encrypted + row.flat."""
-    import pyarrow.parquet as pq
+    """Publish every row of the encrypted Parquet as row.encrypted + row.flat.
+
+    Streams the file in chunks (docs/DECISIONS.md D16): an uncapped upload is
+    millions of rows and every one of them is published, by decision.
+    """
+    from pipeline.common.batching import iter_parquet_batches, parquet_columns
 
     parquet_path = Path(parquet_path)
     manifest = schema_mod.load_manifest(parquet_path)
-    table = pq.read_table(parquet_path)
-    rows = table.to_pylist()
     topics = topics or topics_from_env()
     key_col = manifest.primary_key
 
     # The encrypt stage renames a sensitive column `x` to `x_encrypted` (and
     # adds `x_blind_index` where it applies), so resolve against the FILE
     # rather than assuming the manifest's names survived unchanged.
-    present = set(table.column_names)
+    present = set(parquet_columns(parquet_path))
     enc_cols = [c for c in present if c.endswith(("_encrypted", "_blind_index"))]
     pub_cols = [c for c in manifest.public_columns if c in present]
     _assert_no_plaintext_published(manifest, pub_cols)
@@ -160,20 +162,24 @@ def publish_rows(ctx: RunContext, parquet_path: Path | str, publisher: Publisher
     pub = publisher or Publisher(bootstrap)
     sent = 0
     with pub as p:
-        for r in rows:
-            key = r.get(key_col)
-            common = dict(dataset=manifest.dataset, run_slot=ctx.run_slot,
-                          trace_id=ctx.trace_id, run_id=ctx.run_id,
-                          try_number=ctx.try_number, key=key, producer=ctx.producer)
-            p.send(topics["encrypted"], key,
-                   env_mod.build(event_type=env_mod.EVENT_ROW_ENCRYPTED,
-                                 payload=_jsonable({c: r.get(c) for c in enc_cols}),
-                                 **common))
-            p.send(topics["public"], key,
-                   env_mod.build(event_type=env_mod.EVENT_ROW_FLAT,
-                                 payload=_jsonable({c: r.get(c) for c in pub_cols}),
-                                 **common))
-            sent += 1
+        for chunk in iter_parquet_batches(parquet_path):
+            for r in chunk:
+                key = r.get(key_col)
+                common = dict(dataset=manifest.dataset, run_slot=ctx.run_slot,
+                              trace_id=ctx.trace_id, run_id=ctx.run_id,
+                              try_number=ctx.try_number, key=key, producer=ctx.producer)
+                p.send(topics["encrypted"], key,
+                       env_mod.build(event_type=env_mod.EVENT_ROW_ENCRYPTED,
+                                     payload=_jsonable({c: r.get(c) for c in enc_cols}),
+                                     **common))
+                p.send(topics["public"], key,
+                       env_mod.build(event_type=env_mod.EVENT_ROW_FLAT,
+                                     payload=_jsonable({c: r.get(c) for c in pub_cols}),
+                                     **common))
+                sent += 1
+            # Let the producer drain between chunks so a large run never holds
+            # more than one chunk's worth of unsent messages in memory.
+            p.flush()
 
     log.info("published %d rows to %s and %s", sent, topics["encrypted"], topics["public"])
     return {"dataset": manifest.dataset, "rows": sent,

@@ -16,7 +16,8 @@ from __future__ import annotations
 
 import logging
 import os
-from dataclasses import dataclass
+from contextlib import contextmanager
+from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -49,6 +50,9 @@ class RunEnv:
     run_id: str                 # Airflow dag_run.run_id, or a caller-supplied id
     try_number: int = 1
     pipeline: str = "trips"
+    # Per-run parameters: the DAG run's conf (an upload from the console), or
+    # the runner's flags. Keys: csv_path, dataset, row_limit, source.
+    conf: dict = field(default_factory=dict)
 
     @property
     def trace_id(self) -> str:
@@ -58,15 +62,50 @@ class RunEnv:
     def date(self):
         return self.run_slot.date()
 
+    @property
+    def is_upload(self) -> bool:
+        return bool(self.conf.get("csv_path"))
+
     @classmethod
     def build(cls, data_root: Path, run_slot: datetime, run_id: str | None = None,
-              try_number: int = 1) -> "RunEnv":
+              try_number: int = 1, conf: dict | None = None) -> "RunEnv":
         if run_slot.tzinfo is None:
             run_slot = run_slot.replace(tzinfo=timezone.utc)
         run_slot = run_slot.astimezone(timezone.utc)
         return cls(data_root=Path(data_root), run_slot=run_slot,
                    run_id=run_id or f"manual__{run_slot.isoformat()}",
-                   try_number=try_number)
+                   try_number=try_number, conf=dict(conf or {}))
+
+
+@contextmanager
+def _source_from_conf(conf: dict):
+    """Point the extractor at an uploaded file for the duration of one stage.
+
+    The extractors are configured by environment (CSV_SOURCE_PATH wins over
+    everything, including EXTRACT_MODE=live). A DAG run's conf carries the
+    upload, so it is translated into that environment here and restored
+    afterwards -- one place, rather than every extractor learning about conf.
+    Uploads are uncapped unless the conf says otherwise (D16).
+    """
+    if not conf.get("csv_path"):
+        yield
+        return
+    overrides = {
+        "CSV_SOURCE_PATH": str(conf["csv_path"]),
+        "CSV_ROW_LIMIT": str(int(conf.get("row_limit") or 0)),
+    }
+    if conf.get("dataset"):
+        overrides["DATASET_NAME"] = str(conf["dataset"])
+    saved = {k: os.environ.get(k) for k in overrides}
+    os.environ.update(overrides)
+    try:
+        yield
+    finally:
+        for k, v in saved.items():
+            if v is None:
+                os.environ.pop(k, None)
+            else:
+                os.environ[k] = v
 
 
 # ── Helpers the stages share ──────────────────────────────────────────────
@@ -116,7 +155,8 @@ def extract(env: RunEnv, events: dict) -> dict:
     from pipeline.metadata import contract as contract_mod
     from pipeline.metadata import schema as schema_mod
 
-    r, ex, attempts, fell_back = extract_with_fallback(env.run_slot, env.data_root / "csv", log)
+    with _source_from_conf(env.conf):
+        r, ex, attempts, fell_back = extract_with_fallback(env.run_slot, env.data_root / "csv", log)
 
     csv_path = Path(r.csv_path)
     manifest = schema_mod.load_manifest(csv_path)
@@ -138,6 +178,9 @@ def extract(env: RunEnv, events: dict) -> dict:
         window_source=source, bytes_billed=r.bytes_billed, bq_job_id=r.query_id,
         csv=r.csv_path, dataset=manifest.dataset,
         contract=str(check.path), contract_created=check.created,
+        source="upload" if env.is_upload else "configured",
+        source_file=env.conf.get("csv_path"),
+        row_limit=int(env.conf.get("row_limit") or 0) if env.is_upload else None,
     )
 
 

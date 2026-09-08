@@ -31,9 +31,12 @@ log = logging.getLogger(__name__)
 class CsvSourceExtractor:
     """Lands an existing CSV and infers its schema. Same interface as the rest."""
 
-    def __init__(self, source_path: Path, row_limit: int = 100,
+    def __init__(self, source_path: Path, row_limit: int | None = 100,
                  dataset: str | None = None):
         self.source_path = Path(source_path)
+        # None means uncapped: an UPLOAD through the console (docs/DECISIONS.md
+        # D16). The BigQuery path keeps its cap, which is a billing control;
+        # a local file bills nothing.
         self.row_limit = row_limit
         self.dataset = dataset
 
@@ -93,7 +96,7 @@ class CsvSourceExtractor:
                 writer.writerow(header)
                 written = 0
                 for row in reader:
-                    if written >= self.row_limit:
+                    if self.row_limit is not None and written >= self.row_limit:
                         log.info("row cap %d reached; ignoring the rest of %s",
                                  self.row_limit, self.source_path.name)
                         break
@@ -105,9 +108,18 @@ class CsvSourceExtractor:
         return written
 
 
+def row_limit_from_env() -> int | None:
+    """CSV_ROW_LIMIT wins (0 = uncapped); otherwise the BigQuery cap applies."""
+    raw = os.environ.get("CSV_ROW_LIMIT")
+    if raw is not None and raw != "":
+        n = int(raw)
+        return None if n <= 0 else n
+    return int(os.environ.get("BQ_ROW_LIMIT", "100"))
+
+
 def extractor_from_env() -> CsvSourceExtractor:
     return CsvSourceExtractor(
         source_path=Path(os.environ["CSV_SOURCE_PATH"]),
-        row_limit=int(os.environ.get("BQ_ROW_LIMIT", "100")),
+        row_limit=row_limit_from_env(),
         dataset=os.environ.get("DATASET_NAME") or None,
     )

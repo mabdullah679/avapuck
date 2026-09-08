@@ -1,10 +1,11 @@
 """Hive job: read encrypted Parquet, decrypt via the crypto service, apply
-Ranger masking, write the Hive table.
+Ranger masking, write the Hive table. Streams one chunk at a time.
 
 THE ORDER MATTERS AND IS DELIBERATE: decrypt, then mask, then write. The Hive
 table stores the MASKED value, never the plaintext -- so even a direct file
 read of the warehouse yields nothing sensitive. The plaintext exists only in
-this process's memory, between the decrypt response and the mask call.
+this process's memory, one chunk at a time, between the decrypt response and
+the mask call.
 
 Masking rules come from Ranger policy. This module chooses nothing.
 """
@@ -28,14 +29,7 @@ MASK_GROUP = os.environ.get("MASK_AUDIENCE_GROUP", "analyst")
 
 
 def masked_name(column: str) -> str:
-    """The output column a sensitive column becomes.
-
-    One rule, applied uniformly, replacing the old hand-written map: the
-    warehouse column is always `<column>_masked`. A map was only ever needed
-    because two trips columns were abbreviated by hand
-    (start_station_name -> start_station_masked); uniformity is worth more
-    than those two shorter names now that the set is not fixed.
-    """
+    """The output column a sensitive column becomes: always `<column>_masked`."""
     return f"{column}_masked"
 
 
@@ -65,30 +59,53 @@ def assert_no_plaintext_survives(masked_rows: list[dict],
             + "\n  ".join(sorted(set(leaked))[:10]))
 
 
-def run(logical_date: date, parquet_path: Path, out_dir: Path, crypto) -> dict:
-    import pyarrow.parquet as pq
+def output_columns(manifest, column_map: dict[str, str]) -> list[str]:
+    key = manifest.primary_key
+    cols = [key, "logical_date", "masked_by"]
+    cols += [c for c in manifest.public_columns if c != key]
+    cols += [f"{c}_blind_index" for c in manifest.blind_indexed]
+    cols += list(column_map.values())
+    return cols
 
+
+def mask_rows(rows: list[dict], manifest, column_map: dict[str, str],
+              masks: dict[str, str], provider_name: str, crypto) -> list[dict]:
+    """Decrypt, mask and assert ONE chunk."""
+    plaintext: dict[str, list] = {}
+    for col in column_map:
+        plaintext[col] = crypto.decrypt_column(col, [r.get(f"{col}_encrypted") for r in rows])
+
+    key = manifest.primary_key
+    passthrough = [c for c in manifest.public_columns if c != key]
+    out_rows = []
+    for i, r in enumerate(rows):
+        row = {key: r.get(key), "logical_date": r["logical_date"], "masked_by": provider_name}
+        for col in passthrough:
+            row[col] = r.get(col)
+        for col in manifest.blind_indexed:
+            row[f"{col}_blind_index"] = r.get(f"{col}_blind_index")
+        for col, out_col in column_map.items():
+            row[out_col] = apply_mask(masks[col], plaintext[col][i])
+        out_rows.append(row)
+
+    assert_no_plaintext_survives(out_rows, plaintext, column_map)
+    return out_rows
+
+
+def run(logical_date: date, parquet_path: Path, out_dir: Path, crypto) -> dict:
+    from pipeline.common.batching import ParquetSink, iter_parquet_batches
     from pipeline.metadata import policy_gen
     from pipeline.metadata import schema as schema_mod
 
     manifest = schema_mod.load_manifest(parquet_path)
     table_name = manifest.dataset
-
-    rows = pq.read_table(parquet_path).to_pylist()
-    if not rows:
-        raise RuntimeError(f"{parquet_path} has no rows")
-
     column_map = {col: masked_name(col) for col in manifest.sensitive_columns}
 
     # A dataset nobody has authored policy for gets a generated one, written
     # to config/ranger/ for review. Generation happens ONCE (ensure_policy
     # never overwrites), so a reviewer's edits are what enforce from then on.
-    # This keeps non-negotiable #3 intact: the rules still live in policy JSON
-    # and are still read back through the Ranger provider below -- this module
-    # decides nothing about how a column is masked.
     overrides = schema_mod._load_overrides(manifest.dataset)
-    policy_file, created = policy_gen.ensure_policy(
-        manifest, DATABASE, table_name, overrides)
+    policy_file, created = policy_gen.ensure_policy(manifest, DATABASE, table_name, overrides)
     if created:
         log.info("no policy existed for %s; generated %s -- review it",
                  manifest.dataset, policy_file)
@@ -103,53 +120,27 @@ def run(logical_date: date, parquet_path: Path, out_dir: Path, crypto) -> dict:
             f"no Ranger masking policy for {sorted(missing)}. Refusing to write "
             f"an unmasked sensitive column -- add a policy to {policy_file}.")
 
-    plaintext: dict[str, list] = {}
-    for col in column_map:
-        cts = [r.get(f"{col}_encrypted") for r in rows]
-        plaintext[col] = crypto.decrypt_column(col, cts)
-        log.info("decrypted %d values for %s", len(plaintext[col]), col)
-
-    key = manifest.primary_key
-    passthrough = [c for c in manifest.public_columns if c != key]
-
-    out_rows = []
-    for i, r in enumerate(rows):
-        row = {
-            key: r.get(key),
-            "logical_date": r["logical_date"],
-            "masked_by": provider.name,
-        }
-        for col in passthrough:
-            row[col] = r.get(col)
-        for col in manifest.blind_indexed:
-            row[f"{col}_blind_index"] = r.get(f"{col}_blind_index")
-        for col, out_col in column_map.items():
-            row[out_col] = apply_mask(masks[col], plaintext[col][i])
-        out_rows.append(row)
-
-    assert_no_plaintext_survives(out_rows, plaintext, column_map)
-
-    out_dir.mkdir(parents=True, exist_ok=True)
+    out_dir = Path(out_dir)
     part = out_dir / f"dt={logical_date.isoformat()}"
-    part.mkdir(parents=True, exist_ok=True)
     dest = part / f"{manifest.dataset}_masked.parquet"
 
-    import pyarrow as pa
-    pq.write_table(pa.Table.from_pylist(out_rows), dest)
+    with ParquetSink(dest, output_columns(manifest, column_map)) as sink:
+        for chunk in iter_parquet_batches(parquet_path):
+            sink.write(mask_rows(chunk, manifest, column_map, masks, provider.name, crypto))
+    if sink.rows == 0:
+        raise RuntimeError(f"{parquet_path} has no rows")
 
     schema_mod.write_manifest(manifest, dest)
-    _write_hive_ddl(out_dir.parent / f"{manifest.dataset}_table.hql",
-                    out_dir, manifest, column_map)
+    _write_hive_ddl(out_dir.parent / f"{manifest.dataset}_table.hql", out_dir, manifest, column_map)
 
-    log.info("wrote %d masked rows to %s", len(out_rows), dest)
-    return {"rows": len(out_rows), "hive_path": str(dest),
+    log.info("wrote %d masked rows to %s", sink.rows, dest)
+    return {"rows": sink.rows, "hive_path": str(dest),
             "masked_by": provider.name, "masks_applied": masks,
             "dataset": manifest.dataset, "policy_file": str(policy_file)}
 
 
 # Postgres/inferred type -> the Hive type that holds it. Masked and
-# blind-index columns are always STRING: a mask turns a number into
-# "nnnn" or a hash, neither of which is a number any more.
+# blind-index columns are always STRING.
 _HIVE_TYPE = {
     "BIGINT": "BIGINT",
     "DOUBLE PRECISION": "DOUBLE",
@@ -167,17 +158,11 @@ def _write_hive_ddl(path: Path, warehouse_dir: Path, manifest,
     """
     key = manifest.primary_key
     key_col = manifest.column(key)
-
-    # A synthetic or sensitive key is a digest/blind index, not the source
-    # value, so it is STRING regardless of what the column originally held.
     key_type = (_HIVE_TYPE.get(key_col.sql_type, "STRING")
                 if key_col and not manifest.key_is_synthetic
                 and not manifest.key_is_sensitive else "STRING")
 
-    cols: list[tuple[str, str]] = [
-        (key, key_type),
-        ("logical_date", "STRING"),
-    ]
+    cols: list[tuple[str, str]] = [(key, key_type), ("logical_date", "STRING")]
     for col in manifest.public_columns:
         if col == key:
             continue
