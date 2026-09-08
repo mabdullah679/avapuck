@@ -7,6 +7,111 @@
   ],
   "primary_key": "objectid",
   "columns": {
-    "county_des": {"sensitivity": "public"}
+    "county_des": {
+      "sensitivity": "public"
+    }
+  },
+  "schema": {
+    "_generated": true,
+    "primary_key": "objectid",
+    "key_is_synthetic": false,
+    "columns": {
+      "objectid": {
+        "source_name": "OBJECTID",
+        "sql_type": "BIGINT",
+        "sensitivity": "public",
+        "treatment": ""
+      },
+      "acres": {
+        "source_name": "acres",
+        "sql_type": "DOUBLE PRECISION",
+        "sensitivity": "public",
+        "treatment": ""
+      },
+      "county_des": {
+        "source_name": "county_des",
+        "sql_type": "TEXT",
+        "sensitivity": "public",
+        "treatment": ""
+      },
+      "sale_month": {
+        "source_name": "Sale_Month",
+        "sql_type": "BIGINT",
+        "sensitivity": "public",
+        "treatment": ""
+      },
+      "sale_year": {
+        "source_name": "Sale Year",
+        "sql_type": "BIGINT",
+        "sensitivity": "public",
+        "treatment": ""
+      },
+      "oil_gas_sale_status": {
+        "source_name": "Oil & Gas Sale Status",
+        "sql_type": "TEXT",
+        "sensitivity": "public",
+        "treatment": ""
+      },
+      "reason_for_closed": {
+        "source_name": "Reason for Closed",
+        "sql_type": "TEXT",
+        "sensitivity": "public",
+        "treatment": ""
+      },
+      "reason_for_deferal": {
+        "source_name": "Reason for Deferal",
+        "sql_type": "TEXT",
+        "sensitivity": "public",
+        "treatment": ""
+      },
+      "coments_for_lease_status": {
+        "source_name": "Coments for Lease Status",
+        "sql_type": "TEXT",
+        "sensitivity": "public",
+        "treatment": ""
+      },
+      "reason_for_removed": {
+        "source_name": "Reason for Removed",
+        "sql_type": "TEXT",
+        "sensitivity": "public",
+        "treatment": ""
+      },
+      "administrative_unit_code": {
+        "source_name": "Administrative Unit Code",
+        "sql_type": "TEXT",
+        "sensitivity": "public",
+        "treatment": ""
+      },
+      "globalid": {
+        "source_name": "GlobalID",
+        "sql_type": "TEXT",
+        "sensitivity": "quasi_identifier",
+        "treatment": ""
+      },
+      "parcel_id": {
+        "source_name": "Parcel ID",
+        "sql_type": "TEXT",
+        "sensitivity": "quasi_identifier",
+        "treatment": ""
+      },
+      "shape_area": {
+        "source_name": "Shape__Area",
+        "sql_type": "DOUBLE PRECISION",
+        "sensitivity": "public",
+        "treatment": ""
+      },
+      "shape_length": {
+        "source_name": "Shape__Length",
+        "sql_type": "DOUBLE PRECISION",
+        "sensitivity": "public",
+        "treatment": ""
+      },
+      "card_info": {
+        "source_name": "card_info",
+        "sql_type": "BIGINT",
+        "sensitivity": "direct_identifier",
+        "treatment": "card_split"
+      }
+    }
   }
 }

@@ -68,6 +68,14 @@ identical transformation through pyarrow and the verdict is `complete`, not
 `degraded`, because no Spark was configured. **Never assume which ran; read
 the verdict.**
 
+**Executors do the crypto.** The Spark path reads the CSV on the cluster and
+runs `encrypt_rows` inside `mapPartitions`; each executor builds its own
+crypto client from the worker container's environment (`CLIENT_SECRET_SPARK_JOB`,
+`CRYPTO_URL`, the CA) and calls the crypto service one chunk at a time. The
+driver only promotes the single Parquet part file at the end. This is what
+makes an uncapped upload (D16) spread its heaviest work across workers, and
+what the scaler (D17) grows workers for.
+
 ---
 
 ## 3. Task granularity
@@ -129,6 +137,14 @@ The shape of each event is `contracts/stage_event.schema.json`.
 
 **No fan-out by source.** One dataset per run, named by the manifest, which
 namespaces every output path, Hive table, Postgres table and Kafka envelope.
+
+**Uploads are runs of the same DAG.** The console triggers `trips_pipeline`
+through Airflow's REST API with `conf = {csv_path, dataset, row_limit,
+source: "upload", uploaded_by}`. `run_env(ctx)` in the DAG turns conf into a
+`RunEnv`; `pipeline/stages.py :: _source_from_conf` points the extractor at
+the file for the duration of the extract stage. The extract event records
+`source: upload`. `max_active_runs=1`, so an upload queues behind a scheduled
+run rather than racing it.
 
 **Everything is metadata-driven, and the metadata is a contract.** No stage
 names a column literally; the first run of a dataset commits its inferred
@@ -212,12 +228,25 @@ Docker is the only host prerequisite. `setup.sh` creates `.env.local` from
 stack, creates topics and ACLs, runs the current slot, and reports the PDF
 and the watchdog's view.
 
-**What runs locally:** fourteen containers on the `core` profile — Airflow,
-IdP, crypto, Postgres, Kafka (KRaft, SASL + ACLs), Kafka UI, watchdog, Spark
-master + 2 workers, Hive metastore + its DB, HiveServer2 — plus a one-shot
-`kafka-init`. `--profile ci` adds Jenkins; `--profile ranger` adds Ranger
-admin. Measured working set of the earlier eleven-container stack was 4.2 GB;
-the three additions are capped at 768m, 256m and 1200m. Give Docker 8 GB.
+**What runs locally:** seventeen containers on the `core` profile — Airflow,
+IdP, crypto, Postgres, Kafka (KRaft, SASL + ACLs), Kafka UI, tap, watchdog,
+scaler, console, Spark master + `SPARK_WORKERS_MIN` workers, Hive metastore +
+its DB, HiveServer2 — plus a one-shot `kafka-init`. The scaler adds workers
+up to `SPARK_WORKERS_MAX` under load. `--profile ci` adds Jenkins;
+`--profile ranger` adds Ranger admin. Measured working set of the original
+eleven-container stack was 4.2 GB; the additions are small except Kafka,
+whose heap grew to 1 GB for uncapped uploads. Give Docker 8 GB, more for
+the 2 GB scale test.
+
+```
+services/
+  console/    upload, run, runs+verdicts, Kafka log, Spark cluster, traffic   :8447
+  idp/        JWT issuer, verdict signer, console login client               :8443
+  crypto/     AES-256-GCM, 4 uvicorn workers                                  :8444
+  watchdog/   absence detection                                              :8446
+  tap/        flat + control topics -> monitor.kafka_log                     :8449
+  scaler/     spark-worker autoscaling; holds the Docker socket               :8448
+```
 
 **Configuration:** `.env.local` and nothing else. Compose substitutes
 `${VAR:?}` for every value; a missing one fails `up` by name.
@@ -243,7 +272,8 @@ built without Docker running and have not been exercised against the stack.**
 | Area | Status |
 |---|---|
 | Airflow topology | `airflow standalone` + LocalExecutor. No HA. |
-| Scale | Hard-capped at 100 rows/run; an invariant, not a default. |
+| Scale | 100 rows per BigQuery run, an invariant. Uploads uncapped (D16) and every stage streams; **nothing above 100 rows has been run yet** (TRUST-BOUNDARY 4.4). |
+| Docker socket | Mounted into `scaler` only. Root-equivalent (D17). |
 | Repair semantics | Re-running `mask` alone does **not** cascade to `load`. Clear downstream tasks too. The asset cascade exists only at the team boundary (the consumer DAG). |
 | Verdict rule | Hive registration failing is `degraded`, not `failed`. Change it in `pipeline/verdict.py` with a test. |
 | Card splitting | ~6 digits of a 16-digit PAN encrypted. Not for live cardholder data. |

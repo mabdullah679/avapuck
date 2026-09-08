@@ -179,3 +179,183 @@ spec's own account; git keeps them). `scripts/run_chain.py`: deleted;
 stage list in `pipeline/stages.py`, so a runner cannot drift again.
 `docs/AGENTS.md`: deleted; the root `AGENTS.md` stays. `docs/SECRETS.md` and
 `.env.local.example`: deleted under D12.
+
+---
+
+# Round two: the console, uncapped uploads, scaling, traffic
+
+Decided 2026-09-08, the same way: one question at a time, confirmed.
+
+## D15. A console, and BigQuery is not a toggle in it
+
+`services/console/` is a small web app: drop or pick a CSV, press Run, and
+watch it land. Run means **one fresh run of the existing `trips_pipeline`**
+with the upload in the DAG run's conf, its own run slot, PDF and signed
+verdict. No second pipeline, no per-run cluster.
+
+The scheduled source stays an environment variable, `EXTRACT_MODE`, fixed
+when the stack starts. The console shows it and says why it cannot change it:
+BigQuery is a billable source and there is no RBAC yet, so an API call to
+switch it would be an unauthenticated switch on a bill. **When RBAC exists,
+an admin UI gets an "update BigQuery toggle" API call** backed by the IdP's
+roles; until then the env var is simpler and safer for a proof of concept.
+This paragraph is that documentation.
+
+Rejected: a separate upload DAG (two histories for one pipeline); a fresh
+Spark cluster per run (needs Docker control per run, adds minutes).
+
+## D16. Uploads are uncapped; the data path streams
+
+Non-negotiable 4 said 100 rows per run. Its reason is BigQuery's bill, which
+a local file does not incur. The owner chose to lift the cap for uploads,
+which changed the non-negotiable's wording: **100 rows per BigQuery run;
+uploads are bounded only by `UPLOAD_MAX_ROWS`, 0 meaning none.**
+
+That dragged the data path with it. Every stage now walks rows in chunks of
+`PIPELINE_BATCH_ROWS` through `pipeline/common/batching.py`; every crypto
+call is one chunk wide; Parquet is written incrementally to one file with a
+fixed all-string schema; Postgres loads through `execute_values`. On Spark,
+the **executors** run the same `encrypt_rows` over their partitions and call
+the crypto service themselves with the spark-job identity, which is what
+lets a multi-gigabyte upload spread its crypto work across workers. The
+100-row scheduled run takes exactly the same path with one chunk.
+
+The owner also chose **publish every row, always**, over a summary above a
+threshold. A 2 GB upload is therefore millions of Kafka messages on a single
+local broker. That is honest to the contract; the verdict, the Kafka UI and
+the tap table show the volume plainly, and TRUST-BOUNDARY says the broker
+is single-node.
+
+Rejected: a separate scale-test DAG (would have proven Spark, not the
+pipeline); synthetic load only.
+
+## D17. One scaler service holds the Docker socket
+
+Scaling `spark-worker` containers up and down inside Docker Compose needs
+something that can start and stop containers. The only way is the Docker
+socket, which is root on the host. It was refused for Jenkins; the owner
+accepted it here on the condition that exactly one small service has it and
+the fact is written down. `services/scaler/` polls the Spark master's own
+status, applies the pure rule in `services/scaler/policy.py` (up on waiting
+apps or utilisation above a threshold, down when idle and only ever removing
+workers it created, cooldown between actions), and clones an existing
+worker's container definition to add one. A real deployment replaces it with
+the orchestrator's autoscaler.
+
+Rejected: a fixed pool with Spark dynamic allocation (no container count
+change to show); a manual button that prints a command.
+
+## D18. Traffic audit: detect and block
+
+`config/traffic_profile.json` says what expected traffic is, per category of
+request: per-client and total limits per window. `pipeline/common/traffic.py`
+counts what arrives and **blocks**: a client over its limit is refused for
+`TRAFFIC_BLOCK_SECONDS`; a category over its total is refused to every
+non-allowlisted client until the window drains, which is the distributed
+case. The console audits with nothing allowlisted; the IdP allowlists the
+compose network so the pipeline's own token requests can never be cut off.
+Every transition logs an ALERT line and posts to the watchdog's webhook.
+
+The owner chose blocking over alert-only, knowing a wrong profile locks out
+a real user. The profile ships as a first guess, marked as such; the
+console's Traffic tab is where it gets tuned.
+
+## D19. The Kafka tap is a Postgres table
+
+`services/tap/` consumes the flat and control topics as the `tap` principal,
+which can read those two and nothing else, and writes one row per message to
+`monitor.kafka_log`. The console shows that table, filtered and paged.
+Durable across restarts, queryable with SQL, and messages that fail their
+contract are kept and marked `invalid` rather than dropped.
+
+Rejected: an in-memory ring buffer.
+
+## D20. Console login goes through the IdP
+
+A `console-admin` client in the IdP. The console forwards the typed password
+as that client's secret, verifies the token it gets back against the JWKS
+(signature, issuer, audience `console`, scope `console.admin`), and issues an
+HMAC-signed session cookie. The password is never stored. This is the hook
+RBAC attaches to: more clients, more scopes, the same verification.
+
+Rejected for now: localhost-only with no login.
+
+## D21. The scale test procedure
+
+Small file first, then 2 GB, once the small one is confirmed end to end.
+`scripts/make_test_csv.py` generates either, with sensitive-shaped columns
+and Luhn-valid test cards so every stage does real work. The procedure and
+what to watch are in `docs/RUNBOOK.md`. Until it has been run, everything
+about scale is UNVERIFIED and TRUST-BOUNDARY says so.
+
+---
+
+# Round three: the console in use (2026-09-08, same day, after the first live run)
+
+## D22. Run any pipeline; three presets; "connected" reuses the watchdog
+
+The Run panel lists **every DAG Airflow knows**, mother and child alike, from
+`GET /api/pipelines`. Each entry carries its kind (mother = scheduled and
+producing verdicts; child = asset-triggered), whether Airflow's API answers
+200 for it, its last run, and whether it is *connected*. Three presets filter
+the dropdown: all, responding 200, connected.
+
+"Connected" is **not a new system**. The owner asked for a loop that tags a
+connection from a node and the data it transmits and re-checks one condition
+forever, unless one already existed. One did: the watchdog consumes every
+verdict, records which principal signed it and when, and re-evaluates one
+condition on a timer. The console defines connected as: the pipeline's last
+run succeeded within the watchdog's window (interval + grace), and, for a
+mother, the watchdog has seen a positive verdict inside that window. The
+rule is `connection_state` in `services/console/app.py`, one function for
+every DAG.
+
+Rejected: a separate heartbeat service. It would have duplicated the
+watchdog's loop with a second definition of "alive".
+
+## D23. The local browser stays signed in
+
+Sessions last 30 days by default (`CONSOLE_SESSION_SECONDS`), and
+`CONSOLE_DEV_AUTOLOGIN=true` lets a browser on a loopback or private address
+get a session without typing anything: the console signs in to the IdP
+itself with `CLIENT_SECRET_CONSOLE_ADMIN` and verifies the token exactly as
+a typed login would. The IdP stays in the loop; only the typing is skipped.
+The login form remains for when auto-login is off, and its fields carry
+autocomplete hints so the browser offers to save the password.
+
+This is a development convenience and is labelled as such everywhere it
+appears. Anywhere the console is reachable from a network you do not own,
+`CONSOLE_DEV_AUTOLOGIN` must be false, and TRUST-BOUNDARY says so.
+
+Rejected: pre-filling the password into the page. That puts the secret in
+every page load.
+
+## D24. setup.sh is idempotent, and persistence is only ever brought up to date
+
+Re-running `./setup.sh` must be safe and fast. Builds and pulls are cached by
+Docker; the script does nothing to defeat that. Certificates are generated
+once. `--merge-env` appends variables a newer template added, with dev
+defaults, never touching existing values. The warehouse schema is applied on
+every run with `IF NOT EXISTS` statements, because Postgres only runs init
+SQL on a fresh volume and an older volume must catch up without being
+rebuilt. Both DAGs are unpaused every run. Airflow is waited for until the
+DAG is actually parsed before a run is attempted, and the PDF is looked up
+by the slot it was run for, not by whatever is newest in the folder. A
+paused or stopped Docker Desktop is restarted rather than reported.
+
+## Live findings, first day on the real stack (2026-09-08)
+
+Every one of these was found by running, not by reading. Each is fixed and
+recorded here so the reasoning survives.
+
+| Found | Cause | Fix |
+|---|---|---|
+| Decrypt refused right after encrypt | The crypto service had four uvicorn workers; with no `CRYPTO_MASTER_KEY` each worker made its own random key | One worker. Scaling the crypto service requires fixed keys first; compose says so |
+| Console login failed after the IdP was rebuilt; the crypto service would have too | The IdP's key id was a constant, so every verifier's cached JWKS "matched" a key that no longer existed | The kid is derived from the key; a new key is a new kid and verifiers refetch on their own |
+| BigQuery fell back to CSV every run | `GOOGLE_APPLICATION_CREDENTIALS` in `.env.local` was a host-relative path, meaningless in the container | The DAG resolves a relative path against the repo root, then `/secrets/`; setup warns |
+| Watchdog and tap could not read their topics | They started before `kafka-init` granted their ACLs and cached the refusal | They depend on `kafka-init` completing |
+| The scaler cloned a worker seconds after boot | It read the master before the compose workers had registered and saw fewer than min | A startup grace period |
+| The console could not start a run | Airflow's token endpoint answers 201 Created | Accept 200 and 201 |
+| The consumer DAG never woke | Airflow's serializer passes the trigger's empty args and kwargs to the filter as stray arguments; and the DAG was created paused | The filter accepts and ignores extras; new DAGs are created unpaused; setup unpauses both |
+| The first scheduled run failed in two stages | It began on the old container the moment the DAG was unpaused, and the container was replaced mid-run | Not a bug in the current stack; recorded so nobody chases it |
+| `setup.sh` claimed a PDF that was days old | It listed the newest file in the folder; the run had actually failed before the DAG was parsed | Wait for the DAG to be parsed; look up the PDF by slot; surface the run's errors |

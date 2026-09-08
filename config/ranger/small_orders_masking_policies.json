@@ -1,0 +1,347 @@
+{
+  "_comment": [
+    "GENERATED Ranger masking policies for dataset 'small_orders'.",
+    "",
+    "Written once by pipeline/metadata/policy_gen.py when this dataset was",
+    "first ingested, from the sensitivity inferred for each column. It is",
+    "NOT regenerated on later runs -- edit the mask types here and your",
+    "edits survive, which is what authoring policy in a file is for.",
+    "",
+    "Each policy records why the classifier thought the column was",
+    "sensitive. Review those reasons: a guess that reads wrong is a",
+    "signal to fix the mask type here, or the sensitivity itself in",
+    "config/datasets/small_orders.json."
+  ],
+  "policies": [
+    {
+      "service": "hive_pipeline",
+      "name": "mask-small-orders-customer-name",
+      "policyType": 1,
+      "description": "customer_name classified direct_identifier by schema inference: column name denotes a named party.",
+      "isEnabled": true,
+      "_generated": true,
+      "_sensitivity": "direct_identifier",
+      "resources": {
+        "database": {
+          "values": [
+            "trips_warehouse"
+          ],
+          "isExcludes": false,
+          "isRecursive": false
+        },
+        "table": {
+          "values": [
+            "small_orders"
+          ],
+          "isExcludes": false,
+          "isRecursive": false
+        },
+        "column": {
+          "values": [
+            "customer_name"
+          ],
+          "isExcludes": false,
+          "isRecursive": false
+        }
+      },
+      "dataMaskPolicyItems": [
+        {
+          "accesses": [
+            {
+              "type": "select",
+              "isAllowed": true
+            }
+          ],
+          "users": [],
+          "groups": [
+            "analyst"
+          ],
+          "roles": [],
+          "dataMaskInfo": {
+            "dataMaskType": "MASK_HASH"
+          }
+        },
+        {
+          "accesses": [
+            {
+              "type": "select",
+              "isAllowed": true
+            }
+          ],
+          "users": [],
+          "groups": [
+            "data_steward"
+          ],
+          "roles": [],
+          "dataMaskInfo": {
+            "dataMaskType": "MASK_NONE"
+          }
+        }
+      ]
+    },
+    {
+      "service": "hive_pipeline",
+      "name": "mask-small-orders-customer-email",
+      "policyType": 1,
+      "description": "customer_email classified direct_identifier by schema inference: column name denotes an email address.",
+      "isEnabled": true,
+      "_generated": true,
+      "_sensitivity": "direct_identifier",
+      "resources": {
+        "database": {
+          "values": [
+            "trips_warehouse"
+          ],
+          "isExcludes": false,
+          "isRecursive": false
+        },
+        "table": {
+          "values": [
+            "small_orders"
+          ],
+          "isExcludes": false,
+          "isRecursive": false
+        },
+        "column": {
+          "values": [
+            "customer_email"
+          ],
+          "isExcludes": false,
+          "isRecursive": false
+        }
+      },
+      "dataMaskPolicyItems": [
+        {
+          "accesses": [
+            {
+              "type": "select",
+              "isAllowed": true
+            }
+          ],
+          "users": [],
+          "groups": [
+            "analyst"
+          ],
+          "roles": [],
+          "dataMaskInfo": {
+            "dataMaskType": "MASK_HASH"
+          }
+        },
+        {
+          "accesses": [
+            {
+              "type": "select",
+              "isAllowed": true
+            }
+          ],
+          "users": [],
+          "groups": [
+            "data_steward"
+          ],
+          "roles": [],
+          "dataMaskInfo": {
+            "dataMaskType": "MASK_NONE"
+          }
+        }
+      ]
+    },
+    {
+      "service": "hive_pipeline",
+      "name": "mask-small-orders-street-address",
+      "policyType": 1,
+      "description": "street_address classified direct_identifier by schema inference: column name denotes a postal address.",
+      "isEnabled": true,
+      "_generated": true,
+      "_sensitivity": "direct_identifier",
+      "resources": {
+        "database": {
+          "values": [
+            "trips_warehouse"
+          ],
+          "isExcludes": false,
+          "isRecursive": false
+        },
+        "table": {
+          "values": [
+            "small_orders"
+          ],
+          "isExcludes": false,
+          "isRecursive": false
+        },
+        "column": {
+          "values": [
+            "street_address"
+          ],
+          "isExcludes": false,
+          "isRecursive": false
+        }
+      },
+      "dataMaskPolicyItems": [
+        {
+          "accesses": [
+            {
+              "type": "select",
+              "isAllowed": true
+            }
+          ],
+          "users": [],
+          "groups": [
+            "analyst"
+          ],
+          "roles": [],
+          "dataMaskInfo": {
+            "dataMaskType": "MASK_HASH"
+          }
+        },
+        {
+          "accesses": [
+            {
+              "type": "select",
+              "isAllowed": true
+            }
+          ],
+          "users": [],
+          "groups": [
+            "data_steward"
+          ],
+          "roles": [],
+          "dataMaskInfo": {
+            "dataMaskType": "MASK_NONE"
+          }
+        }
+      ]
+    },
+    {
+      "service": "hive_pipeline",
+      "name": "mask-small-orders-city",
+      "policyType": 1,
+      "description": "city classified quasi_identifier by schema inference: column carries a narrowing geography.",
+      "isEnabled": true,
+      "_generated": true,
+      "_sensitivity": "quasi_identifier",
+      "resources": {
+        "database": {
+          "values": [
+            "trips_warehouse"
+          ],
+          "isExcludes": false,
+          "isRecursive": false
+        },
+        "table": {
+          "values": [
+            "small_orders"
+          ],
+          "isExcludes": false,
+          "isRecursive": false
+        },
+        "column": {
+          "values": [
+            "city"
+          ],
+          "isExcludes": false,
+          "isRecursive": false
+        }
+      },
+      "dataMaskPolicyItems": [
+        {
+          "accesses": [
+            {
+              "type": "select",
+              "isAllowed": true
+            }
+          ],
+          "users": [],
+          "groups": [
+            "analyst"
+          ],
+          "roles": [],
+          "dataMaskInfo": {
+            "dataMaskType": "MASK_SHOW_LAST_4"
+          }
+        },
+        {
+          "accesses": [
+            {
+              "type": "select",
+              "isAllowed": true
+            }
+          ],
+          "users": [],
+          "groups": [
+            "data_steward"
+          ],
+          "roles": [],
+          "dataMaskInfo": {
+            "dataMaskType": "MASK_NONE"
+          }
+        }
+      ]
+    },
+    {
+      "service": "hive_pipeline",
+      "name": "mask-small-orders-card-info",
+      "policyType": 1,
+      "description": "card_info classified direct_identifier by schema inference: column name denotes a payment card.",
+      "isEnabled": true,
+      "_generated": true,
+      "_sensitivity": "direct_identifier",
+      "resources": {
+        "database": {
+          "values": [
+            "trips_warehouse"
+          ],
+          "isExcludes": false,
+          "isRecursive": false
+        },
+        "table": {
+          "values": [
+            "small_orders"
+          ],
+          "isExcludes": false,
+          "isRecursive": false
+        },
+        "column": {
+          "values": [
+            "card_info"
+          ],
+          "isExcludes": false,
+          "isRecursive": false
+        }
+      },
+      "dataMaskPolicyItems": [
+        {
+          "accesses": [
+            {
+              "type": "select",
+              "isAllowed": true
+            }
+          ],
+          "users": [],
+          "groups": [
+            "analyst"
+          ],
+          "roles": [],
+          "dataMaskInfo": {
+            "dataMaskType": "MASK_HASH"
+          }
+        },
+        {
+          "accesses": [
+            {
+              "type": "select",
+              "isAllowed": true
+            }
+          ],
+          "users": [],
+          "groups": [
+            "data_steward"
+          ],
+          "roles": [],
+          "dataMaskInfo": {
+            "dataMaskType": "MASK_NONE"
+          }
+        }
+      ]
+    }
+  ]
+}

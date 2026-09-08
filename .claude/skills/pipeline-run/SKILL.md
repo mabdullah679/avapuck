@@ -77,13 +77,18 @@ make ci            # what the pre-push hook and Jenkins run
 
 `tests/test_secret_hygiene.py` needs `git`, so run on the host.
 
-## Airflow UI
+## The console and the UIs
 
-<http://localhost:8085>, user `admin`. Password:
+<http://localhost:8447> is the console: upload a CSV (uncapped), run it,
+and watch runs, verdicts, the Kafka log table, the Spark cluster and the
+traffic audit. Login: `CONSOLE_ADMIN_USER` / `CLIENT_SECRET_CONSOLE_ADMIN`
+from `.env.local`. Generate a test file with
+`python3 scripts/make_test_csv.py --rows 1000 > small.csv`; the 2 GB scale
+test procedure is in `docs/RUNBOOK.md` and has not been run yet.
 
-```bash
-docker exec pl-airflow cat /opt/airflow/simple_auth_manager_passwords.json.generated
-```
+<http://localhost:8085> is Airflow: `AIRFLOW_ADMIN_USER` /
+`AIRFLOW_ADMIN_PASSWORD` from `.env.local` (written into Airflow's passwords
+file by `docker/airflow-entrypoint.sh`).
 
 ## When something fails
 

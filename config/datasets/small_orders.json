@@ -1,0 +1,86 @@
+{
+  "schema": {
+    "_generated": true,
+    "primary_key": "order_id",
+    "key_is_synthetic": false,
+    "columns": {
+      "order_id": {
+        "source_name": "order_id",
+        "sql_type": "TEXT",
+        "sensitivity": "public",
+        "treatment": ""
+      },
+      "customer_name": {
+        "source_name": "customer_name",
+        "sql_type": "TEXT",
+        "sensitivity": "direct_identifier",
+        "treatment": ""
+      },
+      "customer_email": {
+        "source_name": "customer_email",
+        "sql_type": "TEXT",
+        "sensitivity": "direct_identifier",
+        "treatment": ""
+      },
+      "street_address": {
+        "source_name": "street_address",
+        "sql_type": "TEXT",
+        "sensitivity": "direct_identifier",
+        "treatment": ""
+      },
+      "city": {
+        "source_name": "city",
+        "sql_type": "TEXT",
+        "sensitivity": "quasi_identifier",
+        "treatment": ""
+      },
+      "card_info": {
+        "source_name": "card_info",
+        "sql_type": "BIGINT",
+        "sensitivity": "direct_identifier",
+        "treatment": "card_split"
+      },
+      "category": {
+        "source_name": "category",
+        "sql_type": "TEXT",
+        "sensitivity": "public",
+        "treatment": ""
+      },
+      "status": {
+        "source_name": "status",
+        "sql_type": "TEXT",
+        "sensitivity": "public",
+        "treatment": ""
+      },
+      "sale_price": {
+        "source_name": "sale_price",
+        "sql_type": "DOUBLE PRECISION",
+        "sensitivity": "public",
+        "treatment": ""
+      },
+      "quantity": {
+        "source_name": "quantity",
+        "sql_type": "BIGINT",
+        "sensitivity": "public",
+        "treatment": ""
+      },
+      "sold_at": {
+        "source_name": "sold_at",
+        "sql_type": "TIMESTAMP",
+        "sensitivity": "public",
+        "treatment": ""
+      }
+    }
+  },
+  "_comment": [
+    "Data contract for dataset 'small_orders'.",
+    "",
+    "The `schema` block was GENERATED from inference the first time this",
+    "dataset was seen and is never regenerated. A later run whose inferred",
+    "schema differs FAILS naming the difference. To accept a change, edit",
+    "this block (or run `python -m pipeline.metadata.contract accept`) and",
+    "commit. `columns` above/below are sensitivity overrides fed INTO",
+    "inference; `schema` is what inference produced. Optional:",
+    "`event_time_column` names the column the PDF's data window is read from."
+  ]
+}

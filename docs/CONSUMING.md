@@ -111,7 +111,12 @@ if accept(store, "my-team", msg).process:      # dedupe
 | nobody by default | `rpos_encrypted` | ciphertext; ask for a principal with decrypt rights and a reason |
 
 To find the rows for a run: `rpos_flat` messages whose `envelope.run_slot`
-matches the verdict's, or `warehouse.<dataset> WHERE run_slot = …`.
+matches the verdict's, or `warehouse.<dataset> WHERE run_slot = …`, or the
+tap's table, `monitor.kafka_log`, which holds every flat and control message
+as a row and is what the console's Kafka log tab shows.
+
+Every row of every run is published, uploads included, so a large upload is
+millions of messages. Read by `run_slot`, not from the beginning.
 
 ## Changing the contract
 

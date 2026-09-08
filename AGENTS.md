@@ -56,6 +56,14 @@ stop — add it to the classifier instead.
 **Every Kafka message is `{envelope, payload, signature?}`**, built and parsed
 only through `pipeline/messaging/`. Do not construct a message dict by hand.
 
+**The console is a client of Airflow, never a second orchestrator.** It
+triggers `trips_pipeline` through the REST API with the upload in conf; the
+DAG's `run_env` turns conf into a `RunEnv`. Do not add pipeline logic to the
+console. BigQuery is not a toggle there (D15).
+
+**The scaler is the only service with the Docker socket.** If you find
+yourself mounting it anywhere else, stop and read D17 and TRUST-BOUNDARY 4.8.
+
 ---
 
 ## Invariants. Breaking one is a defect, not a trade-off.
@@ -78,10 +86,14 @@ applies the same rules to verdicts, plus a payload digest check.
 policy **fails the run**. Generation is authoring: a generated file is never
 regenerated over an edit. Never express a masking rule in Python.
 
-### 4. Cost is capped, and the cap is measured
+### 4. Cost is capped, and the cap is measured; uploads are not capped
 BigQuery bills **bytes scanned, not rows returned**. Name columns, never
 `SELECT *`; `maximum_bytes_billed` makes BigQuery refuse an over-budget query.
-A custom `BQ_SQL_FILE` must reference `@row_limit`.
+A custom `BQ_SQL_FILE` must reference `@row_limit`. Console uploads bill
+nothing and are uncapped by decision (D16), which is why **every stage
+streams**: walk rows through `pipeline/common/batching.py`, never
+`to_pylist()` a whole file, never one crypto call for a whole column. If you
+add a stage, it takes chunks.
 
 ### 5. Nothing sensitive is published in the clear
 `row.encrypted` carries ciphertext; `row.flat` carries never-sensitive

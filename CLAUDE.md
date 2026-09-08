@@ -1,10 +1,13 @@
 # BigQuery → Spark → Kafka → Hive → Postgres → PDF → signed verdict
 
-Four-hourly pipeline: pull 100 rows/run from a BigQuery public dataset (or any
-CSV), encrypt sensitive fields with AES-256-GCM via an HTTPS service, publish
-to Kafka in the platform envelope, land Parquet, mask in Hive under Apache
-Ranger policy, load Postgres, emit one PDF per run, and publish one signed
-`run.verdict` that downstream teams react to.
+Four-hourly pipeline: pull 100 rows/run from a BigQuery public dataset, or
+take an uncapped CSV upload from the console (`services/console/`), encrypt
+sensitive fields with AES-256-GCM via an HTTPS service, publish to Kafka in
+the platform envelope, land Parquet, mask in Hive under Apache Ranger policy,
+load Postgres, emit one PDF per run, and publish one signed `run.verdict`
+that downstream teams react to. Around it: a Kafka tap into Postgres, a
+watchdog for absent verdicts, a Spark worker scaler (the one service with
+the Docker socket), and a traffic audit that detects and blocks.
 
 `pipeline/metadata/schema.py` infers each dataset's columns, sensitivity and
 key; `pipeline/metadata/contract.py` holds later runs to that inference as a
@@ -38,8 +41,11 @@ name. See `TRUST-BOUNDARY.md` §2.8 for the limits of that scheme.
    dataset with no policy gets one GENERATED into `config/ranger/` for review,
    written once and never regenerated over an edit. The same pattern governs
    the dataset contract in `config/datasets/`.
-4. **100 rows per run, hard-capped**, enforced in the SQL and asserted after.
-   The CSV source path enforces the same cap on the way in.
+4. **100 rows per BigQuery run, hard-capped**, enforced in the SQL and
+   asserted after, because that is a bill. Uploads through the console are
+   bounded only by `UPLOAD_MAX_ROWS` (0 = none), and every stage streams in
+   chunks of `PIPELINE_BATCH_ROWS` so a large upload and a 100-row run take
+   the same path. `docs/DECISIONS.md` D16.
 5. **Idempotent by run slot.** A re-run of the same slot replaces that slot's
    partition and never double-loads Postgres. On Kafka the envelope carries an
    `idempotency_key` per unit of work and an `event_id` per emission; a

@@ -1,0 +1,1001 @@
+order_id,customer_name,customer_email,street_address,city,card_info,category,status,sale_price,quantity,sold_at
+ord-0000000000,Radia Torvalds,radia.torvalds0@example.com,6469 Guadalupe St,Austin,4111118159083011,hardware,pending,35.86,1,2026-09-26T01:53:00
+ord-0000000001,Ken Lovelace,ken.lovelace1@example.com,9265 Congress Ave,Denver,6011000996030825,pharmacy,pending,72.98,1,2026-09-26T23:35:00
+ord-0000000002,Alan Ritchie,alan.ritchie2@example.com,2962 Congress Ave,Madison,6011003518190937,hardware,refunded,214.37,3,2026-09-22T04:33:00
+ord-0000000003,Frances Liskov,frances.liskov3@example.com,5925 Lavaca St,Denver,4555553194875745,apparel,settled,59.91,4,2026-09-08T12:10:00
+ord-0000000004,Radia Torvalds,radia.torvalds4@example.com,8012 Rainey St,Austin,4111118955597974,grocery,settled,472.40,4,2026-09-03T22:59:00
+ord-0000000005,Ada Turing,ada.turing5@example.com,9470 Guadalupe St,Raleigh,5200006507529174,grocery,settled,384.35,2,2026-09-12T06:27:00
+ord-0000000006,Ken Thompson,ken.thompson6@example.com,8135 Congress Ave,Denver,5555556842684655,dining,pending,478.91,2,2026-09-04T18:38:00
+ord-0000000007,Linus Torvalds,linus.torvalds7@example.com,3801 Guadalupe St,Denver,4111117924402688,pharmacy,refunded,283.60,2,2026-09-24T11:03:00
+ord-0000000008,Frances Lovelace,frances.lovelace8@example.com,7482 Guadalupe St,Madison,5555556661760313,fuel,pending,81.99,3,2026-09-28T08:09:00
+ord-0000000009,Ada Hopper,ada.hopper9@example.com,4 Speedway,Denver,6011001590139624,dining,settled,477.78,5,2026-09-17T13:45:00
+ord-0000000010,Barbara Hopper,barbara.hopper10@example.com,1890 Rainey St,Raleigh,5555557412154723,apparel,settled,103.40,5,2026-09-17T11:07:00
+ord-0000000011,Linus Ritchie,linus.ritchie11@example.com,444 Speedway,Portland,4111114852538880,pharmacy,settled,307.00,2,2026-09-11T21:28:00
+ord-0000000012,Ken Hamilton,ken.hamilton12@example.com,3276 Speedway,Raleigh,5200000047439572,electronics,settled,477.55,3,2026-09-04T15:58:00
+ord-0000000013,Margaret Hopper,margaret.hopper13@example.com,3717 Rainey St,Denver,5200003799075115,hardware,settled,239.54,2,2026-09-20T17:57:00
+ord-0000000014,Radia Hopper,radia.hopper14@example.com,6486 Rainey St,Raleigh,4111112220297296,electronics,refunded,490.17,6,2026-09-16T22:44:00
+ord-0000000015,Linus Ritchie,linus.ritchie15@example.com,8984 Barton Springs Rd,Austin,4111111826330436,pharmacy,refunded,121.03,5,2026-09-15T20:04:00
+ord-0000000016,Alan Ritchie,alan.ritchie16@example.com,6866 Barton Springs Rd,Austin,5200007986828285,apparel,settled,436.53,2,2026-09-28T16:42:00
+ord-0000000017,Ada Torvalds,ada.torvalds17@example.com,2824 Barton Springs Rd,Raleigh,6011001805888718,apparel,settled,125.00,3,2026-09-02T22:05:00
+ord-0000000018,Grace Ritchie,grace.ritchie18@example.com,7409 Speedway,Austin,4111117598983476,apparel,refunded,403.87,5,2026-09-12T06:30:00
+ord-0000000019,Dennis Turing,dennis.turing19@example.com,9168 Barton Springs Rd,Raleigh,4555556167513615,fuel,settled,392.18,2,2026-09-30T06:49:00
+ord-0000000020,Radia Torvalds,radia.torvalds20@example.com,4147 Barton Springs Rd,Raleigh,4555551672326868,pharmacy,pending,98.68,3,2026-09-05T04:42:00
+ord-0000000021,Radia Lovelace,radia.lovelace21@example.com,5538 Speedway,Raleigh,5555550658948114,electronics,settled,485.88,1,2026-09-04T19:49:00
+ord-0000000022,Alan Turing,alan.turing22@example.com,649 Barton Springs Rd,Portland,4555556462889751,grocery,settled,29.71,6,2026-09-09T08:15:00
+ord-0000000023,Ken Hopper,ken.hopper23@example.com,4407 Congress Ave,Boise,4111114193141709,pharmacy,refunded,209.46,3,2026-09-29T07:03:00
+ord-0000000024,Linus Lovelace,linus.lovelace24@example.com,8633 Guadalupe St,Denver,4111112402344833,pharmacy,pending,250.54,2,2026-09-13T07:28:00
+ord-0000000025,Radia Lovelace,radia.lovelace25@example.com,4104 Congress Ave,Austin,4111118838737169,dining,pending,273.41,4,2026-09-24T01:26:00
+ord-0000000026,Alan Hamilton,alan.hamilton26@example.com,3762 Lavaca St,Denver,4555556502014626,grocery,settled,332.95,4,2026-09-24T00:37:00
+ord-0000000027,Alan Allen,alan.allen27@example.com,3969 Guadalupe St,Portland,4111117224704551,apparel,settled,122.98,3,2026-09-10T21:58:00
+ord-0000000028,Radia Torvalds,radia.torvalds28@example.com,18 Lavaca St,Raleigh,4111117483380143,electronics,settled,72.79,5,2026-09-02T21:30:00
+ord-0000000029,Ken Lovelace,ken.lovelace29@example.com,4910 Lavaca St,Boise,4555551982965728,pharmacy,refunded,321.97,1,2026-09-24T08:18:00
+ord-0000000030,Ken Ritchie,ken.ritchie30@example.com,2283 Speedway,Madison,6011000931002517,hardware,pending,279.71,6,2026-09-01T20:34:00
+ord-0000000031,Dennis Hamilton,dennis.hamilton31@example.com,8017 Lavaca St,Austin,5555551881817415,electronics,settled,118.16,2,2026-09-11T12:01:00
+ord-0000000032,Barbara Liskov,barbara.liskov32@example.com,6268 Congress Ave,Raleigh,5200000931925447,apparel,refunded,67.59,4,2026-09-03T18:15:00
+ord-0000000033,Barbara Turing,barbara.turing33@example.com,1631 Guadalupe St,Denver,5555554847771833,pharmacy,settled,468.19,1,2026-09-14T04:18:00
+ord-0000000034,Barbara Hopper,barbara.hopper34@example.com,8301 Rainey St,Portland,5555553319128456,fuel,refunded,410.29,5,2026-09-13T17:21:00
+ord-0000000035,Grace Perlman,grace.perlman35@example.com,3791 Rainey St,Raleigh,5555550207764269,pharmacy,pending,158.72,3,2026-09-01T01:54:00
+ord-0000000036,Radia Perlman,radia.perlman36@example.com,6526 Congress Ave,Denver,4111114451669151,hardware,settled,427.27,3,2026-09-05T15:05:00
+ord-0000000037,Ada Turing,ada.turing37@example.com,2440 Barton Springs Rd,Portland,5555558535606888,fuel,settled,25.69,6,2026-09-19T16:47:00
+ord-0000000038,Barbara Allen,barbara.allen38@example.com,2271 Guadalupe St,Portland,5555550822765444,pharmacy,settled,203.70,2,2026-09-14T16:35:00
+ord-0000000039,Barbara Ritchie,barbara.ritchie39@example.com,6462 Congress Ave,Denver,4555551387837571,hardware,settled,274.34,2,2026-09-05T03:05:00
+ord-0000000040,Linus Perlman,linus.perlman40@example.com,9108 Congress Ave,Portland,4555555493066686,fuel,pending,135.85,1,2026-09-23T16:06:00
+ord-0000000041,Alan Allen,alan.allen41@example.com,5901 Barton Springs Rd,Boise,6011008314366763,pharmacy,settled,64.50,4,2026-09-22T12:56:00
+ord-0000000042,Frances Liskov,frances.liskov42@example.com,3 Congress Ave,Raleigh,6011007731322813,electronics,pending,43.42,1,2026-09-01T01:29:00
+ord-0000000043,Linus Hamilton,linus.hamilton43@example.com,9329 Congress Ave,Boise,5200002486111480,apparel,settled,194.65,2,2026-09-28T08:31:00
+ord-0000000044,Ada Lovelace,ada.lovelace44@example.com,8807 Lavaca St,Raleigh,5200005378383067,dining,settled,28.60,2,2026-09-23T16:17:00
+ord-0000000045,Ken Hopper,ken.hopper45@example.com,4215 Barton Springs Rd,Boise,5555555370565633,grocery,settled,369.83,5,2026-09-04T01:39:00
+ord-0000000046,Margaret Liskov,margaret.liskov46@example.com,3284 Lavaca St,Denver,4555557344197926,fuel,pending,209.10,6,2026-09-03T13:37:00
+ord-0000000047,Frances Torvalds,frances.torvalds47@example.com,6447 Congress Ave,Denver,4111119260026758,dining,settled,498.77,2,2026-09-15T23:37:00
+ord-0000000048,Margaret Torvalds,margaret.torvalds48@example.com,8599 Guadalupe St,Raleigh,4111114655721014,pharmacy,settled,176.38,1,2026-09-26T12:54:00
+ord-0000000049,Margaret Thompson,margaret.thompson49@example.com,5844 Lavaca St,Raleigh,4111110735873551,dining,pending,16.11,4,2026-09-12T06:53:00
+ord-0000000050,Ken Lovelace,ken.lovelace50@example.com,6154 Congress Ave,Raleigh,4111110431955454,apparel,settled,131.82,6,2026-09-15T09:41:00
+ord-0000000051,Alan Turing,alan.turing51@example.com,62 Guadalupe St,Madison,4111110317764673,fuel,pending,92.29,6,2026-09-14T19:18:00
+ord-0000000052,Linus Allen,linus.allen52@example.com,3869 Lavaca St,Portland,5555555918362360,grocery,settled,241.36,5,2026-09-15T19:48:00
+ord-0000000053,Linus Thompson,linus.thompson53@example.com,1724 Congress Ave,Portland,6011001316772328,hardware,pending,310.53,6,2026-09-11T16:36:00
+ord-0000000054,Dennis Hopper,dennis.hopper54@example.com,4816 Lavaca St,Portland,6011004544373232,fuel,settled,141.40,5,2026-09-09T13:37:00
+ord-0000000055,Radia Hopper,radia.hopper55@example.com,6490 Lavaca St,Denver,6011008317010731,electronics,pending,457.27,1,2026-09-14T08:46:00
+ord-0000000056,Margaret Hopper,margaret.hopper56@example.com,826 Barton Springs Rd,Madison,6011003158279404,grocery,refunded,355.14,3,2026-09-10T21:43:00
+ord-0000000057,Ada Perlman,ada.perlman57@example.com,5571 Barton Springs Rd,Austin,4555554093056528,apparel,settled,39.89,1,2026-09-23T13:21:00
+ord-0000000058,Dennis Liskov,dennis.liskov58@example.com,1037 Rainey St,Austin,5555558281264643,dining,settled,209.50,1,2026-09-15T05:10:00
+ord-0000000059,Frances Perlman,frances.perlman59@example.com,6785 Rainey St,Austin,5200003663062611,electronics,settled,203.70,3,2026-09-21T23:25:00
+ord-0000000060,Linus Torvalds,linus.torvalds60@example.com,244 Congress Ave,Madison,4555556199582257,pharmacy,settled,261.06,1,2026-09-05T22:49:00
+ord-0000000061,Ken Liskov,ken.liskov61@example.com,3234 Lavaca St,Denver,4111117509619235,apparel,pending,307.75,2,2026-09-22T12:35:00
+ord-0000000062,Linus Allen,linus.allen62@example.com,3574 Congress Ave,Raleigh,6011002651233082,electronics,settled,334.28,3,2026-09-06T08:35:00
+ord-0000000063,Ken Allen,ken.allen63@example.com,7467 Speedway,Boise,5200006493665784,hardware,settled,12.66,5,2026-09-23T06:39:00
+ord-0000000064,Barbara Hamilton,barbara.hamilton64@example.com,7321 Speedway,Raleigh,4555557611256512,electronics,pending,252.67,6,2026-09-02T20:31:00
+ord-0000000065,Ada Torvalds,ada.torvalds65@example.com,1348 Guadalupe St,Portland,6011001086201912,fuel,settled,490.88,4,2026-09-14T02:26:00
+ord-0000000066,Linus Hamilton,linus.hamilton66@example.com,1074 Lavaca St,Madison,5200002594724877,fuel,refunded,132.17,5,2026-09-11T19:18:00
+ord-0000000067,Radia Perlman,radia.perlman67@example.com,604 Barton Springs Rd,Denver,5555552456241809,dining,settled,483.11,4,2026-09-26T06:24:00
+ord-0000000068,Dennis Allen,dennis.allen68@example.com,1714 Lavaca St,Madison,5555555465925510,hardware,settled,89.20,6,2026-09-03T04:44:00
+ord-0000000069,Alan Ritchie,alan.ritchie69@example.com,4156 Lavaca St,Boise,6011005003249664,apparel,settled,447.88,2,2026-09-23T05:27:00
+ord-0000000070,Margaret Allen,margaret.allen70@example.com,747 Congress Ave,Austin,4111119541858367,apparel,settled,294.96,2,2026-09-17T16:01:00
+ord-0000000071,Frances Liskov,frances.liskov71@example.com,2599 Barton Springs Rd,Austin,4555552711246406,grocery,refunded,446.45,5,2026-09-30T09:10:00
+ord-0000000072,Frances Liskov,frances.liskov72@example.com,9862 Speedway,Boise,5555553200080626,fuel,settled,30.13,1,2026-09-01T13:29:00
+ord-0000000073,Frances Ritchie,frances.ritchie73@example.com,3232 Barton Springs Rd,Raleigh,4555558986928412,pharmacy,settled,497.04,6,2026-09-22T18:01:00
+ord-0000000074,Dennis Lovelace,dennis.lovelace74@example.com,6147 Rainey St,Boise,5555551723143012,pharmacy,settled,356.13,3,2026-09-29T22:32:00
+ord-0000000075,Dennis Thompson,dennis.thompson75@example.com,8573 Lavaca St,Portland,4555551802433253,fuel,pending,164.95,2,2026-09-18T06:27:00
+ord-0000000076,Dennis Liskov,dennis.liskov76@example.com,7736 Speedway,Boise,4111110639436992,grocery,refunded,455.48,2,2026-09-02T11:57:00
+ord-0000000077,Ada Hopper,ada.hopper77@example.com,1748 Speedway,Denver,5200002000201015,electronics,refunded,381.12,2,2026-09-25T07:09:00
+ord-0000000078,Grace Thompson,grace.thompson78@example.com,1755 Barton Springs Rd,Denver,4555551001471211,electronics,settled,147.94,3,2026-09-20T06:51:00
+ord-0000000079,Alan Lovelace,alan.lovelace79@example.com,5750 Lavaca St,Portland,4111115598749061,grocery,pending,259.79,1,2026-09-16T18:46:00
+ord-0000000080,Barbara Lovelace,barbara.lovelace80@example.com,8813 Speedway,Denver,4111119426083404,grocery,settled,245.92,4,2026-09-09T09:32:00
+ord-0000000081,Barbara Allen,barbara.allen81@example.com,5689 Speedway,Portland,6011002433721172,electronics,refunded,393.68,6,2026-09-15T20:46:00
+ord-0000000082,Radia Hopper,radia.hopper82@example.com,6575 Rainey St,Boise,4111116053446888,fuel,pending,491.22,6,2026-09-11T15:07:00
+ord-0000000083,Barbara Torvalds,barbara.torvalds83@example.com,8709 Speedway,Boise,6011000595827852,fuel,pending,219.96,3,2026-09-27T08:36:00
+ord-0000000084,Margaret Torvalds,margaret.torvalds84@example.com,5474 Rainey St,Boise,4555558344922354,apparel,refunded,174.97,2,2026-09-15T22:20:00
+ord-0000000085,Margaret Turing,margaret.turing85@example.com,1668 Barton Springs Rd,Boise,4111113622446432,grocery,settled,141.12,4,2026-09-22T02:43:00
+ord-0000000086,Ada Lovelace,ada.lovelace86@example.com,6538 Rainey St,Boise,4555558470249606,dining,settled,454.09,4,2026-09-27T02:56:00
+ord-0000000087,Frances Thompson,frances.thompson87@example.com,3745 Guadalupe St,Boise,6011003217654167,fuel,pending,356.86,6,2026-09-08T02:53:00
+ord-0000000088,Alan Thompson,alan.thompson88@example.com,7910 Rainey St,Austin,6011006825067102,pharmacy,refunded,109.72,6,2026-09-10T02:14:00
+ord-0000000089,Dennis Perlman,dennis.perlman89@example.com,1657 Speedway,Raleigh,6011003780585673,fuel,settled,196.85,1,2026-09-28T22:39:00
+ord-0000000090,Radia Lovelace,radia.lovelace90@example.com,4137 Lavaca St,Raleigh,5555550016659411,fuel,settled,370.99,5,2026-09-10T23:06:00
+ord-0000000091,Ken Liskov,ken.liskov91@example.com,3474 Barton Springs Rd,Denver,4111113783256745,electronics,refunded,325.15,4,2026-09-17T03:28:00
+ord-0000000092,Margaret Turing,margaret.turing92@example.com,6163 Guadalupe St,Portland,5555552704534575,hardware,pending,312.06,1,2026-09-17T11:52:00
+ord-0000000093,Linus Turing,linus.turing93@example.com,6310 Congress Ave,Austin,6011005285900315,dining,settled,125.76,1,2026-09-27T07:51:00
+ord-0000000094,Linus Hamilton,linus.hamilton94@example.com,3042 Rainey St,Portland,4555553682991848,fuel,pending,346.70,5,2026-09-04T13:52:00
+ord-0000000095,Barbara Hopper,barbara.hopper95@example.com,9095 Congress Ave,Portland,5555553277807729,dining,pending,124.04,2,2026-09-25T13:19:00
+ord-0000000096,Frances Lovelace,frances.lovelace96@example.com,2628 Lavaca St,Raleigh,6011007475661251,dining,settled,11.26,1,2026-09-16T00:56:00
+ord-0000000097,Grace Ritchie,grace.ritchie97@example.com,7933 Rainey St,Denver,4111113625155782,apparel,settled,142.79,3,2026-09-20T05:21:00
+ord-0000000098,Alan Ritchie,alan.ritchie98@example.com,864 Lavaca St,Portland,5200007658485372,electronics,settled,166.12,3,2026-09-14T14:49:00
+ord-0000000099,Linus Allen,linus.allen99@example.com,1435 Congress Ave,Raleigh,6011006890641005,fuel,pending,304.73,6,2026-09-03T17:41:00
+ord-0000000100,Dennis Ritchie,dennis.ritchie100@example.com,6162 Speedway,Denver,6011001307212060,electronics,settled,457.13,6,2026-09-01T14:39:00
+ord-0000000101,Radia Torvalds,radia.torvalds101@example.com,5069 Speedway,Boise,5200004260506992,grocery,pending,284.19,1,2026-09-06T09:48:00
+ord-0000000102,Ken Allen,ken.allen102@example.com,6630 Rainey St,Austin,4111116992768111,dining,pending,106.93,2,2026-09-29T12:44:00
+ord-0000000103,Ada Thompson,ada.thompson103@example.com,79 Congress Ave,Boise,4111111312704938,hardware,settled,461.48,3,2026-09-07T14:09:00
+ord-0000000104,Grace Turing,grace.turing104@example.com,9134 Guadalupe St,Raleigh,5555554000009161,pharmacy,settled,364.99,2,2026-09-23T03:12:00
+ord-0000000105,Frances Lovelace,frances.lovelace105@example.com,5182 Lavaca St,Madison,5555557221526764,electronics,pending,472.52,5,2026-09-16T04:41:00
+ord-0000000106,Alan Turing,alan.turing106@example.com,994 Speedway,Boise,6011005902949638,hardware,pending,342.73,5,2026-09-11T15:58:00
+ord-0000000107,Barbara Turing,barbara.turing107@example.com,28 Lavaca St,Portland,5200006290429244,electronics,refunded,342.63,4,2026-09-16T18:51:00
+ord-0000000108,Dennis Hopper,dennis.hopper108@example.com,8848 Speedway,Raleigh,5555553349067344,apparel,settled,396.04,4,2026-09-25T14:26:00
+ord-0000000109,Grace Ritchie,grace.ritchie109@example.com,5819 Congress Ave,Denver,5555559848578939,fuel,settled,96.96,2,2026-09-14T04:32:00
+ord-0000000110,Radia Allen,radia.allen110@example.com,9248 Lavaca St,Raleigh,6011002307515718,fuel,settled,299.01,3,2026-09-13T18:25:00
+ord-0000000111,Dennis Allen,dennis.allen111@example.com,338 Congress Ave,Austin,4555559799344615,hardware,refunded,409.60,2,2026-09-12T13:25:00
+ord-0000000112,Ada Perlman,ada.perlman112@example.com,3294 Barton Springs Rd,Raleigh,4111110008577194,dining,pending,461.16,6,2026-09-05T02:15:00
+ord-0000000113,Alan Perlman,alan.perlman113@example.com,9249 Barton Springs Rd,Boise,4111118627253329,grocery,settled,470.64,1,2026-09-26T03:50:00
+ord-0000000114,Ada Lovelace,ada.lovelace114@example.com,4226 Speedway,Boise,5555550125034993,hardware,settled,235.89,3,2026-09-12T16:43:00
+ord-0000000115,Ken Hopper,ken.hopper115@example.com,6144 Rainey St,Raleigh,4555557320730237,grocery,refunded,433.51,6,2026-09-07T08:39:00
+ord-0000000116,Barbara Hopper,barbara.hopper116@example.com,6310 Congress Ave,Boise,4111117553715251,fuel,settled,90.94,4,2026-09-26T04:25:00
+ord-0000000117,Linus Liskov,linus.liskov117@example.com,2448 Lavaca St,Raleigh,5555553204945246,hardware,settled,159.72,4,2026-09-06T04:42:00
+ord-0000000118,Linus Ritchie,linus.ritchie118@example.com,932 Guadalupe St,Boise,4555558741435646,fuel,settled,49.68,3,2026-09-19T21:59:00
+ord-0000000119,Linus Lovelace,linus.lovelace119@example.com,4810 Barton Springs Rd,Boise,4111117858270846,fuel,settled,218.19,4,2026-09-10T22:24:00
+ord-0000000120,Alan Allen,alan.allen120@example.com,2961 Barton Springs Rd,Denver,6011003239119744,fuel,settled,69.38,6,2026-09-29T14:25:00
+ord-0000000121,Margaret Allen,margaret.allen121@example.com,5047 Barton Springs Rd,Austin,4111118608554711,grocery,pending,455.20,4,2026-09-07T01:34:00
+ord-0000000122,Alan Hamilton,alan.hamilton122@example.com,3049 Speedway,Portland,4111112599058782,grocery,settled,179.00,2,2026-09-15T14:35:00
+ord-0000000123,Ken Allen,ken.allen123@example.com,1003 Lavaca St,Austin,5555557808820317,fuel,refunded,92.01,1,2026-09-15T04:41:00
+ord-0000000124,Alan Ritchie,alan.ritchie124@example.com,493 Congress Ave,Austin,4555554099783711,pharmacy,settled,358.83,1,2026-09-13T10:12:00
+ord-0000000125,Grace Liskov,grace.liskov125@example.com,8088 Speedway,Madison,5200001116289336,fuel,refunded,231.57,4,2026-09-08T11:29:00
+ord-0000000126,Ada Thompson,ada.thompson126@example.com,6890 Speedway,Madison,6011000605563562,electronics,refunded,402.38,3,2026-09-19T05:33:00
+ord-0000000127,Dennis Lovelace,dennis.lovelace127@example.com,5323 Speedway,Denver,5200003605182154,hardware,settled,252.88,1,2026-09-11T06:16:00
+ord-0000000128,Linus Thompson,linus.thompson128@example.com,6506 Rainey St,Boise,4111110094948093,grocery,settled,61.73,1,2026-09-20T17:42:00
+ord-0000000129,Margaret Lovelace,margaret.lovelace129@example.com,4711 Congress Ave,Portland,5200002109841794,apparel,settled,220.55,5,2026-09-06T23:29:00
+ord-0000000130,Alan Thompson,alan.thompson130@example.com,9460 Lavaca St,Portland,4555551847993634,apparel,settled,230.98,5,2026-09-14T19:43:00
+ord-0000000131,Frances Liskov,frances.liskov131@example.com,7684 Lavaca St,Austin,4555555338869609,pharmacy,settled,431.07,2,2026-09-15T17:50:00
+ord-0000000132,Dennis Perlman,dennis.perlman132@example.com,8052 Lavaca St,Portland,4555554002819578,dining,settled,258.98,4,2026-09-17T02:47:00
+ord-0000000133,Grace Ritchie,grace.ritchie133@example.com,3690 Guadalupe St,Boise,4555556552399489,grocery,pending,135.07,6,2026-09-29T18:27:00
+ord-0000000134,Linus Thompson,linus.thompson134@example.com,1694 Congress Ave,Raleigh,6011009176926496,apparel,settled,190.40,4,2026-09-21T20:09:00
+ord-0000000135,Alan Perlman,alan.perlman135@example.com,4800 Lavaca St,Raleigh,6011008965076745,fuel,refunded,152.71,2,2026-09-20T19:50:00
+ord-0000000136,Frances Thompson,frances.thompson136@example.com,9529 Barton Springs Rd,Austin,5200005935360004,pharmacy,refunded,448.05,3,2026-09-25T09:56:00
+ord-0000000137,Alan Ritchie,alan.ritchie137@example.com,7163 Speedway,Madison,5555556750957010,apparel,settled,50.38,3,2026-09-23T19:07:00
+ord-0000000138,Ken Ritchie,ken.ritchie138@example.com,9406 Barton Springs Rd,Denver,5555557679958121,pharmacy,settled,183.96,1,2026-09-15T03:17:00
+ord-0000000139,Dennis Torvalds,dennis.torvalds139@example.com,1811 Guadalupe St,Portland,5200008628483836,hardware,settled,31.02,5,2026-09-28T10:46:00
+ord-0000000140,Grace Perlman,grace.perlman140@example.com,9337 Guadalupe St,Boise,4111116004804615,apparel,settled,334.39,2,2026-09-08T23:21:00
+ord-0000000141,Barbara Ritchie,barbara.ritchie141@example.com,9291 Lavaca St,Boise,6011008293691223,apparel,refunded,54.22,1,2026-09-04T11:09:00
+ord-0000000142,Linus Ritchie,linus.ritchie142@example.com,8036 Rainey St,Madison,5555550095235422,grocery,settled,314.72,5,2026-09-03T20:50:00
+ord-0000000143,Radia Hamilton,radia.hamilton143@example.com,7371 Speedway,Raleigh,4111110369070938,fuel,settled,22.95,5,2026-09-08T21:32:00
+ord-0000000144,Radia Lovelace,radia.lovelace144@example.com,7462 Lavaca St,Raleigh,6011004713693642,hardware,pending,12.19,2,2026-09-04T23:32:00
+ord-0000000145,Linus Torvalds,linus.torvalds145@example.com,5872 Rainey St,Denver,4111114685158658,hardware,settled,480.65,4,2026-09-16T23:39:00
+ord-0000000146,Dennis Hamilton,dennis.hamilton146@example.com,6347 Barton Springs Rd,Raleigh,5200005360405233,dining,settled,47.22,3,2026-09-25T19:08:00
+ord-0000000147,Linus Ritchie,linus.ritchie147@example.com,7264 Rainey St,Denver,4555555536693470,apparel,settled,114.41,4,2026-09-06T23:01:00
+ord-0000000148,Alan Allen,alan.allen148@example.com,7215 Speedway,Portland,6011003698321815,apparel,settled,368.23,4,2026-09-02T07:21:00
+ord-0000000149,Frances Torvalds,frances.torvalds149@example.com,5092 Congress Ave,Raleigh,4111112353118582,electronics,settled,97.22,6,2026-09-15T03:59:00
+ord-0000000150,Grace Hamilton,grace.hamilton150@example.com,4728 Barton Springs Rd,Boise,5555554567242056,dining,settled,448.58,1,2026-09-30T23:52:00
+ord-0000000151,Barbara Hamilton,barbara.hamilton151@example.com,6563 Lavaca St,Boise,4111112414930603,apparel,settled,215.92,3,2026-09-08T02:36:00
+ord-0000000152,Ken Lovelace,ken.lovelace152@example.com,9050 Lavaca St,Boise,4555559397846953,grocery,settled,417.30,6,2026-09-14T00:45:00
+ord-0000000153,Ada Allen,ada.allen153@example.com,9952 Guadalupe St,Austin,4555551053516699,electronics,settled,141.30,1,2026-09-16T21:14:00
+ord-0000000154,Ken Liskov,ken.liskov154@example.com,5576 Guadalupe St,Madison,5555558036827306,dining,refunded,131.34,5,2026-09-08T10:47:00
+ord-0000000155,Margaret Ritchie,margaret.ritchie155@example.com,4265 Barton Springs Rd,Austin,4555555561342274,dining,pending,119.70,2,2026-09-01T06:25:00
+ord-0000000156,Dennis Liskov,dennis.liskov156@example.com,2181 Guadalupe St,Portland,5200002299351869,electronics,settled,338.84,2,2026-09-28T05:55:00
+ord-0000000157,Barbara Thompson,barbara.thompson157@example.com,3381 Congress Ave,Boise,5200000573004436,grocery,settled,224.56,1,2026-09-08T08:12:00
+ord-0000000158,Radia Liskov,radia.liskov158@example.com,7679 Speedway,Portland,5200002810077159,dining,refunded,132.95,6,2026-09-23T05:58:00
+ord-0000000159,Ken Liskov,ken.liskov159@example.com,3110 Speedway,Portland,4111115149431201,grocery,pending,419.95,3,2026-09-17T17:49:00
+ord-0000000160,Linus Ritchie,linus.ritchie160@example.com,2761 Congress Ave,Boise,5200009562553527,apparel,settled,419.07,3,2026-09-11T21:27:00
+ord-0000000161,Ada Lovelace,ada.lovelace161@example.com,1757 Speedway,Boise,5555550376724995,dining,settled,71.80,2,2026-09-08T10:44:00
+ord-0000000162,Linus Liskov,linus.liskov162@example.com,6577 Congress Ave,Austin,5555557335009863,fuel,settled,36.93,1,2026-09-24T10:06:00
+ord-0000000163,Ken Perlman,ken.perlman163@example.com,1028 Rainey St,Austin,4555552640795937,hardware,settled,271.82,5,2026-09-21T22:57:00
+ord-0000000164,Ken Ritchie,ken.ritchie164@example.com,2530 Rainey St,Madison,6011001059499659,hardware,settled,150.36,3,2026-09-25T03:20:00
+ord-0000000165,Ada Hamilton,ada.hamilton165@example.com,3646 Guadalupe St,Boise,5555551295896583,fuel,refunded,221.24,3,2026-09-06T04:47:00
+ord-0000000166,Margaret Torvalds,margaret.torvalds166@example.com,3324 Speedway,Boise,4111113413847384,hardware,settled,271.07,6,2026-09-06T03:26:00
+ord-0000000167,Dennis Allen,dennis.allen167@example.com,9288 Congress Ave,Raleigh,4111117288818172,electronics,pending,272.61,2,2026-09-26T14:58:00
+ord-0000000168,Barbara Hopper,barbara.hopper168@example.com,2242 Lavaca St,Madison,4111116305009377,pharmacy,settled,354.01,4,2026-09-04T23:47:00
+ord-0000000169,Frances Hamilton,frances.hamilton169@example.com,9224 Congress Ave,Boise,5200002550413580,dining,refunded,474.07,6,2026-09-23T06:06:00
+ord-0000000170,Ada Allen,ada.allen170@example.com,5791 Congress Ave,Portland,6011005910345373,grocery,refunded,220.50,1,2026-09-23T05:04:00
+ord-0000000171,Grace Hopper,grace.hopper171@example.com,4234 Barton Springs Rd,Denver,6011004629484706,grocery,settled,497.25,4,2026-09-23T20:04:00
+ord-0000000172,Barbara Lovelace,barbara.lovelace172@example.com,581 Congress Ave,Denver,6011009672763989,grocery,settled,165.31,2,2026-09-15T03:58:00
+ord-0000000173,Linus Allen,linus.allen173@example.com,716 Barton Springs Rd,Denver,5200007597655051,apparel,pending,167.56,1,2026-09-12T07:41:00
+ord-0000000174,Barbara Allen,barbara.allen174@example.com,744 Guadalupe St,Denver,4555554641845992,apparel,refunded,478.52,6,2026-09-02T13:15:00
+ord-0000000175,Dennis Hopper,dennis.hopper175@example.com,3265 Rainey St,Boise,6011001543214557,apparel,settled,175.86,5,2026-09-19T11:25:00
+ord-0000000176,Radia Lovelace,radia.lovelace176@example.com,5525 Guadalupe St,Portland,5555558533522301,electronics,pending,203.09,4,2026-09-26T21:12:00
+ord-0000000177,Alan Torvalds,alan.torvalds177@example.com,9615 Congress Ave,Denver,5200004498513919,apparel,settled,152.81,3,2026-09-22T07:02:00
+ord-0000000178,Radia Thompson,radia.thompson178@example.com,1110 Rainey St,Portland,4555554480243036,grocery,pending,224.51,5,2026-09-13T20:42:00
+ord-0000000179,Dennis Hopper,dennis.hopper179@example.com,3223 Barton Springs Rd,Boise,4111112901195207,fuel,settled,268.93,1,2026-09-30T02:55:00
+ord-0000000180,Radia Lovelace,radia.lovelace180@example.com,3478 Lavaca St,Portland,4111117695206011,dining,refunded,167.93,4,2026-09-28T05:00:00
+ord-0000000181,Ken Turing,ken.turing181@example.com,7592 Congress Ave,Austin,5200009506952108,fuel,settled,72.19,1,2026-09-17T06:51:00
+ord-0000000182,Radia Thompson,radia.thompson182@example.com,5638 Speedway,Boise,6011008299539475,electronics,settled,388.22,3,2026-09-30T15:45:00
+ord-0000000183,Dennis Liskov,dennis.liskov183@example.com,9164 Lavaca St,Portland,6011008424087150,fuel,settled,201.02,1,2026-09-02T06:31:00
+ord-0000000184,Frances Torvalds,frances.torvalds184@example.com,2003 Congress Ave,Madison,6011003824952228,apparel,settled,176.06,6,2026-09-12T00:58:00
+ord-0000000185,Barbara Liskov,barbara.liskov185@example.com,3493 Guadalupe St,Portland,5555557350101652,grocery,settled,282.54,4,2026-09-18T02:13:00
+ord-0000000186,Margaret Lovelace,margaret.lovelace186@example.com,4128 Congress Ave,Portland,5555553353564475,fuel,refunded,395.62,4,2026-09-13T03:56:00
+ord-0000000187,Linus Turing,linus.turing187@example.com,4630 Congress Ave,Portland,4111117325997393,grocery,settled,425.82,6,2026-09-17T09:36:00
+ord-0000000188,Ada Liskov,ada.liskov188@example.com,2987 Rainey St,Denver,5200000120242851,grocery,settled,232.78,4,2026-09-05T02:33:00
+ord-0000000189,Ken Perlman,ken.perlman189@example.com,6500 Lavaca St,Austin,6011003300289392,hardware,settled,364.52,1,2026-09-15T09:41:00
+ord-0000000190,Grace Hopper,grace.hopper190@example.com,1974 Rainey St,Denver,6011006023828818,apparel,settled,419.95,1,2026-09-16T21:41:00
+ord-0000000191,Margaret Hamilton,margaret.hamilton191@example.com,1187 Lavaca St,Boise,4555550441038069,electronics,refunded,476.01,3,2026-09-01T11:34:00
+ord-0000000192,Radia Lovelace,radia.lovelace192@example.com,7435 Speedway,Portland,6011005646658669,fuel,pending,380.72,4,2026-09-07T12:15:00
+ord-0000000193,Ada Hamilton,ada.hamilton193@example.com,9959 Speedway,Portland,6011006331190067,dining,refunded,162.86,6,2026-09-21T03:14:00
+ord-0000000194,Dennis Perlman,dennis.perlman194@example.com,7463 Speedway,Austin,5555557859863653,dining,settled,197.37,5,2026-09-13T02:59:00
+ord-0000000195,Frances Perlman,frances.perlman195@example.com,1180 Guadalupe St,Madison,4555559447589793,fuel,settled,33.86,5,2026-09-17T13:41:00
+ord-0000000196,Dennis Hamilton,dennis.hamilton196@example.com,8643 Barton Springs Rd,Portland,4555552272056566,grocery,pending,77.77,3,2026-09-18T01:45:00
+ord-0000000197,Grace Perlman,grace.perlman197@example.com,5844 Guadalupe St,Madison,6011004714647175,dining,pending,365.61,2,2026-09-24T13:04:00
+ord-0000000198,Linus Lovelace,linus.lovelace198@example.com,2139 Lavaca St,Raleigh,6011003958564088,fuel,settled,285.70,1,2026-09-27T21:04:00
+ord-0000000199,Linus Turing,linus.turing199@example.com,8924 Lavaca St,Portland,5200003471871328,hardware,settled,309.31,3,2026-09-02T23:57:00
+ord-0000000200,Barbara Thompson,barbara.thompson200@example.com,6016 Congress Ave,Boise,5200006694536925,apparel,settled,488.87,6,2026-09-27T09:44:00
+ord-0000000201,Radia Hopper,radia.hopper201@example.com,3329 Lavaca St,Austin,4111117668670193,apparel,pending,467.59,6,2026-09-20T20:21:00
+ord-0000000202,Ken Liskov,ken.liskov202@example.com,2888 Congress Ave,Raleigh,5555557280336808,dining,settled,277.37,4,2026-09-21T22:19:00
+ord-0000000203,Grace Hopper,grace.hopper203@example.com,3617 Congress Ave,Madison,4111111713970351,hardware,settled,275.64,6,2026-09-20T00:29:00
+ord-0000000204,Frances Torvalds,frances.torvalds204@example.com,6668 Congress Ave,Boise,4555555538028485,pharmacy,settled,157.21,3,2026-09-14T14:20:00
+ord-0000000205,Dennis Thompson,dennis.thompson205@example.com,8372 Rainey St,Boise,4111114436684432,fuel,settled,104.55,6,2026-09-18T00:17:00
+ord-0000000206,Barbara Liskov,barbara.liskov206@example.com,9565 Barton Springs Rd,Portland,5200003780508165,apparel,settled,18.62,2,2026-09-20T23:37:00
+ord-0000000207,Alan Hamilton,alan.hamilton207@example.com,3431 Speedway,Madison,5555556733026107,fuel,settled,407.33,4,2026-09-09T04:47:00
+ord-0000000208,Ada Ritchie,ada.ritchie208@example.com,2690 Rainey St,Denver,5200003822381712,fuel,settled,475.48,4,2026-09-11T04:24:00
+ord-0000000209,Alan Liskov,alan.liskov209@example.com,6957 Barton Springs Rd,Austin,4555550274395826,pharmacy,settled,162.87,2,2026-09-07T21:54:00
+ord-0000000210,Margaret Thompson,margaret.thompson210@example.com,540 Lavaca St,Raleigh,4555554381372264,pharmacy,pending,58.07,3,2026-09-06T13:23:00
+ord-0000000211,Margaret Ritchie,margaret.ritchie211@example.com,8624 Congress Ave,Portland,5555555071374491,apparel,refunded,378.37,2,2026-09-07T08:35:00
+ord-0000000212,Barbara Turing,barbara.turing212@example.com,3723 Speedway,Portland,4111119910532403,fuel,settled,175.76,4,2026-09-12T06:13:00
+ord-0000000213,Radia Perlman,radia.perlman213@example.com,2931 Congress Ave,Portland,4111118718129677,grocery,settled,20.77,5,2026-09-05T10:11:00
+ord-0000000214,Ken Torvalds,ken.torvalds214@example.com,6805 Speedway,Portland,4111115252150747,fuel,settled,47.91,2,2026-09-06T07:52:00
+ord-0000000215,Linus Liskov,linus.liskov215@example.com,4432 Speedway,Madison,4111115732980846,pharmacy,settled,142.46,5,2026-09-10T06:13:00
+ord-0000000216,Linus Hamilton,linus.hamilton216@example.com,8763 Speedway,Denver,4111110107933124,fuel,settled,499.08,4,2026-09-18T21:33:00
+ord-0000000217,Frances Ritchie,frances.ritchie217@example.com,1796 Lavaca St,Madison,4111111933398037,grocery,refunded,169.31,1,2026-09-02T21:01:00
+ord-0000000218,Margaret Allen,margaret.allen218@example.com,2863 Lavaca St,Portland,4111117920566015,electronics,settled,74.88,5,2026-09-08T14:33:00
+ord-0000000219,Linus Perlman,linus.perlman219@example.com,2300 Barton Springs Rd,Denver,4555555107078515,electronics,refunded,318.56,2,2026-09-29T10:50:00
+ord-0000000220,Ada Perlman,ada.perlman220@example.com,6740 Congress Ave,Boise,5200009277244073,electronics,refunded,83.20,4,2026-09-30T02:47:00
+ord-0000000221,Dennis Turing,dennis.turing221@example.com,9726 Speedway,Boise,4111111433397836,hardware,refunded,454.15,6,2026-09-03T06:50:00
+ord-0000000222,Ken Thompson,ken.thompson222@example.com,5614 Rainey St,Raleigh,4111113596404797,grocery,settled,439.22,4,2026-09-20T01:17:00
+ord-0000000223,Ken Allen,ken.allen223@example.com,4907 Rainey St,Denver,5200008315679043,pharmacy,settled,496.24,2,2026-09-21T02:48:00
+ord-0000000224,Ken Ritchie,ken.ritchie224@example.com,3961 Congress Ave,Denver,4111116264525231,pharmacy,refunded,441.10,4,2026-09-15T01:02:00
+ord-0000000225,Barbara Perlman,barbara.perlman225@example.com,8303 Speedway,Denver,4555556800213797,electronics,settled,368.56,6,2026-09-05T14:13:00
+ord-0000000226,Dennis Ritchie,dennis.ritchie226@example.com,6172 Barton Springs Rd,Portland,5555551895744548,dining,pending,468.97,6,2026-09-03T17:11:00
+ord-0000000227,Barbara Liskov,barbara.liskov227@example.com,5960 Guadalupe St,Austin,4111111867482971,grocery,settled,241.75,1,2026-09-13T08:30:00
+ord-0000000228,Linus Hamilton,linus.hamilton228@example.com,9627 Speedway,Madison,4111116294348067,apparel,pending,324.75,6,2026-09-30T02:26:00
+ord-0000000229,Ken Liskov,ken.liskov229@example.com,5903 Guadalupe St,Portland,5200002970852383,electronics,settled,81.91,6,2026-09-24T16:32:00
+ord-0000000230,Linus Turing,linus.turing230@example.com,877 Speedway,Portland,5555555244739570,hardware,settled,341.10,3,2026-09-18T22:19:00
+ord-0000000231,Radia Thompson,radia.thompson231@example.com,7743 Lavaca St,Austin,4555559786250247,electronics,refunded,235.64,5,2026-09-19T17:42:00
+ord-0000000232,Grace Turing,grace.turing232@example.com,6417 Lavaca St,Boise,5555558414700893,pharmacy,settled,301.47,3,2026-09-13T02:01:00
+ord-0000000233,Margaret Hopper,margaret.hopper233@example.com,8988 Congress Ave,Madison,5555551422166561,hardware,pending,403.06,3,2026-09-09T10:52:00
+ord-0000000234,Linus Ritchie,linus.ritchie234@example.com,8540 Rainey St,Boise,5200002351618098,dining,settled,289.33,4,2026-09-10T17:40:00
+ord-0000000235,Frances Turing,frances.turing235@example.com,2171 Barton Springs Rd,Denver,4555558140642693,pharmacy,settled,385.99,5,2026-09-24T04:02:00
+ord-0000000236,Alan Allen,alan.allen236@example.com,3492 Barton Springs Rd,Portland,4111115915081156,fuel,settled,229.41,2,2026-09-21T08:06:00
+ord-0000000237,Alan Ritchie,alan.ritchie237@example.com,969 Rainey St,Madison,6011009008717345,dining,settled,482.39,5,2026-09-26T20:54:00
+ord-0000000238,Margaret Hamilton,margaret.hamilton238@example.com,9120 Barton Springs Rd,Portland,6011008032084656,grocery,settled,362.54,5,2026-09-06T02:44:00
+ord-0000000239,Ken Thompson,ken.thompson239@example.com,8391 Speedway,Raleigh,4555550585417921,hardware,pending,484.62,6,2026-09-29T02:40:00
+ord-0000000240,Barbara Hamilton,barbara.hamilton240@example.com,5599 Speedway,Denver,4111116243180736,electronics,settled,386.88,2,2026-09-26T11:57:00
+ord-0000000241,Alan Lovelace,alan.lovelace241@example.com,259 Congress Ave,Portland,4555556084852955,pharmacy,settled,53.52,6,2026-09-08T23:20:00
+ord-0000000242,Radia Thompson,radia.thompson242@example.com,482 Guadalupe St,Raleigh,4111115125771554,hardware,settled,425.13,5,2026-09-26T15:24:00
+ord-0000000243,Alan Ritchie,alan.ritchie243@example.com,6372 Barton Springs Rd,Portland,5200000348662625,fuel,settled,56.45,6,2026-09-27T15:21:00
+ord-0000000244,Dennis Thompson,dennis.thompson244@example.com,453 Congress Ave,Austin,5555550398155988,hardware,pending,384.70,2,2026-09-01T08:00:00
+ord-0000000245,Margaret Hamilton,margaret.hamilton245@example.com,5810 Rainey St,Austin,4111119237799719,apparel,settled,430.99,2,2026-09-19T05:08:00
+ord-0000000246,Margaret Liskov,margaret.liskov246@example.com,7729 Speedway,Denver,4111117961330693,electronics,settled,317.32,6,2026-09-30T11:32:00
+ord-0000000247,Ada Hamilton,ada.hamilton247@example.com,1537 Barton Springs Rd,Austin,4111117063308969,pharmacy,settled,77.55,1,2026-09-22T19:01:00
+ord-0000000248,Grace Hopper,grace.hopper248@example.com,3063 Barton Springs Rd,Madison,4555559851860102,apparel,settled,251.74,5,2026-09-28T21:20:00
+ord-0000000249,Frances Ritchie,frances.ritchie249@example.com,1272 Guadalupe St,Austin,6011009476083022,electronics,refunded,405.96,4,2026-09-10T12:01:00
+ord-0000000250,Grace Hamilton,grace.hamilton250@example.com,7030 Congress Ave,Madison,4111118851131159,pharmacy,settled,155.30,3,2026-09-07T17:27:00
+ord-0000000251,Barbara Allen,barbara.allen251@example.com,9442 Lavaca St,Denver,4111111101938671,hardware,refunded,287.68,2,2026-09-04T15:10:00
+ord-0000000252,Ada Lovelace,ada.lovelace252@example.com,502 Guadalupe St,Boise,4555556029474246,electronics,settled,423.30,1,2026-09-15T18:20:00
+ord-0000000253,Ken Hopper,ken.hopper253@example.com,2657 Rainey St,Denver,5555559543068053,fuel,refunded,443.26,3,2026-09-01T01:53:00
+ord-0000000254,Margaret Perlman,margaret.perlman254@example.com,1300 Speedway,Denver,4111110565518177,fuel,settled,265.93,6,2026-09-25T12:05:00
+ord-0000000255,Margaret Thompson,margaret.thompson255@example.com,8501 Guadalupe St,Boise,4111113340461291,hardware,refunded,343.75,6,2026-09-13T22:32:00
+ord-0000000256,Ken Hamilton,ken.hamilton256@example.com,5600 Lavaca St,Austin,4111113499219169,pharmacy,settled,32.91,1,2026-09-25T09:06:00
+ord-0000000257,Ada Hopper,ada.hopper257@example.com,5923 Congress Ave,Denver,6011001784721443,hardware,pending,348.69,2,2026-09-21T05:58:00
+ord-0000000258,Grace Liskov,grace.liskov258@example.com,5609 Lavaca St,Denver,4111116313554901,electronics,settled,37.25,1,2026-09-08T04:37:00
+ord-0000000259,Frances Turing,frances.turing259@example.com,4310 Barton Springs Rd,Austin,4555557106419930,grocery,settled,148.65,3,2026-09-06T22:04:00
+ord-0000000260,Radia Perlman,radia.perlman260@example.com,8884 Guadalupe St,Denver,4555555455281323,pharmacy,pending,466.20,1,2026-09-11T04:38:00
+ord-0000000261,Margaret Hamilton,margaret.hamilton261@example.com,6295 Lavaca St,Denver,5555554001653405,hardware,pending,244.23,1,2026-09-21T22:23:00
+ord-0000000262,Dennis Liskov,dennis.liskov262@example.com,1536 Rainey St,Austin,5555557236701311,pharmacy,settled,222.52,2,2026-09-16T09:47:00
+ord-0000000263,Dennis Lovelace,dennis.lovelace263@example.com,1172 Speedway,Denver,5555553996106809,fuel,refunded,86.15,3,2026-09-10T15:58:00
+ord-0000000264,Grace Hopper,grace.hopper264@example.com,7821 Lavaca St,Raleigh,5555552175134517,grocery,pending,241.31,2,2026-09-24T04:32:00
+ord-0000000265,Ada Ritchie,ada.ritchie265@example.com,401 Guadalupe St,Raleigh,4111118379252651,dining,settled,428.80,3,2026-09-30T21:01:00
+ord-0000000266,Linus Hamilton,linus.hamilton266@example.com,257 Speedway,Raleigh,4111117304723455,apparel,settled,469.78,4,2026-09-02T03:20:00
+ord-0000000267,Linus Lovelace,linus.lovelace267@example.com,5897 Rainey St,Denver,4111117587393372,fuel,settled,499.79,4,2026-09-13T07:58:00
+ord-0000000268,Margaret Perlman,margaret.perlman268@example.com,521 Rainey St,Denver,5200006095230292,electronics,settled,303.72,4,2026-09-26T13:42:00
+ord-0000000269,Dennis Thompson,dennis.thompson269@example.com,2256 Lavaca St,Denver,6011001462282957,electronics,settled,84.71,4,2026-09-08T14:57:00
+ord-0000000270,Grace Allen,grace.allen270@example.com,7413 Rainey St,Portland,6011003246106106,pharmacy,settled,145.20,2,2026-09-07T07:08:00
+ord-0000000271,Ken Hopper,ken.hopper271@example.com,8674 Rainey St,Portland,6011009173789582,apparel,settled,218.56,5,2026-09-12T12:43:00
+ord-0000000272,Frances Thompson,frances.thompson272@example.com,2975 Guadalupe St,Portland,4555556584109732,dining,settled,400.00,1,2026-09-21T05:56:00
+ord-0000000273,Barbara Perlman,barbara.perlman273@example.com,2954 Rainey St,Portland,4555556138662350,dining,settled,190.66,4,2026-09-17T14:34:00
+ord-0000000274,Linus Hamilton,linus.hamilton274@example.com,3522 Lavaca St,Austin,4111118269617971,pharmacy,refunded,271.92,3,2026-09-20T21:33:00
+ord-0000000275,Radia Torvalds,radia.torvalds275@example.com,7893 Guadalupe St,Austin,4555556514833930,pharmacy,settled,324.71,2,2026-09-03T22:42:00
+ord-0000000276,Frances Liskov,frances.liskov276@example.com,9647 Congress Ave,Denver,4111119868401023,grocery,settled,2.96,2,2026-09-08T22:38:00
+ord-0000000277,Alan Hamilton,alan.hamilton277@example.com,317 Congress Ave,Austin,4111111327518554,pharmacy,pending,374.01,3,2026-09-16T03:44:00
+ord-0000000278,Ada Hopper,ada.hopper278@example.com,4326 Barton Springs Rd,Portland,4111111904255877,fuel,settled,302.98,5,2026-09-03T07:58:00
+ord-0000000279,Linus Thompson,linus.thompson279@example.com,6312 Lavaca St,Boise,4111113417119236,electronics,pending,402.20,2,2026-09-29T07:52:00
+ord-0000000280,Grace Liskov,grace.liskov280@example.com,9258 Rainey St,Denver,4111113931734866,apparel,refunded,166.59,1,2026-09-02T09:45:00
+ord-0000000281,Margaret Lovelace,margaret.lovelace281@example.com,3621 Speedway,Portland,4555557932344229,grocery,settled,232.00,3,2026-09-15T02:15:00
+ord-0000000282,Ken Perlman,ken.perlman282@example.com,8568 Guadalupe St,Portland,4111119514058326,fuel,settled,231.42,2,2026-09-15T14:09:00
+ord-0000000283,Grace Ritchie,grace.ritchie283@example.com,8541 Lavaca St,Boise,5555558411196673,grocery,settled,401.96,5,2026-09-11T02:21:00
+ord-0000000284,Barbara Perlman,barbara.perlman284@example.com,7814 Guadalupe St,Raleigh,5200008759017148,fuel,settled,429.24,5,2026-09-06T20:51:00
+ord-0000000285,Grace Liskov,grace.liskov285@example.com,576 Lavaca St,Boise,4111115681261008,pharmacy,settled,265.48,6,2026-09-04T05:09:00
+ord-0000000286,Radia Torvalds,radia.torvalds286@example.com,8714 Speedway,Raleigh,4555553266551372,apparel,settled,46.75,6,2026-09-18T14:23:00
+ord-0000000287,Barbara Hamilton,barbara.hamilton287@example.com,3031 Speedway,Portland,5555556323718535,grocery,settled,256.90,6,2026-09-07T18:13:00
+ord-0000000288,Frances Perlman,frances.perlman288@example.com,5136 Barton Springs Rd,Boise,5200003600395041,apparel,settled,449.80,3,2026-09-11T08:57:00
+ord-0000000289,Radia Turing,radia.turing289@example.com,5994 Lavaca St,Portland,6011005664130690,electronics,settled,408.66,6,2026-09-03T09:02:00
+ord-0000000290,Linus Torvalds,linus.torvalds290@example.com,5027 Lavaca St,Madison,5200006642385052,electronics,settled,424.09,2,2026-09-25T16:39:00
+ord-0000000291,Ada Ritchie,ada.ritchie291@example.com,7467 Lavaca St,Raleigh,5555553553111507,electronics,settled,114.32,1,2026-09-28T23:48:00
+ord-0000000292,Grace Liskov,grace.liskov292@example.com,861 Barton Springs Rd,Raleigh,5555554764975540,dining,settled,287.06,1,2026-09-28T07:13:00
+ord-0000000293,Frances Ritchie,frances.ritchie293@example.com,1122 Rainey St,Raleigh,5555550333585190,grocery,pending,295.84,4,2026-09-02T01:48:00
+ord-0000000294,Linus Thompson,linus.thompson294@example.com,1513 Barton Springs Rd,Madison,5200008513903567,fuel,pending,318.84,1,2026-09-19T23:16:00
+ord-0000000295,Margaret Perlman,margaret.perlman295@example.com,4945 Lavaca St,Madison,4555557880296827,fuel,settled,455.19,5,2026-09-06T03:12:00
+ord-0000000296,Frances Perlman,frances.perlman296@example.com,876 Congress Ave,Denver,6011000838728321,fuel,pending,401.90,4,2026-09-07T04:49:00
+ord-0000000297,Frances Turing,frances.turing297@example.com,9899 Lavaca St,Denver,5555553870105232,apparel,settled,116.81,2,2026-09-11T13:34:00
+ord-0000000298,Frances Torvalds,frances.torvalds298@example.com,3310 Speedway,Boise,4111117934680703,hardware,settled,434.41,5,2026-09-19T21:20:00
+ord-0000000299,Linus Perlman,linus.perlman299@example.com,7537 Barton Springs Rd,Boise,4555558563332657,apparel,pending,152.29,2,2026-09-29T21:35:00
+ord-0000000300,Margaret Liskov,margaret.liskov300@example.com,1393 Barton Springs Rd,Denver,6011005184267790,hardware,pending,472.46,4,2026-09-24T14:21:00
+ord-0000000301,Margaret Liskov,margaret.liskov301@example.com,9699 Speedway,Denver,6011002315616151,dining,pending,168.45,6,2026-09-18T20:04:00
+ord-0000000302,Linus Liskov,linus.liskov302@example.com,9382 Speedway,Austin,4111117586694283,dining,settled,474.70,2,2026-09-29T12:20:00
+ord-0000000303,Radia Thompson,radia.thompson303@example.com,5352 Speedway,Madison,4555555288624129,electronics,settled,308.58,4,2026-09-21T01:29:00
+ord-0000000304,Barbara Turing,barbara.turing304@example.com,5955 Speedway,Austin,5200008857154694,apparel,refunded,393.20,3,2026-09-01T18:18:00
+ord-0000000305,Radia Thompson,radia.thompson305@example.com,1101 Lavaca St,Boise,6011000454726013,fuel,settled,30.68,2,2026-09-07T16:26:00
+ord-0000000306,Alan Hamilton,alan.hamilton306@example.com,3593 Congress Ave,Raleigh,5200001128812638,grocery,pending,429.45,4,2026-09-20T05:10:00
+ord-0000000307,Grace Torvalds,grace.torvalds307@example.com,9782 Barton Springs Rd,Portland,4111111021005213,hardware,settled,54.45,2,2026-09-28T17:28:00
+ord-0000000308,Radia Hamilton,radia.hamilton308@example.com,5909 Congress Ave,Raleigh,5200006647370224,fuel,settled,397.05,6,2026-09-30T19:41:00
+ord-0000000309,Ada Liskov,ada.liskov309@example.com,8688 Speedway,Boise,4111117890770951,dining,pending,256.17,2,2026-09-03T04:33:00
+ord-0000000310,Dennis Ritchie,dennis.ritchie310@example.com,2335 Rainey St,Denver,5555552088056393,hardware,pending,167.55,4,2026-09-27T09:35:00
+ord-0000000311,Frances Torvalds,frances.torvalds311@example.com,5184 Rainey St,Denver,5200003909558497,pharmacy,settled,287.23,5,2026-09-23T05:50:00
+ord-0000000312,Alan Hopper,alan.hopper312@example.com,8062 Congress Ave,Denver,5555551964986012,apparel,settled,52.35,3,2026-09-06T04:10:00
+ord-0000000313,Frances Thompson,frances.thompson313@example.com,7239 Guadalupe St,Portland,4111117510743149,pharmacy,settled,103.64,5,2026-09-23T19:01:00
+ord-0000000314,Dennis Thompson,dennis.thompson314@example.com,9368 Guadalupe St,Boise,5200007567102407,apparel,refunded,368.74,2,2026-09-17T00:03:00
+ord-0000000315,Ken Hamilton,ken.hamilton315@example.com,4256 Speedway,Austin,5555557011037972,dining,settled,364.84,3,2026-09-28T16:55:00
+ord-0000000316,Linus Torvalds,linus.torvalds316@example.com,1968 Guadalupe St,Denver,6011004522373444,grocery,settled,81.38,5,2026-09-14T17:47:00
+ord-0000000317,Grace Thompson,grace.thompson317@example.com,8732 Speedway,Raleigh,4555551675063773,electronics,refunded,481.04,3,2026-09-08T07:18:00
+ord-0000000318,Dennis Hopper,dennis.hopper318@example.com,9079 Lavaca St,Raleigh,4555552777495186,hardware,refunded,164.92,3,2026-09-05T08:08:00
+ord-0000000319,Radia Thompson,radia.thompson319@example.com,1839 Barton Springs Rd,Raleigh,6011004569825058,fuel,pending,62.87,3,2026-09-21T17:15:00
+ord-0000000320,Radia Allen,radia.allen320@example.com,5937 Rainey St,Boise,4555558253934432,dining,refunded,33.12,1,2026-09-10T12:58:00
+ord-0000000321,Dennis Hopper,dennis.hopper321@example.com,3372 Speedway,Madison,4111113141390400,hardware,settled,484.56,3,2026-09-26T20:55:00
+ord-0000000322,Ada Ritchie,ada.ritchie322@example.com,6812 Lavaca St,Boise,6011008209323135,grocery,settled,293.15,6,2026-09-24T11:07:00
+ord-0000000323,Radia Thompson,radia.thompson323@example.com,6637 Guadalupe St,Austin,4111119614826507,grocery,settled,496.80,5,2026-09-25T04:22:00
+ord-0000000324,Ken Torvalds,ken.torvalds324@example.com,6092 Guadalupe St,Portland,6011002554822221,fuel,settled,294.68,1,2026-09-08T06:48:00
+ord-0000000325,Alan Ritchie,alan.ritchie325@example.com,9292 Speedway,Austin,6011007678003624,fuel,settled,121.71,3,2026-09-11T23:45:00
+ord-0000000326,Grace Liskov,grace.liskov326@example.com,9650 Rainey St,Raleigh,5200007030783098,fuel,settled,35.68,1,2026-09-16T02:14:00
+ord-0000000327,Grace Perlman,grace.perlman327@example.com,1292 Rainey St,Portland,4111118732246515,dining,refunded,214.99,2,2026-09-27T17:13:00
+ord-0000000328,Ada Liskov,ada.liskov328@example.com,2006 Guadalupe St,Boise,4555550480501837,apparel,pending,84.88,6,2026-09-10T12:48:00
+ord-0000000329,Ken Turing,ken.turing329@example.com,7437 Congress Ave,Denver,5555550361361845,pharmacy,settled,124.84,6,2026-09-16T00:38:00
+ord-0000000330,Margaret Lovelace,margaret.lovelace330@example.com,6566 Rainey St,Boise,5555551211083415,hardware,refunded,340.54,3,2026-09-09T19:55:00
+ord-0000000331,Grace Liskov,grace.liskov331@example.com,9220 Rainey St,Portland,4111119722176209,dining,settled,289.49,6,2026-09-03T01:23:00
+ord-0000000332,Grace Hopper,grace.hopper332@example.com,5277 Barton Springs Rd,Austin,4555559452564277,hardware,settled,2.80,1,2026-09-25T18:04:00
+ord-0000000333,Ken Hamilton,ken.hamilton333@example.com,2546 Guadalupe St,Portland,4111111613020513,electronics,settled,498.18,3,2026-09-26T10:37:00
+ord-0000000334,Frances Liskov,frances.liskov334@example.com,9271 Speedway,Denver,5200008375255882,apparel,settled,310.14,6,2026-09-23T21:17:00
+ord-0000000335,Linus Ritchie,linus.ritchie335@example.com,367 Rainey St,Raleigh,6011002084417583,hardware,settled,352.48,5,2026-09-25T16:35:00
+ord-0000000336,Ken Ritchie,ken.ritchie336@example.com,4758 Lavaca St,Raleigh,4111114753754750,grocery,settled,366.95,2,2026-09-11T15:22:00
+ord-0000000337,Ken Turing,ken.turing337@example.com,6004 Guadalupe St,Austin,5200008055606982,dining,settled,402.40,2,2026-09-16T11:48:00
+ord-0000000338,Radia Liskov,radia.liskov338@example.com,1779 Guadalupe St,Boise,4555557153470257,electronics,pending,433.96,4,2026-09-14T03:11:00
+ord-0000000339,Ken Torvalds,ken.torvalds339@example.com,5146 Barton Springs Rd,Boise,4555552540350205,hardware,pending,96.96,3,2026-09-24T04:13:00
+ord-0000000340,Grace Hopper,grace.hopper340@example.com,4451 Rainey St,Madison,5555559406626054,grocery,settled,167.14,6,2026-09-02T14:18:00
+ord-0000000341,Frances Hamilton,frances.hamilton341@example.com,3390 Congress Ave,Madison,6011009341333792,electronics,refunded,441.15,1,2026-09-02T15:45:00
+ord-0000000342,Frances Perlman,frances.perlman342@example.com,8455 Guadalupe St,Madison,4111118713374658,grocery,settled,58.89,4,2026-09-11T22:33:00
+ord-0000000343,Ken Hamilton,ken.hamilton343@example.com,5465 Speedway,Denver,5555550884477706,grocery,pending,231.51,5,2026-09-29T10:35:00
+ord-0000000344,Linus Allen,linus.allen344@example.com,7693 Speedway,Raleigh,4555551471473010,grocery,settled,92.73,1,2026-09-20T16:30:00
+ord-0000000345,Ken Ritchie,ken.ritchie345@example.com,7464 Lavaca St,Boise,5200008521887158,pharmacy,refunded,105.55,4,2026-09-17T06:47:00
+ord-0000000346,Radia Allen,radia.allen346@example.com,9163 Speedway,Portland,5200001951585251,dining,settled,169.97,4,2026-09-02T00:45:00
+ord-0000000347,Radia Hamilton,radia.hamilton347@example.com,6587 Congress Ave,Denver,4555558756432728,electronics,settled,407.72,1,2026-09-02T07:24:00
+ord-0000000348,Ken Hamilton,ken.hamilton348@example.com,5256 Guadalupe St,Raleigh,4111117873821227,pharmacy,refunded,68.94,5,2026-09-08T19:28:00
+ord-0000000349,Dennis Perlman,dennis.perlman349@example.com,4759 Speedway,Madison,4555557912444387,apparel,refunded,416.91,6,2026-09-21T03:21:00
+ord-0000000350,Radia Allen,radia.allen350@example.com,2069 Lavaca St,Raleigh,5555558201199093,dining,refunded,364.32,3,2026-09-04T04:41:00
+ord-0000000351,Linus Ritchie,linus.ritchie351@example.com,383 Congress Ave,Madison,4555557178323556,apparel,settled,66.72,3,2026-09-04T00:11:00
+ord-0000000352,Grace Lovelace,grace.lovelace352@example.com,1980 Congress Ave,Denver,5200004413794800,electronics,settled,366.35,2,2026-09-15T00:18:00
+ord-0000000353,Grace Ritchie,grace.ritchie353@example.com,7931 Speedway,Madison,4555556876733447,dining,refunded,124.65,6,2026-09-14T21:48:00
+ord-0000000354,Ken Lovelace,ken.lovelace354@example.com,3672 Congress Ave,Denver,5555555785870958,hardware,settled,80.81,4,2026-09-30T22:41:00
+ord-0000000355,Ken Torvalds,ken.torvalds355@example.com,8596 Barton Springs Rd,Raleigh,4555557833359144,pharmacy,settled,318.17,4,2026-09-13T19:54:00
+ord-0000000356,Ken Allen,ken.allen356@example.com,9481 Barton Springs Rd,Portland,5555550442889921,dining,settled,146.74,1,2026-09-20T19:31:00
+ord-0000000357,Barbara Thompson,barbara.thompson357@example.com,7157 Barton Springs Rd,Austin,4555556282536640,fuel,settled,92.30,5,2026-09-09T15:28:00
+ord-0000000358,Linus Liskov,linus.liskov358@example.com,9608 Speedway,Denver,5555558710370912,apparel,pending,109.59,3,2026-09-29T16:35:00
+ord-0000000359,Frances Hamilton,frances.hamilton359@example.com,9386 Barton Springs Rd,Boise,5200005171242486,electronics,settled,30.89,5,2026-09-03T07:08:00
+ord-0000000360,Margaret Hamilton,margaret.hamilton360@example.com,3373 Congress Ave,Portland,5200001472404735,pharmacy,settled,394.46,6,2026-09-19T19:43:00
+ord-0000000361,Grace Hamilton,grace.hamilton361@example.com,136 Congress Ave,Portland,4111117703350561,hardware,refunded,196.84,3,2026-09-20T00:28:00
+ord-0000000362,Grace Allen,grace.allen362@example.com,8391 Guadalupe St,Raleigh,5555559874266300,apparel,settled,231.21,5,2026-09-12T03:43:00
+ord-0000000363,Dennis Ritchie,dennis.ritchie363@example.com,1940 Congress Ave,Boise,5200006004723726,electronics,settled,217.58,6,2026-09-10T07:27:00
+ord-0000000364,Linus Thompson,linus.thompson364@example.com,43 Guadalupe St,Portland,4111116758935128,grocery,settled,144.18,3,2026-09-14T21:55:00
+ord-0000000365,Dennis Torvalds,dennis.torvalds365@example.com,1894 Congress Ave,Boise,4111114052968614,grocery,refunded,232.52,4,2026-09-21T04:53:00
+ord-0000000366,Ken Hopper,ken.hopper366@example.com,7133 Barton Springs Rd,Raleigh,4555555766884195,grocery,pending,132.01,2,2026-09-07T23:34:00
+ord-0000000367,Barbara Thompson,barbara.thompson367@example.com,9987 Lavaca St,Portland,4555559826243186,grocery,pending,41.79,5,2026-09-21T05:20:00
+ord-0000000368,Alan Allen,alan.allen368@example.com,7207 Guadalupe St,Austin,4111111648065277,grocery,settled,14.52,5,2026-09-11T02:58:00
+ord-0000000369,Grace Hopper,grace.hopper369@example.com,9057 Barton Springs Rd,Madison,6011001246749354,electronics,settled,282.08,1,2026-09-25T17:14:00
+ord-0000000370,Ken Turing,ken.turing370@example.com,9792 Congress Ave,Austin,4111116193947423,apparel,pending,11.67,4,2026-09-27T15:43:00
+ord-0000000371,Radia Turing,radia.turing371@example.com,9019 Lavaca St,Boise,6011001187535150,apparel,refunded,146.34,3,2026-09-18T00:21:00
+ord-0000000372,Margaret Thompson,margaret.thompson372@example.com,8407 Lavaca St,Madison,6011003674932825,electronics,refunded,8.60,3,2026-09-08T23:38:00
+ord-0000000373,Radia Turing,radia.turing373@example.com,3179 Rainey St,Raleigh,4555551412786033,hardware,pending,342.89,2,2026-09-18T01:09:00
+ord-0000000374,Dennis Turing,dennis.turing374@example.com,6593 Guadalupe St,Madison,5555558636285871,grocery,settled,121.09,6,2026-09-04T11:07:00
+ord-0000000375,Dennis Torvalds,dennis.torvalds375@example.com,5889 Lavaca St,Raleigh,5555555495282213,fuel,refunded,265.52,4,2026-09-16T07:37:00
+ord-0000000376,Grace Ritchie,grace.ritchie376@example.com,2536 Barton Springs Rd,Boise,6011003544143603,hardware,settled,190.57,1,2026-09-21T01:13:00
+ord-0000000377,Ken Lovelace,ken.lovelace377@example.com,1539 Barton Springs Rd,Raleigh,5200003091769811,fuel,pending,144.08,1,2026-09-17T22:34:00
+ord-0000000378,Frances Lovelace,frances.lovelace378@example.com,2042 Speedway,Austin,6011007826287459,hardware,settled,96.45,6,2026-09-27T01:59:00
+ord-0000000379,Radia Allen,radia.allen379@example.com,7106 Barton Springs Rd,Portland,6011005085810540,dining,settled,331.59,4,2026-09-24T20:10:00
+ord-0000000380,Barbara Liskov,barbara.liskov380@example.com,7566 Rainey St,Madison,5200001921323239,hardware,settled,94.85,3,2026-09-21T06:44:00
+ord-0000000381,Barbara Lovelace,barbara.lovelace381@example.com,2842 Congress Ave,Denver,5555551170076814,hardware,settled,425.03,1,2026-09-27T16:22:00
+ord-0000000382,Ken Hamilton,ken.hamilton382@example.com,5561 Lavaca St,Boise,5555556608050968,fuel,settled,168.49,1,2026-09-02T05:18:00
+ord-0000000383,Grace Lovelace,grace.lovelace383@example.com,6929 Rainey St,Boise,5555555196950647,hardware,refunded,479.41,4,2026-09-25T16:20:00
+ord-0000000384,Dennis Thompson,dennis.thompson384@example.com,1699 Rainey St,Austin,5555551768901977,electronics,settled,23.84,4,2026-09-28T03:14:00
+ord-0000000385,Alan Lovelace,alan.lovelace385@example.com,7776 Barton Springs Rd,Portland,6011007614990546,apparel,settled,464.24,5,2026-09-19T04:22:00
+ord-0000000386,Frances Lovelace,frances.lovelace386@example.com,7053 Rainey St,Madison,6011002974804023,pharmacy,settled,382.82,2,2026-09-02T09:44:00
+ord-0000000387,Linus Turing,linus.turing387@example.com,3901 Guadalupe St,Raleigh,4555558959921378,apparel,pending,475.92,2,2026-09-21T09:40:00
+ord-0000000388,Linus Ritchie,linus.ritchie388@example.com,4734 Lavaca St,Austin,6011004701206811,pharmacy,settled,36.48,4,2026-09-07T02:08:00
+ord-0000000389,Alan Ritchie,alan.ritchie389@example.com,663 Speedway,Austin,5555558271324308,grocery,settled,49.70,2,2026-09-20T22:26:00
+ord-0000000390,Dennis Perlman,dennis.perlman390@example.com,2120 Barton Springs Rd,Portland,5555552974498220,apparel,settled,444.71,2,2026-09-01T22:13:00
+ord-0000000391,Grace Hamilton,grace.hamilton391@example.com,5018 Congress Ave,Portland,5200001478271153,hardware,settled,81.77,1,2026-09-01T07:19:00
+ord-0000000392,Grace Thompson,grace.thompson392@example.com,1368 Barton Springs Rd,Denver,5555550671065334,apparel,pending,357.40,4,2026-09-25T04:47:00
+ord-0000000393,Radia Torvalds,radia.torvalds393@example.com,6309 Congress Ave,Portland,5555554413657432,electronics,pending,152.54,5,2026-09-05T01:51:00
+ord-0000000394,Grace Liskov,grace.liskov394@example.com,1027 Speedway,Raleigh,5555554746138282,hardware,settled,495.33,4,2026-09-18T09:39:00
+ord-0000000395,Radia Thompson,radia.thompson395@example.com,2024 Speedway,Boise,4111116246824579,electronics,pending,144.58,5,2026-09-22T18:07:00
+ord-0000000396,Frances Allen,frances.allen396@example.com,2277 Barton Springs Rd,Portland,6011000604875363,electronics,settled,234.76,4,2026-09-09T22:42:00
+ord-0000000397,Grace Hopper,grace.hopper397@example.com,3626 Lavaca St,Raleigh,4555556597656133,grocery,settled,259.91,5,2026-09-21T08:29:00
+ord-0000000398,Ken Perlman,ken.perlman398@example.com,9346 Rainey St,Boise,4555553988654652,hardware,pending,19.55,4,2026-09-26T15:01:00
+ord-0000000399,Dennis Hamilton,dennis.hamilton399@example.com,880 Barton Springs Rd,Austin,5200004133747864,apparel,settled,22.24,1,2026-09-08T20:45:00
+ord-0000000400,Margaret Hopper,margaret.hopper400@example.com,6232 Barton Springs Rd,Madison,5200005128563109,grocery,pending,163.13,6,2026-09-19T08:12:00
+ord-0000000401,Alan Perlman,alan.perlman401@example.com,7303 Barton Springs Rd,Portland,4555557227529682,grocery,settled,152.53,3,2026-09-13T10:42:00
+ord-0000000402,Dennis Hamilton,dennis.hamilton402@example.com,1642 Speedway,Portland,5555553950076543,hardware,settled,286.78,2,2026-09-14T14:12:00
+ord-0000000403,Margaret Perlman,margaret.perlman403@example.com,9193 Rainey St,Madison,5200006109098651,hardware,settled,218.21,6,2026-09-26T01:06:00
+ord-0000000404,Frances Hamilton,frances.hamilton404@example.com,8018 Congress Ave,Raleigh,4555555704427933,pharmacy,refunded,246.38,2,2026-09-09T23:58:00
+ord-0000000405,Alan Thompson,alan.thompson405@example.com,5620 Congress Ave,Austin,5200005392264152,electronics,refunded,74.71,1,2026-09-14T19:23:00
+ord-0000000406,Alan Ritchie,alan.ritchie406@example.com,6775 Lavaca St,Boise,5555554854035353,electronics,settled,398.96,3,2026-09-16T13:46:00
+ord-0000000407,Ada Turing,ada.turing407@example.com,4620 Congress Ave,Madison,5200002351551828,hardware,settled,44.27,4,2026-09-23T16:50:00
+ord-0000000408,Alan Perlman,alan.perlman408@example.com,8617 Speedway,Boise,4111115694827753,fuel,settled,442.89,5,2026-09-05T11:43:00
+ord-0000000409,Margaret Hamilton,margaret.hamilton409@example.com,4046 Congress Ave,Denver,6011003287575037,dining,settled,213.19,4,2026-09-09T12:59:00
+ord-0000000410,Ada Perlman,ada.perlman410@example.com,675 Congress Ave,Portland,5200001728821898,fuel,pending,64.16,2,2026-09-27T12:25:00
+ord-0000000411,Radia Liskov,radia.liskov411@example.com,1295 Rainey St,Portland,5555553507733885,grocery,pending,387.33,6,2026-09-11T04:53:00
+ord-0000000412,Frances Hopper,frances.hopper412@example.com,5522 Barton Springs Rd,Austin,4555558551618042,dining,pending,402.97,4,2026-09-22T11:05:00
+ord-0000000413,Alan Perlman,alan.perlman413@example.com,4935 Speedway,Austin,4555557213596315,dining,settled,264.73,6,2026-09-02T23:52:00
+ord-0000000414,Frances Torvalds,frances.torvalds414@example.com,259 Speedway,Raleigh,5555559440694803,pharmacy,settled,231.19,2,2026-09-10T13:15:00
+ord-0000000415,Margaret Torvalds,margaret.torvalds415@example.com,458 Guadalupe St,Boise,6011004276506603,apparel,settled,249.70,5,2026-09-02T22:09:00
+ord-0000000416,Ken Torvalds,ken.torvalds416@example.com,8077 Rainey St,Denver,4555558628644138,grocery,pending,463.78,3,2026-09-26T22:26:00
+ord-0000000417,Grace Ritchie,grace.ritchie417@example.com,8764 Speedway,Denver,6011003201535315,grocery,pending,91.46,1,2026-09-22T17:36:00
+ord-0000000418,Barbara Hamilton,barbara.hamilton418@example.com,6685 Lavaca St,Boise,4555552897720588,electronics,settled,402.47,1,2026-09-10T13:33:00
+ord-0000000419,Barbara Hopper,barbara.hopper419@example.com,1922 Guadalupe St,Boise,5200008898204904,hardware,refunded,378.67,5,2026-09-03T10:33:00
+ord-0000000420,Linus Perlman,linus.perlman420@example.com,6978 Guadalupe St,Raleigh,4111116388586267,pharmacy,settled,149.45,5,2026-09-05T02:40:00
+ord-0000000421,Barbara Lovelace,barbara.lovelace421@example.com,5298 Guadalupe St,Austin,5555557729150398,grocery,settled,437.03,6,2026-09-14T00:17:00
+ord-0000000422,Barbara Perlman,barbara.perlman422@example.com,956 Barton Springs Rd,Boise,4555557477613251,grocery,settled,297.28,6,2026-09-21T21:36:00
+ord-0000000423,Linus Lovelace,linus.lovelace423@example.com,6958 Guadalupe St,Denver,4111117979219060,hardware,settled,252.18,6,2026-09-06T12:58:00
+ord-0000000424,Frances Hamilton,frances.hamilton424@example.com,7202 Lavaca St,Denver,6011005179285153,electronics,refunded,10.44,3,2026-09-19T16:17:00
+ord-0000000425,Frances Torvalds,frances.torvalds425@example.com,8196 Lavaca St,Austin,5555551583248927,apparel,settled,128.08,5,2026-09-13T13:04:00
+ord-0000000426,Barbara Torvalds,barbara.torvalds426@example.com,4804 Lavaca St,Boise,5555553929372353,fuel,pending,409.50,3,2026-09-19T09:03:00
+ord-0000000427,Barbara Thompson,barbara.thompson427@example.com,2536 Lavaca St,Austin,5555554285364224,pharmacy,pending,256.91,5,2026-09-10T09:57:00
+ord-0000000428,Linus Torvalds,linus.torvalds428@example.com,5510 Guadalupe St,Madison,5200000621413142,apparel,pending,164.08,2,2026-09-14T06:02:00
+ord-0000000429,Alan Perlman,alan.perlman429@example.com,892 Guadalupe St,Boise,6011001900294812,electronics,refunded,432.85,2,2026-09-12T00:29:00
+ord-0000000430,Barbara Ritchie,barbara.ritchie430@example.com,5591 Rainey St,Austin,5200004165841395,dining,settled,141.77,3,2026-09-28T18:22:00
+ord-0000000431,Grace Hamilton,grace.hamilton431@example.com,711 Congress Ave,Madison,5555555926543282,apparel,settled,90.63,1,2026-09-26T03:48:00
+ord-0000000432,Linus Lovelace,linus.lovelace432@example.com,3962 Lavaca St,Madison,6011007286972053,electronics,settled,10.21,3,2026-09-07T12:17:00
+ord-0000000433,Ada Allen,ada.allen433@example.com,984 Barton Springs Rd,Denver,5200004182628452,fuel,settled,225.09,4,2026-09-19T07:37:00
+ord-0000000434,Linus Torvalds,linus.torvalds434@example.com,4965 Rainey St,Denver,6011005836518590,hardware,settled,382.87,5,2026-09-26T05:11:00
+ord-0000000435,Frances Hopper,frances.hopper435@example.com,9297 Lavaca St,Madison,4111112556081124,dining,pending,398.26,3,2026-09-15T10:35:00
+ord-0000000436,Ada Torvalds,ada.torvalds436@example.com,4481 Guadalupe St,Austin,5200005527705459,dining,refunded,51.54,3,2026-09-03T12:43:00
+ord-0000000437,Radia Ritchie,radia.ritchie437@example.com,6615 Guadalupe St,Portland,6011008957421412,dining,settled,328.78,4,2026-09-02T18:49:00
+ord-0000000438,Ada Ritchie,ada.ritchie438@example.com,4636 Speedway,Madison,4555556881231270,dining,refunded,403.55,6,2026-09-01T01:17:00
+ord-0000000439,Margaret Lovelace,margaret.lovelace439@example.com,3693 Congress Ave,Boise,4555552682289674,electronics,settled,3.33,2,2026-09-15T09:07:00
+ord-0000000440,Alan Ritchie,alan.ritchie440@example.com,7976 Congress Ave,Portland,5555552972998502,dining,pending,276.40,5,2026-09-07T18:32:00
+ord-0000000441,Ada Perlman,ada.perlman441@example.com,7833 Guadalupe St,Raleigh,5200009070171192,hardware,settled,117.12,6,2026-09-21T08:54:00
+ord-0000000442,Grace Liskov,grace.liskov442@example.com,8832 Speedway,Raleigh,6011004898573619,hardware,settled,255.34,6,2026-09-06T17:47:00
+ord-0000000443,Dennis Thompson,dennis.thompson443@example.com,3418 Barton Springs Rd,Denver,4555553506440089,hardware,settled,459.85,5,2026-09-18T17:34:00
+ord-0000000444,Frances Turing,frances.turing444@example.com,9404 Guadalupe St,Boise,4555557774601793,pharmacy,settled,318.52,5,2026-09-02T06:09:00
+ord-0000000445,Barbara Torvalds,barbara.torvalds445@example.com,3785 Lavaca St,Portland,6011009150955693,electronics,settled,472.98,3,2026-09-16T00:44:00
+ord-0000000446,Radia Turing,radia.turing446@example.com,2330 Barton Springs Rd,Austin,6011001785381056,fuel,pending,267.90,3,2026-09-12T12:51:00
+ord-0000000447,Dennis Lovelace,dennis.lovelace447@example.com,1230 Speedway,Portland,6011005198694054,hardware,settled,472.12,3,2026-09-01T17:47:00
+ord-0000000448,Radia Lovelace,radia.lovelace448@example.com,9533 Congress Ave,Denver,6011008719518455,grocery,settled,479.07,6,2026-09-21T21:09:00
+ord-0000000449,Barbara Hamilton,barbara.hamilton449@example.com,2927 Guadalupe St,Madison,5200008574698932,grocery,settled,271.74,5,2026-09-03T14:43:00
+ord-0000000450,Linus Liskov,linus.liskov450@example.com,5630 Barton Springs Rd,Raleigh,5555559463018229,pharmacy,pending,403.96,6,2026-09-08T22:35:00
+ord-0000000451,Ada Lovelace,ada.lovelace451@example.com,9813 Lavaca St,Portland,4111110643391738,grocery,settled,54.72,2,2026-09-05T11:55:00
+ord-0000000452,Barbara Allen,barbara.allen452@example.com,1853 Lavaca St,Raleigh,5200007267256727,apparel,settled,340.07,1,2026-09-21T14:42:00
+ord-0000000453,Dennis Liskov,dennis.liskov453@example.com,1723 Congress Ave,Boise,4555555219677626,apparel,pending,248.56,4,2026-09-14T02:22:00
+ord-0000000454,Dennis Hopper,dennis.hopper454@example.com,9830 Speedway,Denver,5200005393376872,hardware,refunded,326.44,2,2026-09-10T06:07:00
+ord-0000000455,Margaret Perlman,margaret.perlman455@example.com,5425 Congress Ave,Austin,5200001727706199,grocery,refunded,216.39,1,2026-09-24T22:30:00
+ord-0000000456,Linus Hamilton,linus.hamilton456@example.com,5638 Rainey St,Portland,4555555938430356,dining,refunded,29.90,6,2026-09-14T14:38:00
+ord-0000000457,Ada Allen,ada.allen457@example.com,1787 Congress Ave,Raleigh,6011006750972904,fuel,pending,157.05,3,2026-09-25T05:08:00
+ord-0000000458,Barbara Lovelace,barbara.lovelace458@example.com,4710 Lavaca St,Portland,4111111170861713,electronics,settled,135.17,4,2026-09-05T05:25:00
+ord-0000000459,Dennis Ritchie,dennis.ritchie459@example.com,3844 Rainey St,Denver,4111115908699287,electronics,settled,41.96,2,2026-09-11T07:08:00
+ord-0000000460,Linus Perlman,linus.perlman460@example.com,5596 Rainey St,Austin,5200006287348035,pharmacy,pending,103.81,4,2026-09-11T13:41:00
+ord-0000000461,Alan Lovelace,alan.lovelace461@example.com,5552 Guadalupe St,Raleigh,6011003696111143,apparel,settled,243.67,6,2026-09-04T23:37:00
+ord-0000000462,Frances Lovelace,frances.lovelace462@example.com,3374 Congress Ave,Boise,4555559839966344,pharmacy,settled,321.36,3,2026-09-29T18:38:00
+ord-0000000463,Barbara Torvalds,barbara.torvalds463@example.com,7351 Lavaca St,Madison,5555550438374995,apparel,refunded,183.83,1,2026-09-25T16:12:00
+ord-0000000464,Linus Hopper,linus.hopper464@example.com,1833 Barton Springs Rd,Boise,4555550272084562,electronics,settled,242.35,3,2026-09-12T02:15:00
+ord-0000000465,Radia Torvalds,radia.torvalds465@example.com,6792 Lavaca St,Portland,5200005208497038,grocery,pending,229.16,2,2026-09-23T00:50:00
+ord-0000000466,Linus Hopper,linus.hopper466@example.com,8210 Rainey St,Madison,4111110529839966,apparel,settled,329.29,2,2026-09-27T02:52:00
+ord-0000000467,Alan Hopper,alan.hopper467@example.com,1893 Barton Springs Rd,Raleigh,5200001396434693,grocery,pending,117.60,4,2026-09-19T16:50:00
+ord-0000000468,Grace Thompson,grace.thompson468@example.com,8688 Barton Springs Rd,Denver,4555554228378235,fuel,settled,74.33,1,2026-09-22T08:14:00
+ord-0000000469,Radia Perlman,radia.perlman469@example.com,1438 Barton Springs Rd,Austin,6011008001999116,electronics,settled,120.94,5,2026-09-20T03:55:00
+ord-0000000470,Dennis Perlman,dennis.perlman470@example.com,6131 Guadalupe St,Raleigh,6011006882804330,fuel,refunded,199.74,2,2026-09-20T14:25:00
+ord-0000000471,Barbara Hamilton,barbara.hamilton471@example.com,1181 Rainey St,Raleigh,5555554464707755,apparel,settled,327.11,2,2026-09-25T05:35:00
+ord-0000000472,Alan Turing,alan.turing472@example.com,1725 Rainey St,Raleigh,4111111277578483,pharmacy,pending,309.80,4,2026-09-01T20:06:00
+ord-0000000473,Dennis Hopper,dennis.hopper473@example.com,6008 Lavaca St,Denver,5200005567902230,pharmacy,settled,200.32,4,2026-09-06T22:45:00
+ord-0000000474,Frances Liskov,frances.liskov474@example.com,9569 Speedway,Madison,4111119935028999,grocery,settled,187.50,6,2026-09-23T07:12:00
+ord-0000000475,Alan Thompson,alan.thompson475@example.com,8270 Lavaca St,Denver,5200008337427819,fuel,pending,398.10,1,2026-09-19T20:33:00
+ord-0000000476,Dennis Turing,dennis.turing476@example.com,1161 Congress Ave,Austin,5200007371754278,fuel,settled,415.34,6,2026-09-10T04:01:00
+ord-0000000477,Frances Liskov,frances.liskov477@example.com,9866 Barton Springs Rd,Denver,5555554701643896,pharmacy,settled,476.95,5,2026-09-03T06:59:00
+ord-0000000478,Alan Torvalds,alan.torvalds478@example.com,3935 Guadalupe St,Denver,6011008972702382,pharmacy,settled,143.37,1,2026-09-15T10:40:00
+ord-0000000479,Barbara Hopper,barbara.hopper479@example.com,3775 Rainey St,Portland,5555552412383729,grocery,settled,228.70,5,2026-09-18T05:46:00
+ord-0000000480,Linus Torvalds,linus.torvalds480@example.com,2511 Lavaca St,Raleigh,4111119711162319,fuel,settled,24.79,1,2026-09-30T16:50:00
+ord-0000000481,Grace Thompson,grace.thompson481@example.com,8535 Lavaca St,Austin,4111118288179755,grocery,settled,345.99,1,2026-09-19T05:18:00
+ord-0000000482,Grace Perlman,grace.perlman482@example.com,859 Barton Springs Rd,Portland,6011008055173972,grocery,settled,108.73,2,2026-09-01T05:11:00
+ord-0000000483,Frances Torvalds,frances.torvalds483@example.com,169 Congress Ave,Austin,4555554943115383,apparel,settled,91.52,2,2026-09-28T22:23:00
+ord-0000000484,Ken Ritchie,ken.ritchie484@example.com,8475 Congress Ave,Austin,4111113201144689,hardware,settled,238.74,1,2026-09-27T10:36:00
+ord-0000000485,Margaret Hopper,margaret.hopper485@example.com,9265 Rainey St,Austin,5200006796962094,electronics,settled,291.77,1,2026-09-07T20:15:00
+ord-0000000486,Ada Ritchie,ada.ritchie486@example.com,4278 Lavaca St,Madison,6011007714142808,apparel,settled,193.16,4,2026-09-11T21:46:00
+ord-0000000487,Radia Perlman,radia.perlman487@example.com,4156 Barton Springs Rd,Portland,5200003419900452,apparel,pending,132.33,3,2026-09-08T06:58:00
+ord-0000000488,Ken Perlman,ken.perlman488@example.com,3762 Congress Ave,Boise,5555559113840493,hardware,pending,277.65,4,2026-09-22T08:08:00
+ord-0000000489,Ada Ritchie,ada.ritchie489@example.com,5764 Lavaca St,Austin,5555550760553190,grocery,refunded,274.12,3,2026-09-12T08:48:00
+ord-0000000490,Linus Hopper,linus.hopper490@example.com,6413 Congress Ave,Portland,5555559198006788,electronics,settled,301.35,1,2026-09-16T16:37:00
+ord-0000000491,Grace Hopper,grace.hopper491@example.com,8929 Barton Springs Rd,Denver,4111114765229502,grocery,settled,467.95,5,2026-09-21T01:05:00
+ord-0000000492,Grace Allen,grace.allen492@example.com,9437 Lavaca St,Denver,5200002703211980,hardware,settled,246.52,1,2026-09-15T14:51:00
+ord-0000000493,Linus Ritchie,linus.ritchie493@example.com,2345 Rainey St,Madison,5200004437946485,fuel,settled,79.77,4,2026-09-17T12:55:00
+ord-0000000494,Ken Hopper,ken.hopper494@example.com,4448 Rainey St,Austin,5200004111725098,hardware,pending,400.72,2,2026-09-24T17:57:00
+ord-0000000495,Frances Torvalds,frances.torvalds495@example.com,1203 Guadalupe St,Raleigh,4555554419877268,apparel,settled,338.16,4,2026-09-02T19:05:00
+ord-0000000496,Alan Ritchie,alan.ritchie496@example.com,1181 Guadalupe St,Portland,4555557347129447,electronics,refunded,417.19,2,2026-09-12T14:01:00
+ord-0000000497,Ada Thompson,ada.thompson497@example.com,6052 Lavaca St,Madison,4111119476887100,pharmacy,settled,343.49,5,2026-09-03T19:21:00
+ord-0000000498,Barbara Turing,barbara.turing498@example.com,3654 Guadalupe St,Austin,5200000954983117,pharmacy,settled,38.20,5,2026-09-06T13:25:00
+ord-0000000499,Barbara Hamilton,barbara.hamilton499@example.com,5961 Lavaca St,Austin,6011003136649587,electronics,settled,447.71,3,2026-09-10T14:50:00
+ord-0000000500,Ada Ritchie,ada.ritchie500@example.com,9523 Congress Ave,Raleigh,4111113587039305,pharmacy,refunded,257.41,5,2026-09-08T03:57:00
+ord-0000000501,Linus Perlman,linus.perlman501@example.com,2216 Lavaca St,Boise,4555558782515736,pharmacy,pending,496.95,1,2026-09-03T09:25:00
+ord-0000000502,Ada Liskov,ada.liskov502@example.com,5370 Guadalupe St,Austin,6011002565183787,hardware,refunded,139.38,5,2026-09-22T18:42:00
+ord-0000000503,Linus Hamilton,linus.hamilton503@example.com,2398 Speedway,Madison,4111116600620829,electronics,settled,251.73,1,2026-09-22T01:44:00
+ord-0000000504,Ken Thompson,ken.thompson504@example.com,5355 Rainey St,Madison,5200000832853508,pharmacy,settled,91.56,3,2026-09-20T16:53:00
+ord-0000000505,Margaret Perlman,margaret.perlman505@example.com,8791 Speedway,Austin,5200007654379850,dining,refunded,326.57,4,2026-09-20T04:46:00
+ord-0000000506,Grace Turing,grace.turing506@example.com,1839 Rainey St,Denver,5200002925333273,fuel,refunded,378.15,1,2026-09-04T07:58:00
+ord-0000000507,Barbara Thompson,barbara.thompson507@example.com,9959 Guadalupe St,Madison,5555551575111612,electronics,settled,156.19,5,2026-09-12T11:36:00
+ord-0000000508,Ada Hamilton,ada.hamilton508@example.com,2107 Congress Ave,Boise,6011003572602355,electronics,settled,308.28,5,2026-09-15T06:27:00
+ord-0000000509,Ken Torvalds,ken.torvalds509@example.com,6961 Speedway,Denver,6011007431469948,electronics,refunded,326.23,1,2026-09-04T09:10:00
+ord-0000000510,Margaret Torvalds,margaret.torvalds510@example.com,9092 Lavaca St,Austin,4111112783628432,electronics,settled,116.85,6,2026-09-07T07:05:00
+ord-0000000511,Ada Ritchie,ada.ritchie511@example.com,1346 Guadalupe St,Madison,5555555187568069,dining,refunded,276.06,4,2026-09-27T09:04:00
+ord-0000000512,Radia Lovelace,radia.lovelace512@example.com,4660 Barton Springs Rd,Boise,5555559083802291,apparel,settled,195.00,2,2026-09-11T03:11:00
+ord-0000000513,Frances Hopper,frances.hopper513@example.com,9185 Guadalupe St,Raleigh,6011002067037135,grocery,pending,396.82,5,2026-09-27T10:29:00
+ord-0000000514,Barbara Hamilton,barbara.hamilton514@example.com,698 Guadalupe St,Raleigh,4555556791694708,hardware,settled,447.11,5,2026-09-26T06:22:00
+ord-0000000515,Frances Hamilton,frances.hamilton515@example.com,4285 Rainey St,Austin,4111112580799766,pharmacy,pending,327.63,5,2026-09-29T06:29:00
+ord-0000000516,Margaret Lovelace,margaret.lovelace516@example.com,220 Barton Springs Rd,Raleigh,6011001821093129,pharmacy,pending,395.05,1,2026-09-26T04:04:00
+ord-0000000517,Radia Ritchie,radia.ritchie517@example.com,1814 Speedway,Raleigh,5555552621718756,pharmacy,settled,305.54,5,2026-09-25T12:59:00
+ord-0000000518,Frances Torvalds,frances.torvalds518@example.com,5940 Guadalupe St,Raleigh,4555557272359837,hardware,pending,151.78,4,2026-09-18T20:04:00
+ord-0000000519,Ada Thompson,ada.thompson519@example.com,6541 Barton Springs Rd,Raleigh,5555557570354842,fuel,settled,465.18,1,2026-09-10T08:21:00
+ord-0000000520,Radia Torvalds,radia.torvalds520@example.com,1481 Speedway,Denver,4111114852437836,electronics,refunded,56.18,6,2026-09-24T15:56:00
+ord-0000000521,Ada Allen,ada.allen521@example.com,1454 Speedway,Raleigh,5200008929826212,dining,settled,32.21,4,2026-09-02T17:23:00
+ord-0000000522,Alan Liskov,alan.liskov522@example.com,8372 Speedway,Boise,4111118419647183,dining,settled,85.03,2,2026-09-01T12:15:00
+ord-0000000523,Radia Perlman,radia.perlman523@example.com,9179 Congress Ave,Denver,4555551002340134,pharmacy,settled,43.13,4,2026-09-06T21:51:00
+ord-0000000524,Radia Liskov,radia.liskov524@example.com,1827 Rainey St,Madison,4111112713982230,pharmacy,settled,110.83,2,2026-09-16T04:49:00
+ord-0000000525,Frances Lovelace,frances.lovelace525@example.com,5316 Congress Ave,Portland,6011005154853694,dining,refunded,131.71,2,2026-09-14T16:25:00
+ord-0000000526,Ada Torvalds,ada.torvalds526@example.com,8936 Lavaca St,Boise,4111115078781824,pharmacy,refunded,350.24,4,2026-09-10T09:11:00
+ord-0000000527,Linus Hamilton,linus.hamilton527@example.com,7639 Speedway,Portland,4111114480187746,apparel,refunded,311.68,1,2026-09-08T17:51:00
+ord-0000000528,Barbara Torvalds,barbara.torvalds528@example.com,4987 Lavaca St,Boise,4111116014308375,hardware,settled,287.05,6,2026-09-24T22:47:00
+ord-0000000529,Ken Allen,ken.allen529@example.com,8173 Speedway,Madison,6011003472541893,fuel,refunded,4.66,4,2026-09-14T11:21:00
+ord-0000000530,Ken Hamilton,ken.hamilton530@example.com,5736 Rainey St,Austin,4111114472049623,pharmacy,refunded,465.84,3,2026-09-25T02:51:00
+ord-0000000531,Barbara Ritchie,barbara.ritchie531@example.com,5666 Guadalupe St,Austin,4111111046113836,electronics,settled,417.41,1,2026-09-02T21:26:00
+ord-0000000532,Grace Allen,grace.allen532@example.com,4003 Guadalupe St,Portland,4555552579221376,grocery,settled,278.88,1,2026-09-21T11:20:00
+ord-0000000533,Linus Turing,linus.turing533@example.com,2110 Lavaca St,Boise,5200008909868945,pharmacy,settled,328.78,3,2026-09-30T16:03:00
+ord-0000000534,Grace Torvalds,grace.torvalds534@example.com,9651 Speedway,Austin,5200009551174996,hardware,settled,228.48,5,2026-09-27T18:36:00
+ord-0000000535,Barbara Turing,barbara.turing535@example.com,4631 Lavaca St,Denver,4111118032508549,pharmacy,pending,34.19,2,2026-09-10T20:56:00
+ord-0000000536,Dennis Lovelace,dennis.lovelace536@example.com,9841 Lavaca St,Raleigh,6011002185121191,grocery,refunded,402.41,2,2026-09-30T14:59:00
+ord-0000000537,Frances Turing,frances.turing537@example.com,1808 Rainey St,Austin,5555550153209160,dining,settled,375.59,3,2026-09-23T01:18:00
+ord-0000000538,Margaret Thompson,margaret.thompson538@example.com,7809 Barton Springs Rd,Raleigh,6011002059839977,dining,refunded,267.02,3,2026-09-10T20:54:00
+ord-0000000539,Dennis Hamilton,dennis.hamilton539@example.com,7500 Congress Ave,Raleigh,6011002388990780,dining,pending,440.70,5,2026-09-01T09:15:00
+ord-0000000540,Ada Thompson,ada.thompson540@example.com,1960 Guadalupe St,Portland,5555555453747348,pharmacy,refunded,350.29,3,2026-09-08T06:20:00
+ord-0000000541,Alan Thompson,alan.thompson541@example.com,8559 Congress Ave,Portland,4555557967557661,apparel,settled,88.72,3,2026-09-07T08:55:00
+ord-0000000542,Ada Lovelace,ada.lovelace542@example.com,3287 Lavaca St,Portland,4555557726335052,pharmacy,settled,415.99,2,2026-09-14T08:56:00
+ord-0000000543,Alan Hamilton,alan.hamilton543@example.com,6638 Barton Springs Rd,Austin,4111118301462998,dining,settled,385.52,2,2026-09-08T04:13:00
+ord-0000000544,Linus Hamilton,linus.hamilton544@example.com,3953 Congress Ave,Austin,6011001332014218,fuel,settled,44.20,5,2026-09-14T17:43:00
+ord-0000000545,Grace Lovelace,grace.lovelace545@example.com,8915 Lavaca St,Portland,4111110182836432,electronics,settled,78.28,6,2026-09-02T18:19:00
+ord-0000000546,Frances Liskov,frances.liskov546@example.com,4214 Barton Springs Rd,Madison,4111113407570299,pharmacy,refunded,65.46,4,2026-09-30T13:33:00
+ord-0000000547,Dennis Liskov,dennis.liskov547@example.com,8027 Congress Ave,Denver,6011007635603433,dining,pending,113.01,5,2026-09-06T17:04:00
+ord-0000000548,Grace Ritchie,grace.ritchie548@example.com,3549 Guadalupe St,Austin,5555557297151091,fuel,pending,423.10,3,2026-09-07T15:26:00
+ord-0000000549,Dennis Allen,dennis.allen549@example.com,9538 Speedway,Denver,4555559992314944,hardware,settled,320.66,1,2026-09-14T13:54:00
+ord-0000000550,Ada Lovelace,ada.lovelace550@example.com,5194 Speedway,Austin,5200006118918584,fuel,settled,89.36,4,2026-09-07T12:01:00
+ord-0000000551,Radia Ritchie,radia.ritchie551@example.com,2971 Rainey St,Raleigh,4111111600122140,apparel,refunded,162.56,2,2026-09-02T09:16:00
+ord-0000000552,Dennis Hopper,dennis.hopper552@example.com,3140 Guadalupe St,Denver,5555550197509211,grocery,refunded,276.08,1,2026-09-18T21:00:00
+ord-0000000553,Grace Hamilton,grace.hamilton553@example.com,8841 Speedway,Portland,5200000974648864,grocery,refunded,197.56,4,2026-09-06T23:12:00
+ord-0000000554,Grace Thompson,grace.thompson554@example.com,8290 Speedway,Portland,5555550603393093,fuel,settled,155.29,6,2026-09-06T09:45:00
+ord-0000000555,Ada Hopper,ada.hopper555@example.com,1632 Lavaca St,Madison,4111119700355205,grocery,settled,262.03,5,2026-09-24T20:39:00
+ord-0000000556,Ken Torvalds,ken.torvalds556@example.com,9304 Lavaca St,Denver,5200002576791316,apparel,settled,391.07,4,2026-09-17T11:35:00
+ord-0000000557,Dennis Liskov,dennis.liskov557@example.com,9226 Guadalupe St,Boise,5555557309430657,pharmacy,pending,368.02,2,2026-09-24T23:52:00
+ord-0000000558,Radia Thompson,radia.thompson558@example.com,8663 Barton Springs Rd,Madison,6011005375695080,fuel,settled,294.42,6,2026-09-03T20:12:00
+ord-0000000559,Grace Torvalds,grace.torvalds559@example.com,6230 Guadalupe St,Denver,5555555094393353,electronics,settled,273.02,5,2026-09-05T18:31:00
+ord-0000000560,Barbara Thompson,barbara.thompson560@example.com,5456 Congress Ave,Boise,5200006875352357,hardware,settled,250.20,1,2026-09-20T01:11:00
+ord-0000000561,Margaret Lovelace,margaret.lovelace561@example.com,8051 Congress Ave,Raleigh,6011006871158920,apparel,settled,218.57,3,2026-09-22T17:14:00
+ord-0000000562,Radia Torvalds,radia.torvalds562@example.com,2272 Lavaca St,Portland,5200009503145136,dining,refunded,443.49,2,2026-09-03T07:15:00
+ord-0000000563,Barbara Thompson,barbara.thompson563@example.com,3576 Barton Springs Rd,Austin,5555553699214215,dining,pending,13.29,2,2026-09-21T09:31:00
+ord-0000000564,Margaret Turing,margaret.turing564@example.com,3135 Lavaca St,Boise,5555559838050071,grocery,settled,309.31,2,2026-09-20T15:18:00
+ord-0000000565,Ada Lovelace,ada.lovelace565@example.com,4131 Barton Springs Rd,Madison,6011007551451809,dining,refunded,304.02,6,2026-09-03T17:58:00
+ord-0000000566,Frances Perlman,frances.perlman566@example.com,3644 Barton Springs Rd,Austin,6011004771081474,pharmacy,settled,438.20,5,2026-09-26T00:25:00
+ord-0000000567,Ken Turing,ken.turing567@example.com,7394 Guadalupe St,Raleigh,4555555506433022,dining,settled,388.38,3,2026-09-21T22:51:00
+ord-0000000568,Grace Perlman,grace.perlman568@example.com,2299 Rainey St,Denver,5555554682884105,electronics,refunded,359.08,6,2026-09-05T05:33:00
+ord-0000000569,Ken Liskov,ken.liskov569@example.com,284 Barton Springs Rd,Denver,4111113848238704,hardware,settled,243.63,5,2026-09-04T03:47:00
+ord-0000000570,Ken Ritchie,ken.ritchie570@example.com,8327 Lavaca St,Madison,4555552612154667,grocery,refunded,111.67,6,2026-09-03T15:19:00
+ord-0000000571,Radia Ritchie,radia.ritchie571@example.com,9309 Congress Ave,Boise,5200009956405284,dining,pending,191.43,3,2026-09-14T00:30:00
+ord-0000000572,Ken Thompson,ken.thompson572@example.com,7720 Barton Springs Rd,Portland,4555558126046919,pharmacy,settled,293.95,4,2026-09-15T10:31:00
+ord-0000000573,Ada Hopper,ada.hopper573@example.com,4040 Guadalupe St,Portland,4555552372495581,fuel,settled,311.75,1,2026-09-19T23:53:00
+ord-0000000574,Barbara Ritchie,barbara.ritchie574@example.com,5087 Rainey St,Portland,4111113790727977,dining,pending,496.40,1,2026-09-11T11:13:00
+ord-0000000575,Barbara Hamilton,barbara.hamilton575@example.com,5428 Congress Ave,Portland,5200006947419051,apparel,settled,491.36,2,2026-09-17T15:15:00
+ord-0000000576,Margaret Thompson,margaret.thompson576@example.com,2802 Speedway,Raleigh,5200009810016475,fuel,settled,216.48,3,2026-09-22T01:48:00
+ord-0000000577,Grace Thompson,grace.thompson577@example.com,2167 Rainey St,Madison,4555550422201942,grocery,settled,368.65,3,2026-09-15T10:09:00
+ord-0000000578,Ada Turing,ada.turing578@example.com,1536 Guadalupe St,Madison,5200005953653363,apparel,pending,235.78,6,2026-09-07T20:21:00
+ord-0000000579,Barbara Hamilton,barbara.hamilton579@example.com,1557 Rainey St,Portland,5555555528620587,pharmacy,settled,388.69,2,2026-09-02T16:39:00
+ord-0000000580,Alan Liskov,alan.liskov580@example.com,4751 Congress Ave,Boise,5200000571297826,electronics,pending,247.70,4,2026-09-26T22:17:00
+ord-0000000581,Barbara Liskov,barbara.liskov581@example.com,5486 Speedway,Denver,5555556016569906,electronics,refunded,142.64,5,2026-09-03T22:05:00
+ord-0000000582,Frances Hamilton,frances.hamilton582@example.com,5925 Guadalupe St,Raleigh,4111117691382394,hardware,pending,257.74,3,2026-09-23T06:39:00
+ord-0000000583,Barbara Thompson,barbara.thompson583@example.com,7972 Guadalupe St,Denver,4555553069995495,dining,settled,185.44,4,2026-09-27T15:37:00
+ord-0000000584,Grace Turing,grace.turing584@example.com,3767 Congress Ave,Portland,4111118136766738,pharmacy,pending,145.06,3,2026-09-07T23:58:00
+ord-0000000585,Ken Hamilton,ken.hamilton585@example.com,994 Barton Springs Rd,Austin,6011008842673417,electronics,refunded,321.45,4,2026-09-30T03:20:00
+ord-0000000586,Linus Lovelace,linus.lovelace586@example.com,5853 Guadalupe St,Madison,5200002080549531,dining,pending,98.95,5,2026-09-04T11:21:00
+ord-0000000587,Dennis Allen,dennis.allen587@example.com,6793 Guadalupe St,Madison,5555550869965360,apparel,settled,5.80,5,2026-09-08T05:58:00
+ord-0000000588,Ken Allen,ken.allen588@example.com,2160 Rainey St,Denver,5200003410144589,electronics,settled,226.71,1,2026-09-17T23:27:00
+ord-0000000589,Grace Perlman,grace.perlman589@example.com,5797 Guadalupe St,Madison,4555554069712054,dining,settled,33.70,2,2026-09-05T11:29:00
+ord-0000000590,Linus Thompson,linus.thompson590@example.com,6710 Guadalupe St,Austin,4111115079588764,electronics,settled,446.02,5,2026-09-25T08:24:00
+ord-0000000591,Radia Perlman,radia.perlman591@example.com,5509 Rainey St,Raleigh,4555551537341995,electronics,settled,58.66,4,2026-09-30T06:29:00
+ord-0000000592,Margaret Hamilton,margaret.hamilton592@example.com,3625 Rainey St,Denver,6011004546737715,electronics,pending,264.33,6,2026-09-14T17:14:00
+ord-0000000593,Dennis Liskov,dennis.liskov593@example.com,9490 Congress Ave,Denver,6011006747449032,hardware,settled,457.64,5,2026-09-04T07:50:00
+ord-0000000594,Grace Allen,grace.allen594@example.com,1624 Guadalupe St,Raleigh,5555556195389175,electronics,settled,409.46,3,2026-09-21T09:11:00
+ord-0000000595,Dennis Lovelace,dennis.lovelace595@example.com,8905 Guadalupe St,Madison,4111113372118918,dining,settled,311.74,5,2026-09-03T13:03:00
+ord-0000000596,Grace Perlman,grace.perlman596@example.com,2684 Guadalupe St,Boise,5555553012285751,hardware,refunded,7.10,5,2026-09-12T12:53:00
+ord-0000000597,Radia Hopper,radia.hopper597@example.com,929 Congress Ave,Denver,5555552721859112,fuel,pending,480.07,2,2026-09-28T07:27:00
+ord-0000000598,Dennis Hopper,dennis.hopper598@example.com,5419 Rainey St,Austin,6011007260410435,apparel,settled,469.40,2,2026-09-15T01:36:00
+ord-0000000599,Margaret Perlman,margaret.perlman599@example.com,3762 Guadalupe St,Austin,5555558154426840,apparel,settled,315.13,3,2026-09-04T09:59:00
+ord-0000000600,Linus Allen,linus.allen600@example.com,882 Lavaca St,Portland,5555551584168173,dining,settled,423.09,4,2026-09-08T23:41:00
+ord-0000000601,Margaret Hopper,margaret.hopper601@example.com,6527 Congress Ave,Portland,6011001566360261,apparel,refunded,430.84,5,2026-09-15T18:31:00
+ord-0000000602,Ada Lovelace,ada.lovelace602@example.com,4915 Guadalupe St,Austin,4555554281521499,pharmacy,pending,243.47,5,2026-09-21T17:45:00
+ord-0000000603,Ada Turing,ada.turing603@example.com,7833 Speedway,Portland,4555558803061256,fuel,pending,7.39,4,2026-09-04T12:28:00
+ord-0000000604,Barbara Ritchie,barbara.ritchie604@example.com,8784 Congress Ave,Boise,6011001901537128,fuel,settled,237.10,5,2026-09-20T08:55:00
+ord-0000000605,Grace Ritchie,grace.ritchie605@example.com,6103 Rainey St,Boise,4555555127287815,pharmacy,settled,107.31,6,2026-09-05T21:03:00
+ord-0000000606,Linus Ritchie,linus.ritchie606@example.com,3209 Barton Springs Rd,Boise,6011008692976936,electronics,settled,195.34,1,2026-09-27T19:46:00
+ord-0000000607,Barbara Ritchie,barbara.ritchie607@example.com,8410 Rainey St,Austin,4111119746770615,electronics,pending,380.07,2,2026-09-15T10:47:00
+ord-0000000608,Linus Hopper,linus.hopper608@example.com,4250 Lavaca St,Portland,6011008835909273,fuel,pending,449.71,1,2026-09-28T17:43:00
+ord-0000000609,Ada Turing,ada.turing609@example.com,6664 Barton Springs Rd,Madison,6011009410515659,electronics,settled,347.64,2,2026-09-22T00:01:00
+ord-0000000610,Alan Torvalds,alan.torvalds610@example.com,2380 Lavaca St,Madison,4111115971819655,hardware,refunded,357.52,4,2026-09-07T22:04:00
+ord-0000000611,Frances Torvalds,frances.torvalds611@example.com,9886 Congress Ave,Denver,4555554591547598,pharmacy,pending,66.46,2,2026-09-10T20:44:00
+ord-0000000612,Ken Ritchie,ken.ritchie612@example.com,2377 Barton Springs Rd,Denver,5200000099768175,pharmacy,settled,387.35,5,2026-09-17T07:42:00
+ord-0000000613,Linus Hopper,linus.hopper613@example.com,9766 Barton Springs Rd,Raleigh,5200007193657642,electronics,settled,483.15,5,2026-09-15T02:04:00
+ord-0000000614,Grace Turing,grace.turing614@example.com,9777 Guadalupe St,Austin,6011000669677191,grocery,settled,169.05,3,2026-09-09T19:12:00
+ord-0000000615,Linus Hopper,linus.hopper615@example.com,6633 Congress Ave,Denver,4111113639020949,fuel,settled,234.22,2,2026-09-19T22:56:00
+ord-0000000616,Frances Torvalds,frances.torvalds616@example.com,4669 Guadalupe St,Portland,5555558364820253,apparel,settled,116.62,4,2026-09-22T08:16:00
+ord-0000000617,Dennis Lovelace,dennis.lovelace617@example.com,5971 Congress Ave,Denver,4555551431883639,dining,settled,402.53,3,2026-09-10T02:17:00
+ord-0000000618,Grace Allen,grace.allen618@example.com,5725 Rainey St,Raleigh,5200009934265784,electronics,pending,55.65,6,2026-09-15T23:35:00
+ord-0000000619,Barbara Hopper,barbara.hopper619@example.com,4872 Rainey St,Denver,5555554867661526,pharmacy,pending,245.03,4,2026-09-02T09:33:00
+ord-0000000620,Margaret Lovelace,margaret.lovelace620@example.com,6632 Rainey St,Portland,6011008804698709,grocery,settled,75.72,5,2026-09-13T08:06:00
+ord-0000000621,Dennis Thompson,dennis.thompson621@example.com,7626 Lavaca St,Raleigh,4555557106130404,pharmacy,pending,450.36,3,2026-09-05T14:28:00
+ord-0000000622,Grace Allen,grace.allen622@example.com,1524 Speedway,Portland,6011005176174137,pharmacy,settled,408.55,4,2026-09-18T18:48:00
+ord-0000000623,Grace Lovelace,grace.lovelace623@example.com,2092 Guadalupe St,Boise,4111113654085587,hardware,pending,184.42,2,2026-09-29T05:08:00
+ord-0000000624,Barbara Perlman,barbara.perlman624@example.com,2768 Rainey St,Madison,5200008526874581,fuel,refunded,189.42,2,2026-09-26T01:51:00
+ord-0000000625,Grace Hamilton,grace.hamilton625@example.com,3649 Speedway,Raleigh,6011002210463857,pharmacy,refunded,386.42,6,2026-09-06T13:05:00
+ord-0000000626,Ada Thompson,ada.thompson626@example.com,5382 Congress Ave,Raleigh,5555559840535978,hardware,settled,11.63,4,2026-09-12T09:44:00
+ord-0000000627,Ken Allen,ken.allen627@example.com,5803 Lavaca St,Madison,5555556012077771,pharmacy,settled,463.95,6,2026-09-01T00:39:00
+ord-0000000628,Barbara Lovelace,barbara.lovelace628@example.com,8029 Lavaca St,Boise,5555550983436140,dining,settled,218.29,2,2026-09-10T16:53:00
+ord-0000000629,Ada Turing,ada.turing629@example.com,4512 Guadalupe St,Raleigh,4555550907986116,apparel,settled,176.58,4,2026-09-22T10:55:00
+ord-0000000630,Frances Torvalds,frances.torvalds630@example.com,1368 Rainey St,Boise,4111110266728786,hardware,settled,75.37,6,2026-09-09T05:50:00
+ord-0000000631,Linus Allen,linus.allen631@example.com,696 Speedway,Portland,4111118052862131,hardware,pending,59.03,1,2026-09-07T21:22:00
+ord-0000000632,Radia Perlman,radia.perlman632@example.com,3629 Barton Springs Rd,Portland,4111119733713123,fuel,settled,61.95,6,2026-09-04T16:56:00
+ord-0000000633,Linus Turing,linus.turing633@example.com,8965 Rainey St,Austin,5555558349078175,pharmacy,pending,23.41,6,2026-09-14T17:29:00
+ord-0000000634,Dennis Thompson,dennis.thompson634@example.com,8454 Barton Springs Rd,Boise,5555552764463343,hardware,settled,154.95,3,2026-09-24T02:40:00
+ord-0000000635,Ken Perlman,ken.perlman635@example.com,7695 Barton Springs Rd,Portland,5200004270788838,dining,settled,270.12,2,2026-09-03T23:12:00
+ord-0000000636,Ken Thompson,ken.thompson636@example.com,5688 Lavaca St,Denver,6011007196432867,apparel,pending,380.34,2,2026-09-14T12:16:00
+ord-0000000637,Barbara Hopper,barbara.hopper637@example.com,5023 Speedway,Madison,4111115256586995,dining,pending,97.18,3,2026-09-17T13:07:00
+ord-0000000638,Barbara Perlman,barbara.perlman638@example.com,236 Rainey St,Raleigh,6011007301829809,dining,pending,254.52,3,2026-09-09T13:30:00
+ord-0000000639,Ken Thompson,ken.thompson639@example.com,5631 Speedway,Raleigh,5200003780585874,apparel,settled,210.75,5,2026-09-30T20:58:00
+ord-0000000640,Dennis Ritchie,dennis.ritchie640@example.com,1690 Guadalupe St,Madison,4555553444980030,apparel,refunded,122.84,3,2026-09-26T05:39:00
+ord-0000000641,Linus Ritchie,linus.ritchie641@example.com,2918 Rainey St,Austin,4555553561459222,hardware,refunded,115.93,3,2026-09-11T18:16:00
+ord-0000000642,Margaret Torvalds,margaret.torvalds642@example.com,224 Speedway,Madison,4555558733396186,dining,settled,357.75,3,2026-09-20T18:08:00
+ord-0000000643,Grace Hamilton,grace.hamilton643@example.com,8565 Lavaca St,Raleigh,4555558327724306,dining,settled,216.08,2,2026-09-19T13:32:00
+ord-0000000644,Ken Turing,ken.turing644@example.com,6559 Rainey St,Raleigh,4555552015546568,apparel,settled,71.15,4,2026-09-13T12:15:00
+ord-0000000645,Ken Hamilton,ken.hamilton645@example.com,3158 Congress Ave,Denver,4555556885303893,hardware,pending,28.23,6,2026-09-08T17:45:00
+ord-0000000646,Linus Torvalds,linus.torvalds646@example.com,8924 Rainey St,Raleigh,4111113925750902,pharmacy,settled,206.57,1,2026-09-20T00:28:00
+ord-0000000647,Ken Torvalds,ken.torvalds647@example.com,505 Barton Springs Rd,Portland,4555553287202864,hardware,pending,166.95,2,2026-09-12T22:40:00
+ord-0000000648,Margaret Turing,margaret.turing648@example.com,4547 Congress Ave,Boise,4555556244380889,dining,refunded,52.89,4,2026-09-12T18:55:00
+ord-0000000649,Alan Torvalds,alan.torvalds649@example.com,913 Rainey St,Portland,5555552794118644,hardware,settled,324.43,4,2026-09-04T12:01:00
+ord-0000000650,Radia Allen,radia.allen650@example.com,9592 Guadalupe St,Denver,5555559049180162,hardware,settled,358.92,4,2026-09-27T23:55:00
+ord-0000000651,Alan Perlman,alan.perlman651@example.com,9966 Rainey St,Austin,4111119996484628,apparel,pending,55.71,4,2026-09-27T13:37:00
+ord-0000000652,Dennis Perlman,dennis.perlman652@example.com,6096 Guadalupe St,Austin,6011006986380690,fuel,settled,283.46,2,2026-09-15T10:36:00
+ord-0000000653,Dennis Ritchie,dennis.ritchie653@example.com,3666 Rainey St,Austin,5555552396923052,apparel,settled,323.06,5,2026-09-19T00:05:00
+ord-0000000654,Radia Turing,radia.turing654@example.com,9494 Guadalupe St,Madison,6011005474740373,dining,settled,183.19,1,2026-09-05T05:12:00
+ord-0000000655,Frances Ritchie,frances.ritchie655@example.com,5528 Guadalupe St,Madison,4111110105481365,hardware,settled,155.18,4,2026-09-05T03:14:00
+ord-0000000656,Ada Lovelace,ada.lovelace656@example.com,9860 Guadalupe St,Raleigh,6011005539142938,hardware,pending,385.47,5,2026-09-16T14:15:00
+ord-0000000657,Ken Perlman,ken.perlman657@example.com,7341 Lavaca St,Denver,5200004944219640,pharmacy,settled,269.82,5,2026-09-21T11:22:00
+ord-0000000658,Alan Lovelace,alan.lovelace658@example.com,4591 Speedway,Raleigh,6011005444152147,dining,settled,477.10,4,2026-09-15T07:38:00
+ord-0000000659,Margaret Perlman,margaret.perlman659@example.com,8893 Congress Ave,Austin,6011008028603758,apparel,settled,270.43,2,2026-09-23T08:55:00
+ord-0000000660,Barbara Torvalds,barbara.torvalds660@example.com,684 Rainey St,Portland,4111118361235789,fuel,settled,167.06,4,2026-09-05T08:40:00
+ord-0000000661,Dennis Hamilton,dennis.hamilton661@example.com,9825 Lavaca St,Portland,6011009629655569,dining,settled,192.97,6,2026-09-20T05:13:00
+ord-0000000662,Radia Perlman,radia.perlman662@example.com,3811 Speedway,Austin,4111118025444157,apparel,pending,386.98,4,2026-09-24T22:55:00
+ord-0000000663,Dennis Allen,dennis.allen663@example.com,6562 Congress Ave,Madison,5555558895123219,grocery,settled,17.45,5,2026-09-19T21:59:00
+ord-0000000664,Grace Allen,grace.allen664@example.com,1879 Barton Springs Rd,Madison,5555554906491844,fuel,pending,185.92,2,2026-09-17T14:10:00
+ord-0000000665,Ada Liskov,ada.liskov665@example.com,1952 Lavaca St,Boise,5555550646537516,fuel,settled,164.39,5,2026-09-13T05:54:00
+ord-0000000666,Frances Allen,frances.allen666@example.com,2383 Barton Springs Rd,Austin,4555554596681202,dining,settled,406.51,5,2026-09-03T15:18:00
+ord-0000000667,Dennis Allen,dennis.allen667@example.com,9978 Congress Ave,Portland,5200000699576358,grocery,settled,230.39,5,2026-09-25T01:58:00
+ord-0000000668,Grace Allen,grace.allen668@example.com,7854 Guadalupe St,Portland,5555557934573848,pharmacy,settled,322.97,4,2026-09-08T20:18:00
+ord-0000000669,Ken Torvalds,ken.torvalds669@example.com,4195 Rainey St,Madison,6011001133002701,dining,refunded,206.47,5,2026-09-04T06:01:00
+ord-0000000670,Frances Lovelace,frances.lovelace670@example.com,2256 Congress Ave,Madison,6011005974528963,pharmacy,settled,166.66,2,2026-09-20T04:43:00
+ord-0000000671,Ada Thompson,ada.thompson671@example.com,3922 Lavaca St,Raleigh,4555550136831646,electronics,pending,445.61,3,2026-09-02T03:38:00
+ord-0000000672,Ada Torvalds,ada.torvalds672@example.com,8702 Rainey St,Portland,4555550398802434,apparel,pending,309.95,3,2026-09-04T01:52:00
+ord-0000000673,Linus Perlman,linus.perlman673@example.com,4897 Lavaca St,Raleigh,4555550131468352,hardware,settled,473.86,4,2026-09-24T05:20:00
+ord-0000000674,Dennis Liskov,dennis.liskov674@example.com,8298 Guadalupe St,Madison,5555551448523431,grocery,settled,325.02,3,2026-09-24T08:09:00
+ord-0000000675,Radia Ritchie,radia.ritchie675@example.com,2809 Guadalupe St,Boise,5555557882535252,dining,settled,121.55,2,2026-09-20T10:25:00
+ord-0000000676,Frances Hopper,frances.hopper676@example.com,2951 Speedway,Denver,4555557113790836,hardware,refunded,224.12,5,2026-09-09T09:54:00
+ord-0000000677,Dennis Perlman,dennis.perlman677@example.com,3625 Congress Ave,Austin,5555554682753037,electronics,pending,467.69,5,2026-09-05T11:35:00
+ord-0000000678,Frances Hopper,frances.hopper678@example.com,5401 Lavaca St,Denver,5555556454628917,electronics,settled,308.49,4,2026-09-24T16:37:00
+ord-0000000679,Barbara Liskov,barbara.liskov679@example.com,9676 Speedway,Portland,4555554814886633,grocery,settled,192.51,3,2026-09-03T01:05:00
+ord-0000000680,Radia Thompson,radia.thompson680@example.com,385 Rainey St,Denver,4111118704156924,fuel,settled,337.57,5,2026-09-25T18:36:00
+ord-0000000681,Dennis Liskov,dennis.liskov681@example.com,5809 Barton Springs Rd,Austin,6011001516213735,dining,pending,437.19,4,2026-09-28T04:16:00
+ord-0000000682,Ken Thompson,ken.thompson682@example.com,9554 Barton Springs Rd,Raleigh,4555554243196745,hardware,pending,303.05,6,2026-09-20T19:42:00
+ord-0000000683,Radia Liskov,radia.liskov683@example.com,6522 Barton Springs Rd,Denver,4555557738171289,apparel,refunded,172.93,6,2026-09-04T22:57:00
+ord-0000000684,Frances Thompson,frances.thompson684@example.com,5378 Rainey St,Madison,4111117395296759,hardware,refunded,331.65,5,2026-09-15T23:34:00
+ord-0000000685,Radia Liskov,radia.liskov685@example.com,7939 Speedway,Raleigh,5555559710764922,grocery,refunded,334.67,5,2026-09-24T22:25:00
+ord-0000000686,Barbara Liskov,barbara.liskov686@example.com,6908 Barton Springs Rd,Denver,4111119865675330,grocery,settled,431.77,3,2026-09-19T04:48:00
+ord-0000000687,Frances Thompson,frances.thompson687@example.com,7532 Congress Ave,Denver,6011008456451514,grocery,refunded,88.60,6,2026-09-14T12:45:00
+ord-0000000688,Ada Ritchie,ada.ritchie688@example.com,1435 Congress Ave,Portland,6011003793216175,apparel,settled,381.72,3,2026-09-14T18:39:00
+ord-0000000689,Radia Turing,radia.turing689@example.com,3095 Lavaca St,Portland,5555558092897599,electronics,settled,321.26,1,2026-09-01T07:07:00
+ord-0000000690,Ken Torvalds,ken.torvalds690@example.com,8918 Guadalupe St,Austin,4111115559021179,hardware,settled,494.75,4,2026-09-20T14:47:00
+ord-0000000691,Margaret Lovelace,margaret.lovelace691@example.com,4018 Speedway,Madison,5555550434244796,dining,pending,193.14,6,2026-09-25T08:32:00
+ord-0000000692,Ada Hopper,ada.hopper692@example.com,6095 Guadalupe St,Boise,5555552082402130,grocery,settled,285.04,3,2026-09-30T21:01:00
+ord-0000000693,Alan Turing,alan.turing693@example.com,8444 Lavaca St,Portland,4555559619036847,fuel,refunded,222.80,3,2026-09-30T04:05:00
+ord-0000000694,Margaret Hopper,margaret.hopper694@example.com,9358 Congress Ave,Raleigh,6011006584860861,pharmacy,settled,299.23,3,2026-09-04T14:48:00
+ord-0000000695,Barbara Turing,barbara.turing695@example.com,3952 Rainey St,Boise,4111111131600937,pharmacy,pending,304.10,4,2026-09-28T11:29:00
+ord-0000000696,Linus Hopper,linus.hopper696@example.com,8294 Guadalupe St,Portland,6011002263800112,apparel,settled,134.25,2,2026-09-06T16:00:00
+ord-0000000697,Frances Allen,frances.allen697@example.com,9246 Lavaca St,Raleigh,4111116136986348,fuel,refunded,360.77,4,2026-09-17T23:52:00
+ord-0000000698,Ada Torvalds,ada.torvalds698@example.com,7677 Guadalupe St,Denver,4555554511250224,pharmacy,settled,146.66,4,2026-09-27T09:30:00
+ord-0000000699,Margaret Hamilton,margaret.hamilton699@example.com,3764 Guadalupe St,Raleigh,4555552699336252,pharmacy,settled,129.52,5,2026-09-11T14:26:00
+ord-0000000700,Grace Allen,grace.allen700@example.com,4126 Lavaca St,Raleigh,4555550102392979,apparel,settled,482.92,3,2026-09-17T20:25:00
+ord-0000000701,Grace Hopper,grace.hopper701@example.com,4481 Barton Springs Rd,Madison,6011002478878473,fuel,settled,368.63,5,2026-09-06T11:05:00
+ord-0000000702,Radia Liskov,radia.liskov702@example.com,7521 Guadalupe St,Portland,5200008370167363,hardware,settled,69.57,2,2026-09-20T19:05:00
+ord-0000000703,Linus Thompson,linus.thompson703@example.com,4158 Congress Ave,Portland,6011002527497150,electronics,settled,215.67,2,2026-09-23T23:46:00
+ord-0000000704,Grace Ritchie,grace.ritchie704@example.com,2746 Lavaca St,Raleigh,6011004155983105,apparel,pending,420.48,5,2026-09-06T21:07:00
+ord-0000000705,Frances Liskov,frances.liskov705@example.com,1357 Congress Ave,Denver,4111114862541320,fuel,settled,403.31,4,2026-09-12T03:54:00
+ord-0000000706,Frances Hopper,frances.hopper706@example.com,5460 Congress Ave,Portland,4111111275278516,grocery,settled,225.69,3,2026-09-26T02:54:00
+ord-0000000707,Frances Thompson,frances.thompson707@example.com,2513 Guadalupe St,Denver,4111117234985208,dining,refunded,56.36,4,2026-09-24T01:04:00
+ord-0000000708,Alan Thompson,alan.thompson708@example.com,2063 Speedway,Denver,4111119004901001,grocery,refunded,423.65,4,2026-09-02T20:49:00
+ord-0000000709,Margaret Liskov,margaret.liskov709@example.com,3797 Lavaca St,Portland,4555551337741659,fuel,refunded,208.28,2,2026-09-19T19:29:00
+ord-0000000710,Frances Lovelace,frances.lovelace710@example.com,9113 Rainey St,Austin,5555557039460388,dining,settled,283.97,5,2026-09-01T14:41:00
+ord-0000000711,Frances Allen,frances.allen711@example.com,2953 Guadalupe St,Denver,5555553476895327,electronics,pending,329.01,2,2026-09-14T15:38:00
+ord-0000000712,Linus Perlman,linus.perlman712@example.com,1718 Guadalupe St,Austin,6011003854505409,fuel,settled,240.11,4,2026-09-09T22:18:00
+ord-0000000713,Radia Perlman,radia.perlman713@example.com,2054 Guadalupe St,Madison,5200003613458034,apparel,settled,457.21,6,2026-09-30T23:52:00
+ord-0000000714,Ada Ritchie,ada.ritchie714@example.com,7271 Rainey St,Boise,4555550052160343,grocery,settled,68.13,5,2026-09-13T04:10:00
+ord-0000000715,Linus Turing,linus.turing715@example.com,4575 Lavaca St,Boise,4555557952898922,pharmacy,settled,114.94,6,2026-09-02T19:04:00
+ord-0000000716,Radia Ritchie,radia.ritchie716@example.com,4595 Speedway,Austin,5200004706663712,dining,settled,25.87,6,2026-09-26T00:00:00
+ord-0000000717,Linus Perlman,linus.perlman717@example.com,9784 Guadalupe St,Austin,4111113670312924,apparel,pending,29.25,5,2026-09-08T06:28:00
+ord-0000000718,Margaret Perlman,margaret.perlman718@example.com,7879 Barton Springs Rd,Portland,4111115240246912,electronics,settled,352.96,2,2026-09-27T05:21:00
+ord-0000000719,Frances Allen,frances.allen719@example.com,1509 Barton Springs Rd,Raleigh,4111115994537748,dining,settled,111.63,6,2026-09-27T09:55:00
+ord-0000000720,Ken Lovelace,ken.lovelace720@example.com,1729 Barton Springs Rd,Boise,4111111149982533,apparel,settled,279.39,5,2026-09-18T19:52:00
+ord-0000000721,Frances Turing,frances.turing721@example.com,9222 Rainey St,Portland,5200004390371432,electronics,settled,326.10,4,2026-09-02T03:57:00
+ord-0000000722,Frances Perlman,frances.perlman722@example.com,1203 Congress Ave,Austin,4111113551381501,fuel,settled,58.33,6,2026-09-12T04:45:00
+ord-0000000723,Ada Torvalds,ada.torvalds723@example.com,3659 Speedway,Madison,5200004075874163,fuel,settled,274.09,5,2026-09-26T23:07:00
+ord-0000000724,Radia Lovelace,radia.lovelace724@example.com,4649 Speedway,Portland,5200007878599887,fuel,refunded,177.25,2,2026-09-21T01:42:00
+ord-0000000725,Linus Hamilton,linus.hamilton725@example.com,1569 Guadalupe St,Raleigh,6011004678231685,hardware,settled,371.43,1,2026-09-22T21:39:00
+ord-0000000726,Ken Allen,ken.allen726@example.com,8631 Rainey St,Denver,5200007044395343,grocery,settled,478.19,2,2026-09-05T05:16:00
+ord-0000000727,Ada Allen,ada.allen727@example.com,2856 Barton Springs Rd,Madison,4111115927020440,fuel,pending,423.27,6,2026-09-12T11:19:00
+ord-0000000728,Margaret Lovelace,margaret.lovelace728@example.com,4450 Lavaca St,Denver,6011001651109276,fuel,settled,182.12,3,2026-09-12T03:30:00
+ord-0000000729,Margaret Hamilton,margaret.hamilton729@example.com,4434 Lavaca St,Denver,5200008449943729,fuel,refunded,455.24,4,2026-09-17T18:23:00
+ord-0000000730,Linus Ritchie,linus.ritchie730@example.com,2010 Guadalupe St,Austin,6011008131876424,hardware,refunded,203.70,1,2026-09-06T15:48:00
+ord-0000000731,Frances Lovelace,frances.lovelace731@example.com,4454 Congress Ave,Denver,5555554066612064,electronics,refunded,197.99,3,2026-09-07T03:07:00
+ord-0000000732,Frances Ritchie,frances.ritchie732@example.com,1443 Guadalupe St,Raleigh,4555550547516364,electronics,settled,72.28,2,2026-09-08T19:45:00
+ord-0000000733,Alan Turing,alan.turing733@example.com,6776 Rainey St,Madison,5555557055810771,dining,pending,326.97,4,2026-09-23T11:28:00
+ord-0000000734,Frances Lovelace,frances.lovelace734@example.com,976 Guadalupe St,Madison,5200005427847294,apparel,settled,287.28,6,2026-09-03T13:14:00
+ord-0000000735,Dennis Hopper,dennis.hopper735@example.com,7997 Lavaca St,Raleigh,5200004771712204,apparel,settled,283.40,1,2026-09-21T12:16:00
+ord-0000000736,Ada Torvalds,ada.torvalds736@example.com,8910 Lavaca St,Boise,6011000560128435,fuel,pending,320.34,2,2026-09-12T08:20:00
+ord-0000000737,Dennis Hamilton,dennis.hamilton737@example.com,3410 Barton Springs Rd,Boise,6011003382333605,fuel,pending,331.81,2,2026-09-22T18:59:00
+ord-0000000738,Alan Thompson,alan.thompson738@example.com,6861 Barton Springs Rd,Denver,5200000517034044,hardware,settled,444.66,5,2026-09-14T22:27:00
+ord-0000000739,Ken Ritchie,ken.ritchie739@example.com,7001 Speedway,Portland,6011000522283658,hardware,settled,496.95,2,2026-09-10T02:05:00
+ord-0000000740,Grace Ritchie,grace.ritchie740@example.com,7882 Guadalupe St,Raleigh,6011004753402557,dining,settled,130.67,2,2026-09-09T04:36:00
+ord-0000000741,Frances Turing,frances.turing741@example.com,7735 Barton Springs Rd,Austin,5555553232309746,hardware,settled,478.79,6,2026-09-13T18:17:00
+ord-0000000742,Margaret Lovelace,margaret.lovelace742@example.com,6333 Congress Ave,Denver,6011008923642943,fuel,settled,414.39,4,2026-09-09T10:53:00
+ord-0000000743,Barbara Ritchie,barbara.ritchie743@example.com,5937 Barton Springs Rd,Boise,6011008297383397,pharmacy,settled,404.00,4,2026-09-18T09:08:00
+ord-0000000744,Barbara Liskov,barbara.liskov744@example.com,8270 Speedway,Madison,5555554583676436,electronics,settled,355.45,1,2026-09-12T20:29:00
+ord-0000000745,Grace Torvalds,grace.torvalds745@example.com,9687 Lavaca St,Portland,4555551696916744,pharmacy,settled,116.96,6,2026-09-18T08:50:00
+ord-0000000746,Ken Ritchie,ken.ritchie746@example.com,8997 Barton Springs Rd,Portland,5200000792441237,grocery,pending,474.75,4,2026-09-27T21:20:00
+ord-0000000747,Frances Torvalds,frances.torvalds747@example.com,6168 Barton Springs Rd,Portland,4111119824965418,electronics,settled,8.51,6,2026-09-14T09:07:00
+ord-0000000748,Margaret Lovelace,margaret.lovelace748@example.com,554 Guadalupe St,Austin,4555556944676982,electronics,refunded,343.78,2,2026-09-29T10:26:00
+ord-0000000749,Alan Hamilton,alan.hamilton749@example.com,1927 Barton Springs Rd,Austin,6011005344042190,pharmacy,settled,411.82,1,2026-09-24T18:51:00
+ord-0000000750,Ada Turing,ada.turing750@example.com,1036 Lavaca St,Portland,4555557979525409,grocery,pending,16.11,5,2026-09-26T07:34:00
+ord-0000000751,Grace Liskov,grace.liskov751@example.com,3190 Barton Springs Rd,Denver,4111113183804326,fuel,settled,423.23,2,2026-09-22T18:31:00
+ord-0000000752,Grace Ritchie,grace.ritchie752@example.com,3066 Speedway,Boise,5555552682512767,apparel,settled,423.68,1,2026-09-14T13:24:00
+ord-0000000753,Radia Hopper,radia.hopper753@example.com,7526 Speedway,Denver,4555555798351155,dining,settled,18.85,3,2026-09-28T00:48:00
+ord-0000000754,Linus Ritchie,linus.ritchie754@example.com,3230 Congress Ave,Madison,4555555800963344,fuel,settled,294.76,4,2026-09-16T11:32:00
+ord-0000000755,Dennis Hamilton,dennis.hamilton755@example.com,5459 Barton Springs Rd,Denver,6011009281121132,pharmacy,settled,208.24,6,2026-09-09T20:18:00
+ord-0000000756,Ken Torvalds,ken.torvalds756@example.com,9479 Lavaca St,Raleigh,5555554306441704,hardware,settled,354.37,5,2026-09-27T17:49:00
+ord-0000000757,Ken Thompson,ken.thompson757@example.com,8768 Barton Springs Rd,Raleigh,5555554606964751,fuel,refunded,476.43,2,2026-09-23T14:41:00
+ord-0000000758,Barbara Allen,barbara.allen758@example.com,199 Speedway,Raleigh,5555550322774003,electronics,settled,46.76,1,2026-09-06T20:11:00
+ord-0000000759,Frances Torvalds,frances.torvalds759@example.com,3605 Barton Springs Rd,Madison,5200001075633979,electronics,settled,243.93,1,2026-09-10T16:22:00
+ord-0000000760,Radia Ritchie,radia.ritchie760@example.com,9164 Barton Springs Rd,Raleigh,4111110019376917,apparel,settled,136.80,4,2026-09-06T14:35:00
+ord-0000000761,Margaret Allen,margaret.allen761@example.com,6376 Speedway,Madison,5200008092370352,apparel,pending,400.03,2,2026-09-30T11:03:00
+ord-0000000762,Radia Allen,radia.allen762@example.com,9545 Rainey St,Portland,5555555572468917,fuel,settled,182.47,3,2026-09-06T07:10:00
+ord-0000000763,Ada Hopper,ada.hopper763@example.com,6969 Guadalupe St,Denver,6011002496904822,hardware,settled,160.74,1,2026-09-10T03:50:00
+ord-0000000764,Margaret Liskov,margaret.liskov764@example.com,6399 Lavaca St,Denver,4111113854352555,hardware,pending,398.66,2,2026-09-16T11:57:00
+ord-0000000765,Alan Hamilton,alan.hamilton765@example.com,7753 Congress Ave,Raleigh,5200004079397633,electronics,settled,468.26,2,2026-09-28T07:30:00
+ord-0000000766,Linus Perlman,linus.perlman766@example.com,8989 Rainey St,Boise,5200001481072945,fuel,settled,257.02,4,2026-09-24T04:16:00
+ord-0000000767,Alan Torvalds,alan.torvalds767@example.com,2497 Rainey St,Austin,5555556920618328,pharmacy,refunded,100.98,2,2026-09-22T23:10:00
+ord-0000000768,Dennis Perlman,dennis.perlman768@example.com,564 Speedway,Boise,5200001137959917,dining,settled,453.77,4,2026-09-28T13:04:00
+ord-0000000769,Radia Ritchie,radia.ritchie769@example.com,7032 Barton Springs Rd,Madison,5200002668638771,pharmacy,settled,461.23,1,2026-09-10T11:57:00
+ord-0000000770,Frances Turing,frances.turing770@example.com,7648 Speedway,Portland,4111111675619921,dining,settled,384.89,2,2026-09-06T10:48:00
+ord-0000000771,Margaret Ritchie,margaret.ritchie771@example.com,5174 Barton Springs Rd,Raleigh,4111114486057299,fuel,refunded,472.01,2,2026-09-28T10:15:00
+ord-0000000772,Alan Hopper,alan.hopper772@example.com,9140 Rainey St,Denver,6011003754395547,apparel,refunded,476.38,1,2026-09-15T02:38:00
+ord-0000000773,Grace Hopper,grace.hopper773@example.com,8606 Rainey St,Denver,6011004517144081,fuel,settled,15.15,1,2026-09-25T08:55:00
+ord-0000000774,Margaret Allen,margaret.allen774@example.com,1499 Barton Springs Rd,Raleigh,4111116986574723,apparel,settled,206.61,5,2026-09-12T08:43:00
+ord-0000000775,Margaret Liskov,margaret.liskov775@example.com,8691 Barton Springs Rd,Austin,5200005028821037,fuel,settled,141.87,6,2026-09-17T01:49:00
+ord-0000000776,Grace Lovelace,grace.lovelace776@example.com,606 Congress Ave,Denver,5555551577502081,electronics,pending,259.21,1,2026-09-30T22:18:00
+ord-0000000777,Frances Thompson,frances.thompson777@example.com,2089 Lavaca St,Raleigh,4555558975034289,grocery,settled,8.71,1,2026-09-06T02:11:00
+ord-0000000778,Dennis Hamilton,dennis.hamilton778@example.com,2270 Guadalupe St,Raleigh,6011008348384063,dining,refunded,175.93,4,2026-09-27T15:49:00
+ord-0000000779,Frances Thompson,frances.thompson779@example.com,9003 Speedway,Austin,5555557035379079,pharmacy,settled,150.06,5,2026-09-12T09:42:00
+ord-0000000780,Dennis Hopper,dennis.hopper780@example.com,3648 Speedway,Raleigh,4111115482694191,hardware,refunded,414.34,4,2026-09-26T19:19:00
+ord-0000000781,Ken Hopper,ken.hopper781@example.com,8532 Rainey St,Boise,5555551528996523,dining,settled,223.53,4,2026-09-18T05:47:00
+ord-0000000782,Alan Turing,alan.turing782@example.com,3566 Barton Springs Rd,Austin,5200008586058133,dining,settled,326.93,3,2026-09-02T14:29:00
+ord-0000000783,Dennis Torvalds,dennis.torvalds783@example.com,8229 Lavaca St,Raleigh,4111117748811692,pharmacy,settled,116.83,4,2026-09-25T01:55:00
+ord-0000000784,Linus Turing,linus.turing784@example.com,8031 Lavaca St,Denver,5200004262531808,pharmacy,settled,184.69,6,2026-09-26T02:15:00
+ord-0000000785,Linus Turing,linus.turing785@example.com,7216 Rainey St,Raleigh,4111119383352990,fuel,settled,160.26,6,2026-09-11T16:30:00
+ord-0000000786,Grace Lovelace,grace.lovelace786@example.com,4901 Congress Ave,Portland,4111113882537029,electronics,settled,156.74,1,2026-09-08T10:48:00
+ord-0000000787,Linus Hamilton,linus.hamilton787@example.com,9233 Barton Springs Rd,Boise,5200008568117113,electronics,settled,229.84,5,2026-09-09T08:35:00
+ord-0000000788,Barbara Thompson,barbara.thompson788@example.com,7951 Guadalupe St,Raleigh,5555553954540130,hardware,settled,367.62,1,2026-09-27T14:00:00
+ord-0000000789,Frances Hamilton,frances.hamilton789@example.com,3330 Lavaca St,Denver,4555550703129135,electronics,settled,336.28,3,2026-09-24T08:20:00
+ord-0000000790,Ada Ritchie,ada.ritchie790@example.com,5336 Congress Ave,Raleigh,4111112138425583,apparel,settled,268.02,1,2026-09-25T22:12:00
+ord-0000000791,Ken Liskov,ken.liskov791@example.com,4180 Guadalupe St,Boise,5200006153718642,apparel,settled,248.07,1,2026-09-16T00:18:00
+ord-0000000792,Ken Ritchie,ken.ritchie792@example.com,9212 Guadalupe St,Madison,6011005748900282,electronics,settled,108.15,6,2026-09-27T10:45:00
+ord-0000000793,Linus Lovelace,linus.lovelace793@example.com,2508 Barton Springs Rd,Denver,6011005705214040,hardware,pending,440.32,4,2026-09-23T13:10:00
+ord-0000000794,Frances Perlman,frances.perlman794@example.com,7093 Congress Ave,Austin,4111118323370625,apparel,pending,174.94,5,2026-09-15T12:13:00
+ord-0000000795,Radia Ritchie,radia.ritchie795@example.com,6546 Speedway,Denver,4555551631504613,electronics,pending,96.78,5,2026-09-23T22:52:00
+ord-0000000796,Ken Torvalds,ken.torvalds796@example.com,885 Rainey St,Denver,5555557802081270,hardware,settled,315.64,6,2026-09-05T22:18:00
+ord-0000000797,Dennis Turing,dennis.turing797@example.com,2438 Congress Ave,Raleigh,4555552267207059,dining,refunded,404.81,6,2026-09-11T07:43:00
+ord-0000000798,Barbara Allen,barbara.allen798@example.com,4398 Rainey St,Portland,4111116735785521,dining,settled,361.25,2,2026-09-05T15:51:00
+ord-0000000799,Margaret Hopper,margaret.hopper799@example.com,8857 Congress Ave,Austin,4111115355653274,fuel,settled,221.05,3,2026-09-28T17:02:00
+ord-0000000800,Linus Ritchie,linus.ritchie800@example.com,9036 Lavaca St,Boise,6011005568822517,electronics,settled,435.02,4,2026-09-29T02:30:00
+ord-0000000801,Dennis Lovelace,dennis.lovelace801@example.com,6983 Guadalupe St,Denver,5200007247635255,apparel,settled,11.82,5,2026-09-12T11:40:00
+ord-0000000802,Alan Ritchie,alan.ritchie802@example.com,7564 Guadalupe St,Austin,4111118683747461,grocery,refunded,115.42,5,2026-09-12T12:12:00
+ord-0000000803,Ken Lovelace,ken.lovelace803@example.com,3502 Guadalupe St,Austin,4111115038928283,pharmacy,pending,483.40,4,2026-09-13T03:02:00
+ord-0000000804,Margaret Hopper,margaret.hopper804@example.com,8811 Speedway,Raleigh,4555550912842841,electronics,settled,234.37,2,2026-09-19T06:12:00
+ord-0000000805,Frances Allen,frances.allen805@example.com,8001 Lavaca St,Austin,5200007606969428,grocery,settled,259.64,4,2026-09-01T23:18:00
+ord-0000000806,Dennis Turing,dennis.turing806@example.com,2652 Lavaca St,Austin,6011007457694924,apparel,settled,423.74,6,2026-09-04T11:40:00
+ord-0000000807,Grace Allen,grace.allen807@example.com,7314 Barton Springs Rd,Austin,5200004679800119,fuel,settled,398.24,1,2026-09-17T12:01:00
+ord-0000000808,Linus Liskov,linus.liskov808@example.com,2717 Barton Springs Rd,Boise,6011007118094787,pharmacy,refunded,159.84,1,2026-09-03T23:44:00
+ord-0000000809,Margaret Ritchie,margaret.ritchie809@example.com,8986 Congress Ave,Madison,5555553658524034,fuel,refunded,96.47,1,2026-09-12T04:05:00
+ord-0000000810,Grace Lovelace,grace.lovelace810@example.com,2300 Speedway,Boise,4111111200909003,hardware,settled,40.31,4,2026-09-03T08:58:00
+ord-0000000811,Radia Hamilton,radia.hamilton811@example.com,2859 Speedway,Austin,4111115202384727,dining,settled,499.49,5,2026-09-06T07:03:00
+ord-0000000812,Ken Allen,ken.allen812@example.com,6307 Rainey St,Austin,5200008853069979,hardware,settled,32.32,4,2026-09-21T16:18:00
+ord-0000000813,Barbara Torvalds,barbara.torvalds813@example.com,2502 Guadalupe St,Austin,4111112291494103,electronics,settled,256.84,2,2026-09-19T17:18:00
+ord-0000000814,Dennis Allen,dennis.allen814@example.com,3230 Speedway,Madison,5200003291601962,apparel,pending,480.89,2,2026-09-10T13:45:00
+ord-0000000815,Ada Allen,ada.allen815@example.com,6612 Rainey St,Madison,6011007503703372,fuel,pending,221.54,2,2026-09-14T16:15:00
+ord-0000000816,Frances Turing,frances.turing816@example.com,1165 Lavaca St,Boise,5200008179360722,apparel,settled,209.37,6,2026-09-03T15:09:00
+ord-0000000817,Alan Torvalds,alan.torvalds817@example.com,3551 Guadalupe St,Madison,5555555609206561,apparel,pending,171.07,5,2026-09-12T08:48:00
+ord-0000000818,Barbara Liskov,barbara.liskov818@example.com,6819 Guadalupe St,Portland,4555553245586754,electronics,settled,66.71,2,2026-09-02T12:54:00
+ord-0000000819,Barbara Liskov,barbara.liskov819@example.com,7962 Lavaca St,Raleigh,5555553412968501,electronics,settled,334.74,1,2026-09-20T12:38:00
+ord-0000000820,Ada Liskov,ada.liskov820@example.com,7690 Rainey St,Portland,6011003938613807,pharmacy,settled,245.34,6,2026-09-22T09:54:00
+ord-0000000821,Linus Hamilton,linus.hamilton821@example.com,6119 Lavaca St,Madison,4555551473849829,apparel,settled,192.05,2,2026-09-02T19:45:00
+ord-0000000822,Frances Turing,frances.turing822@example.com,4408 Speedway,Boise,4111119883604791,apparel,refunded,483.26,1,2026-09-21T17:41:00
+ord-0000000823,Radia Hamilton,radia.hamilton823@example.com,6576 Barton Springs Rd,Madison,5555554027107428,electronics,refunded,485.29,2,2026-09-08T13:12:00
+ord-0000000824,Frances Perlman,frances.perlman824@example.com,7382 Speedway,Denver,4111116208042319,hardware,refunded,424.08,1,2026-09-09T19:09:00
+ord-0000000825,Grace Hopper,grace.hopper825@example.com,5264 Congress Ave,Boise,4555554273951027,pharmacy,pending,449.57,3,2026-09-03T04:20:00
+ord-0000000826,Alan Hamilton,alan.hamilton826@example.com,1402 Guadalupe St,Boise,5555556804279700,apparel,refunded,377.29,2,2026-09-30T08:41:00
+ord-0000000827,Alan Liskov,alan.liskov827@example.com,6462 Guadalupe St,Austin,4555550409386450,pharmacy,settled,314.73,4,2026-09-19T20:04:00
+ord-0000000828,Frances Ritchie,frances.ritchie828@example.com,1800 Barton Springs Rd,Austin,5555555924006563,electronics,pending,333.68,4,2026-09-20T23:34:00
+ord-0000000829,Barbara Perlman,barbara.perlman829@example.com,3193 Speedway,Boise,6011007092361863,pharmacy,settled,39.02,6,2026-09-26T05:17:00
+ord-0000000830,Grace Allen,grace.allen830@example.com,3568 Speedway,Denver,4555553593326431,apparel,pending,386.51,1,2026-09-15T15:30:00
+ord-0000000831,Radia Turing,radia.turing831@example.com,113 Guadalupe St,Denver,5200007453617062,fuel,settled,26.50,4,2026-09-07T03:04:00
+ord-0000000832,Linus Perlman,linus.perlman832@example.com,824 Lavaca St,Raleigh,4555558009850726,electronics,settled,51.61,6,2026-09-27T06:19:00
+ord-0000000833,Barbara Hamilton,barbara.hamilton833@example.com,4782 Congress Ave,Portland,4555550794053699,dining,settled,310.69,6,2026-09-25T06:11:00
+ord-0000000834,Frances Hopper,frances.hopper834@example.com,2714 Rainey St,Boise,4555550540468910,dining,settled,28.19,3,2026-09-11T19:31:00
+ord-0000000835,Frances Lovelace,frances.lovelace835@example.com,397 Rainey St,Portland,6011006211065884,dining,settled,102.17,1,2026-09-28T17:11:00
+ord-0000000836,Barbara Liskov,barbara.liskov836@example.com,2875 Lavaca St,Raleigh,5200005519948992,pharmacy,settled,495.85,4,2026-09-28T10:12:00
+ord-0000000837,Ken Ritchie,ken.ritchie837@example.com,2893 Guadalupe St,Portland,5555558823702076,hardware,refunded,415.86,3,2026-09-17T01:25:00
+ord-0000000838,Dennis Hopper,dennis.hopper838@example.com,6505 Congress Ave,Austin,5555553238487116,pharmacy,settled,230.21,4,2026-09-13T06:10:00
+ord-0000000839,Ken Turing,ken.turing839@example.com,4780 Guadalupe St,Denver,6011007924551731,apparel,settled,164.67,1,2026-09-25T10:02:00
+ord-0000000840,Ada Hamilton,ada.hamilton840@example.com,6764 Guadalupe St,Portland,4555550477243658,grocery,settled,223.26,2,2026-09-17T07:34:00
+ord-0000000841,Frances Hamilton,frances.hamilton841@example.com,7936 Rainey St,Portland,6011007013833958,grocery,settled,113.19,6,2026-09-09T20:26:00
+ord-0000000842,Barbara Ritchie,barbara.ritchie842@example.com,4314 Speedway,Portland,6011007760729441,electronics,settled,78.33,2,2026-09-27T20:58:00
+ord-0000000843,Ada Torvalds,ada.torvalds843@example.com,1146 Speedway,Boise,6011008561225621,dining,refunded,342.78,6,2026-09-13T02:46:00
+ord-0000000844,Margaret Perlman,margaret.perlman844@example.com,9780 Lavaca St,Madison,5555557272505121,fuel,refunded,139.51,5,2026-09-04T14:28:00
+ord-0000000845,Margaret Thompson,margaret.thompson845@example.com,1403 Congress Ave,Denver,6011009972553700,pharmacy,settled,430.88,3,2026-09-09T14:41:00
+ord-0000000846,Dennis Thompson,dennis.thompson846@example.com,4414 Rainey St,Portland,4555550450054718,grocery,settled,233.35,1,2026-09-15T01:06:00
+ord-0000000847,Frances Ritchie,frances.ritchie847@example.com,7035 Speedway,Boise,5200004414397769,dining,refunded,218.33,4,2026-09-18T19:53:00
+ord-0000000848,Frances Torvalds,frances.torvalds848@example.com,4886 Lavaca St,Madison,4555557983097320,pharmacy,settled,184.29,2,2026-09-10T22:13:00
+ord-0000000849,Alan Turing,alan.turing849@example.com,9250 Congress Ave,Denver,4111110960852569,hardware,refunded,470.49,6,2026-09-10T04:12:00
+ord-0000000850,Ken Allen,ken.allen850@example.com,6486 Barton Springs Rd,Denver,6011003901192656,grocery,settled,90.54,6,2026-09-01T21:18:00
+ord-0000000851,Grace Liskov,grace.liskov851@example.com,4679 Lavaca St,Portland,4555559275552988,pharmacy,pending,464.63,2,2026-09-17T23:24:00
+ord-0000000852,Radia Ritchie,radia.ritchie852@example.com,7088 Congress Ave,Austin,6011003032585240,dining,settled,23.30,2,2026-09-13T14:13:00
+ord-0000000853,Margaret Torvalds,margaret.torvalds853@example.com,1234 Guadalupe St,Boise,5200003570369356,pharmacy,settled,71.22,4,2026-09-25T12:24:00
+ord-0000000854,Grace Hopper,grace.hopper854@example.com,1508 Guadalupe St,Boise,5555556359478780,fuel,refunded,379.47,3,2026-09-14T15:10:00
+ord-0000000855,Ken Torvalds,ken.torvalds855@example.com,4640 Speedway,Denver,5200002215104756,pharmacy,settled,24.20,6,2026-09-22T04:15:00
+ord-0000000856,Radia Turing,radia.turing856@example.com,2907 Rainey St,Denver,6011004337621862,apparel,pending,412.59,4,2026-09-04T17:20:00
+ord-0000000857,Grace Perlman,grace.perlman857@example.com,1011 Congress Ave,Denver,5555557689394069,hardware,settled,361.31,4,2026-09-24T10:35:00
+ord-0000000858,Grace Allen,grace.allen858@example.com,3054 Barton Springs Rd,Denver,4111110045315368,apparel,refunded,432.85,1,2026-09-15T21:04:00
+ord-0000000859,Linus Thompson,linus.thompson859@example.com,9062 Speedway,Boise,4555556411184361,apparel,pending,118.91,3,2026-09-19T12:36:00
+ord-0000000860,Margaret Lovelace,margaret.lovelace860@example.com,8734 Lavaca St,Portland,6011008451446063,dining,settled,196.38,4,2026-09-17T20:26:00
+ord-0000000861,Dennis Thompson,dennis.thompson861@example.com,5433 Congress Ave,Portland,4111110808093467,grocery,pending,468.26,1,2026-09-09T14:53:00
+ord-0000000862,Dennis Liskov,dennis.liskov862@example.com,445 Speedway,Madison,5200009733646697,apparel,pending,104.52,3,2026-09-04T22:31:00
+ord-0000000863,Margaret Turing,margaret.turing863@example.com,6974 Lavaca St,Denver,4111114566159445,fuel,settled,494.93,4,2026-09-22T11:04:00
+ord-0000000864,Ken Turing,ken.turing864@example.com,4961 Barton Springs Rd,Raleigh,6011003193987508,hardware,settled,9.73,4,2026-09-08T01:24:00
+ord-0000000865,Radia Thompson,radia.thompson865@example.com,8561 Speedway,Raleigh,4555556900015050,fuel,pending,217.74,2,2026-09-11T17:51:00
+ord-0000000866,Ada Torvalds,ada.torvalds866@example.com,6020 Guadalupe St,Austin,4555554684159558,dining,settled,155.92,5,2026-09-24T10:27:00
+ord-0000000867,Margaret Lovelace,margaret.lovelace867@example.com,8404 Congress Ave,Austin,4555558420353870,pharmacy,settled,447.19,5,2026-09-11T06:35:00
+ord-0000000868,Alan Perlman,alan.perlman868@example.com,835 Lavaca St,Boise,4555553712289130,grocery,settled,147.27,4,2026-09-22T22:03:00
+ord-0000000869,Ken Torvalds,ken.torvalds869@example.com,6430 Congress Ave,Madison,4111112256426710,grocery,settled,267.34,6,2026-09-21T08:05:00
+ord-0000000870,Grace Torvalds,grace.torvalds870@example.com,3720 Congress Ave,Austin,5555556298417121,hardware,refunded,312.78,4,2026-09-22T11:18:00
+ord-0000000871,Ken Ritchie,ken.ritchie871@example.com,3397 Rainey St,Madison,4555557073631996,hardware,settled,494.41,5,2026-09-09T10:29:00
+ord-0000000872,Radia Hopper,radia.hopper872@example.com,2388 Guadalupe St,Portland,5200006913098913,fuel,pending,428.93,1,2026-09-27T13:42:00
+ord-0000000873,Ada Lovelace,ada.lovelace873@example.com,6377 Rainey St,Austin,5555550457644161,dining,refunded,397.25,3,2026-09-01T02:28:00
+ord-0000000874,Ada Perlman,ada.perlman874@example.com,4541 Guadalupe St,Boise,6011007696090132,grocery,settled,114.92,2,2026-09-04T08:40:00
+ord-0000000875,Ada Ritchie,ada.ritchie875@example.com,8945 Rainey St,Denver,4555556773706496,fuel,settled,142.48,4,2026-09-06T08:51:00
+ord-0000000876,Grace Torvalds,grace.torvalds876@example.com,1329 Lavaca St,Denver,5555559376478619,electronics,pending,320.46,3,2026-09-06T19:25:00
+ord-0000000877,Barbara Lovelace,barbara.lovelace877@example.com,9235 Lavaca St,Denver,4111114670297156,hardware,pending,325.67,6,2026-09-24T18:57:00
+ord-0000000878,Radia Hamilton,radia.hamilton878@example.com,6288 Speedway,Boise,5555551427334438,grocery,pending,261.01,2,2026-09-06T17:52:00
+ord-0000000879,Linus Lovelace,linus.lovelace879@example.com,1032 Lavaca St,Portland,5200003098962930,dining,refunded,433.47,2,2026-09-11T13:45:00
+ord-0000000880,Radia Allen,radia.allen880@example.com,4969 Rainey St,Denver,4555551256703003,electronics,settled,396.53,1,2026-09-14T10:10:00
+ord-0000000881,Margaret Lovelace,margaret.lovelace881@example.com,1970 Guadalupe St,Madison,6011001420397863,apparel,settled,268.52,1,2026-09-17T11:08:00
+ord-0000000882,Frances Turing,frances.turing882@example.com,1648 Speedway,Denver,4111115663147571,pharmacy,refunded,122.35,3,2026-09-10T17:29:00
+ord-0000000883,Alan Torvalds,alan.torvalds883@example.com,7413 Congress Ave,Raleigh,6011006129163110,dining,pending,185.36,2,2026-09-10T18:00:00
+ord-0000000884,Barbara Ritchie,barbara.ritchie884@example.com,8794 Guadalupe St,Denver,5200003360350509,grocery,settled,10.09,3,2026-09-21T18:50:00
+ord-0000000885,Barbara Liskov,barbara.liskov885@example.com,953 Congress Ave,Portland,4555554937566542,hardware,settled,496.56,4,2026-09-30T10:15:00
+ord-0000000886,Linus Thompson,linus.thompson886@example.com,1560 Guadalupe St,Madison,4555558180152827,fuel,pending,445.10,2,2026-09-06T11:55:00
+ord-0000000887,Barbara Allen,barbara.allen887@example.com,8710 Rainey St,Boise,5200002278334720,hardware,pending,190.03,5,2026-09-28T05:09:00
+ord-0000000888,Margaret Ritchie,margaret.ritchie888@example.com,1649 Speedway,Boise,5200009146393531,hardware,settled,148.26,5,2026-09-13T14:29:00
+ord-0000000889,Ada Liskov,ada.liskov889@example.com,8139 Lavaca St,Portland,4111113677941329,electronics,pending,467.95,1,2026-09-04T10:55:00
+ord-0000000890,Ken Torvalds,ken.torvalds890@example.com,6890 Lavaca St,Denver,4555551788376054,apparel,settled,38.85,3,2026-09-21T23:28:00
+ord-0000000891,Margaret Ritchie,margaret.ritchie891@example.com,2089 Lavaca St,Portland,4555555200702540,pharmacy,settled,225.77,6,2026-09-23T21:20:00
+ord-0000000892,Frances Turing,frances.turing892@example.com,5949 Lavaca St,Portland,6011008791579870,hardware,pending,410.52,1,2026-09-10T04:26:00
+ord-0000000893,Grace Allen,grace.allen893@example.com,8220 Rainey St,Portland,4111117323178046,apparel,settled,49.39,3,2026-09-01T19:45:00
+ord-0000000894,Alan Hamilton,alan.hamilton894@example.com,5386 Lavaca St,Denver,5200005347041986,fuel,settled,461.52,2,2026-09-10T22:56:00
+ord-0000000895,Ada Torvalds,ada.torvalds895@example.com,6817 Lavaca St,Raleigh,6011009183297428,apparel,settled,417.91,4,2026-09-20T18:01:00
+ord-0000000896,Ken Thompson,ken.thompson896@example.com,4887 Lavaca St,Madison,4555555467159046,hardware,pending,462.68,4,2026-09-30T11:43:00
+ord-0000000897,Radia Liskov,radia.liskov897@example.com,4913 Guadalupe St,Austin,4111110425578445,grocery,pending,76.88,4,2026-09-05T14:21:00
+ord-0000000898,Ada Liskov,ada.liskov898@example.com,6833 Rainey St,Portland,5200004591862692,hardware,pending,382.78,1,2026-09-19T10:26:00
+ord-0000000899,Radia Hopper,radia.hopper899@example.com,8784 Congress Ave,Denver,6011009502275782,apparel,settled,310.81,4,2026-09-06T13:59:00
+ord-0000000900,Barbara Ritchie,barbara.ritchie900@example.com,5694 Congress Ave,Madison,4111113877677483,pharmacy,settled,80.46,5,2026-09-28T05:43:00
+ord-0000000901,Dennis Turing,dennis.turing901@example.com,7021 Congress Ave,Portland,6011004280890282,dining,refunded,163.17,2,2026-09-23T12:23:00
+ord-0000000902,Grace Perlman,grace.perlman902@example.com,5033 Rainey St,Denver,6011001080342712,grocery,refunded,214.80,2,2026-09-16T06:16:00
+ord-0000000903,Radia Hopper,radia.hopper903@example.com,355 Congress Ave,Denver,6011007645498485,hardware,refunded,494.77,4,2026-09-27T03:10:00
+ord-0000000904,Barbara Ritchie,barbara.ritchie904@example.com,2831 Lavaca St,Madison,4111110396860921,hardware,pending,314.88,1,2026-09-12T07:33:00
+ord-0000000905,Alan Thompson,alan.thompson905@example.com,6942 Guadalupe St,Madison,4555554302584633,electronics,settled,262.96,2,2026-09-08T13:22:00
+ord-0000000906,Alan Turing,alan.turing906@example.com,4759 Congress Ave,Portland,5555555135639632,pharmacy,settled,260.97,6,2026-09-09T18:58:00
+ord-0000000907,Margaret Liskov,margaret.liskov907@example.com,586 Guadalupe St,Austin,4555556588708711,dining,settled,300.92,6,2026-09-22T00:44:00
+ord-0000000908,Ada Torvalds,ada.torvalds908@example.com,4776 Rainey St,Austin,4555553732413710,apparel,refunded,337.29,2,2026-09-18T01:58:00
+ord-0000000909,Radia Hamilton,radia.hamilton909@example.com,1357 Guadalupe St,Raleigh,6011000594606687,hardware,settled,49.08,4,2026-09-06T10:08:00
+ord-0000000910,Margaret Torvalds,margaret.torvalds910@example.com,2130 Rainey St,Portland,4111116029278209,grocery,settled,17.10,6,2026-09-18T11:54:00
+ord-0000000911,Grace Perlman,grace.perlman911@example.com,4920 Rainey St,Portland,4555559733688705,pharmacy,refunded,257.17,2,2026-09-16T08:43:00
+ord-0000000912,Radia Perlman,radia.perlman912@example.com,1809 Lavaca St,Portland,6011009222351996,electronics,settled,305.16,3,2026-09-25T07:07:00
+ord-0000000913,Radia Torvalds,radia.torvalds913@example.com,191 Congress Ave,Boise,5555553833121813,fuel,settled,368.05,5,2026-09-24T06:53:00
+ord-0000000914,Ada Allen,ada.allen914@example.com,4582 Barton Springs Rd,Denver,4555555344357995,apparel,settled,140.56,1,2026-09-27T00:38:00
+ord-0000000915,Radia Ritchie,radia.ritchie915@example.com,3441 Lavaca St,Raleigh,6011009908854602,dining,settled,43.11,1,2026-09-22T10:22:00
+ord-0000000916,Ken Allen,ken.allen916@example.com,6217 Guadalupe St,Austin,4111111062274082,hardware,settled,161.93,5,2026-09-03T16:34:00
+ord-0000000917,Alan Hopper,alan.hopper917@example.com,9492 Lavaca St,Boise,5200003274534131,dining,pending,53.04,2,2026-09-18T11:52:00
+ord-0000000918,Alan Torvalds,alan.torvalds918@example.com,8207 Lavaca St,Madison,4555558028883880,hardware,settled,131.42,6,2026-09-10T16:58:00
+ord-0000000919,Margaret Liskov,margaret.liskov919@example.com,247 Lavaca St,Austin,6011007092703734,fuel,settled,237.78,5,2026-09-16T13:15:00
+ord-0000000920,Ada Turing,ada.turing920@example.com,5965 Lavaca St,Madison,4111114659313321,grocery,pending,343.44,3,2026-09-09T02:47:00
+ord-0000000921,Radia Thompson,radia.thompson921@example.com,3273 Barton Springs Rd,Raleigh,5555554196354918,apparel,refunded,205.67,2,2026-09-15T13:55:00
+ord-0000000922,Frances Perlman,frances.perlman922@example.com,2046 Congress Ave,Madison,4555557353365539,dining,refunded,277.40,6,2026-09-21T07:25:00
+ord-0000000923,Grace Perlman,grace.perlman923@example.com,7468 Rainey St,Austin,4111110170493295,grocery,settled,91.90,6,2026-09-14T12:48:00
+ord-0000000924,Barbara Hamilton,barbara.hamilton924@example.com,5248 Guadalupe St,Madison,5200008789539236,grocery,settled,307.32,2,2026-09-28T08:40:00
+ord-0000000925,Grace Liskov,grace.liskov925@example.com,3072 Barton Springs Rd,Austin,5200006569777208,fuel,pending,270.71,3,2026-09-13T23:42:00
+ord-0000000926,Linus Hamilton,linus.hamilton926@example.com,472 Guadalupe St,Austin,5555556242649589,dining,refunded,127.11,4,2026-09-29T12:13:00
+ord-0000000927,Linus Perlman,linus.perlman927@example.com,2948 Rainey St,Boise,4111110499641590,fuel,settled,215.46,3,2026-09-17T20:10:00
+ord-0000000928,Grace Perlman,grace.perlman928@example.com,1876 Congress Ave,Boise,4555550451709823,fuel,refunded,12.04,4,2026-09-06T08:23:00
+ord-0000000929,Barbara Hamilton,barbara.hamilton929@example.com,2418 Congress Ave,Boise,4555556839002831,fuel,settled,362.54,5,2026-09-16T22:29:00
+ord-0000000930,Radia Liskov,radia.liskov930@example.com,8383 Congress Ave,Boise,5555555776327240,hardware,refunded,441.56,3,2026-09-12T06:06:00
+ord-0000000931,Linus Ritchie,linus.ritchie931@example.com,3293 Rainey St,Austin,6011005831669992,pharmacy,settled,97.23,6,2026-09-03T17:26:00
+ord-0000000932,Ada Hamilton,ada.hamilton932@example.com,6919 Barton Springs Rd,Austin,6011003605216900,pharmacy,settled,274.87,6,2026-09-12T02:35:00
+ord-0000000933,Linus Ritchie,linus.ritchie933@example.com,5315 Congress Ave,Boise,4555557363509217,apparel,settled,194.83,4,2026-09-13T16:12:00
+ord-0000000934,Margaret Torvalds,margaret.torvalds934@example.com,2311 Congress Ave,Austin,5555552021258056,hardware,settled,466.50,1,2026-09-30T16:50:00
+ord-0000000935,Linus Liskov,linus.liskov935@example.com,6160 Lavaca St,Raleigh,4111115996818492,pharmacy,settled,481.31,3,2026-09-24T15:34:00
+ord-0000000936,Grace Hamilton,grace.hamilton936@example.com,4299 Speedway,Raleigh,5555553582288664,hardware,settled,260.12,2,2026-09-08T18:40:00
+ord-0000000937,Grace Torvalds,grace.torvalds937@example.com,7999 Barton Springs Rd,Austin,4555556283655498,dining,settled,392.26,5,2026-09-12T22:09:00
+ord-0000000938,Ada Perlman,ada.perlman938@example.com,7204 Lavaca St,Boise,5200004009860718,electronics,pending,358.33,6,2026-09-11T02:47:00
+ord-0000000939,Frances Ritchie,frances.ritchie939@example.com,8641 Barton Springs Rd,Austin,5555556730092995,electronics,refunded,424.26,4,2026-09-17T16:12:00
+ord-0000000940,Dennis Lovelace,dennis.lovelace940@example.com,6849 Guadalupe St,Austin,4555550175949465,grocery,settled,130.78,2,2026-09-04T19:46:00
+ord-0000000941,Grace Thompson,grace.thompson941@example.com,2504 Rainey St,Raleigh,5555552413145234,electronics,refunded,192.32,4,2026-09-01T04:48:00
+ord-0000000942,Radia Torvalds,radia.torvalds942@example.com,3157 Rainey St,Boise,4555555290528730,electronics,settled,494.06,5,2026-09-17T18:14:00
+ord-0000000943,Linus Thompson,linus.thompson943@example.com,7247 Barton Springs Rd,Portland,5200005493905950,electronics,refunded,471.06,3,2026-09-15T15:20:00
+ord-0000000944,Grace Torvalds,grace.torvalds944@example.com,3031 Guadalupe St,Madison,6011007591276406,fuel,settled,142.33,2,2026-09-19T00:08:00
+ord-0000000945,Barbara Liskov,barbara.liskov945@example.com,9275 Rainey St,Boise,5200002225066540,electronics,settled,212.12,3,2026-09-16T00:09:00
+ord-0000000946,Dennis Torvalds,dennis.torvalds946@example.com,3620 Rainey St,Madison,6011006873535836,dining,settled,284.78,6,2026-09-04T16:19:00
+ord-0000000947,Barbara Ritchie,barbara.ritchie947@example.com,8671 Speedway,Raleigh,6011005458788984,electronics,settled,254.94,5,2026-09-04T03:13:00
+ord-0000000948,Barbara Liskov,barbara.liskov948@example.com,3872 Speedway,Madison,4111117756408571,apparel,refunded,208.51,6,2026-09-30T09:43:00
+ord-0000000949,Dennis Allen,dennis.allen949@example.com,8714 Lavaca St,Austin,4111110189431583,grocery,settled,131.48,3,2026-09-30T09:16:00
+ord-0000000950,Radia Liskov,radia.liskov950@example.com,1534 Speedway,Portland,4111119529286433,hardware,settled,473.66,3,2026-09-07T21:00:00
+ord-0000000951,Dennis Perlman,dennis.perlman951@example.com,4956 Lavaca St,Portland,5200004878855369,pharmacy,settled,482.98,2,2026-09-11T17:36:00
+ord-0000000952,Radia Torvalds,radia.torvalds952@example.com,2712 Barton Springs Rd,Denver,5200008947267464,electronics,refunded,191.70,2,2026-09-14T07:15:00
+ord-0000000953,Alan Allen,alan.allen953@example.com,7619 Congress Ave,Portland,4555557779906437,hardware,pending,441.02,1,2026-09-14T23:09:00
+ord-0000000954,Frances Hopper,frances.hopper954@example.com,4344 Guadalupe St,Madison,4555551023484275,dining,settled,441.64,3,2026-09-06T07:04:00
+ord-0000000955,Radia Hopper,radia.hopper955@example.com,7342 Guadalupe St,Boise,5555556551609562,hardware,settled,104.74,5,2026-09-15T16:44:00
+ord-0000000956,Dennis Torvalds,dennis.torvalds956@example.com,1455 Congress Ave,Austin,6011009903036635,fuel,settled,187.40,2,2026-09-18T18:56:00
+ord-0000000957,Ada Turing,ada.turing957@example.com,2329 Speedway,Denver,6011006713846955,hardware,pending,251.90,4,2026-09-28T18:38:00
+ord-0000000958,Grace Lovelace,grace.lovelace958@example.com,1983 Guadalupe St,Portland,4111111875171582,fuel,settled,24.42,5,2026-09-30T13:22:00
+ord-0000000959,Ada Allen,ada.allen959@example.com,8250 Congress Ave,Madison,5555550405950249,electronics,settled,388.98,4,2026-09-13T10:27:00
+ord-0000000960,Radia Lovelace,radia.lovelace960@example.com,7916 Barton Springs Rd,Madison,6011002771163409,fuel,refunded,320.13,6,2026-09-19T23:22:00
+ord-0000000961,Dennis Lovelace,dennis.lovelace961@example.com,4045 Speedway,Denver,4111113262027047,grocery,pending,448.24,3,2026-09-15T08:17:00
+ord-0000000962,Radia Perlman,radia.perlman962@example.com,2254 Lavaca St,Madison,5555558425604613,electronics,refunded,297.23,6,2026-09-15T04:50:00
+ord-0000000963,Alan Hamilton,alan.hamilton963@example.com,3685 Rainey St,Denver,5200009825994286,grocery,pending,123.52,2,2026-09-25T17:20:00
+ord-0000000964,Grace Ritchie,grace.ritchie964@example.com,8620 Congress Ave,Austin,4555556763982750,hardware,settled,90.69,4,2026-09-11T04:31:00
+ord-0000000965,Frances Perlman,frances.perlman965@example.com,3822 Barton Springs Rd,Austin,5555554552427183,electronics,settled,490.64,6,2026-09-29T19:40:00
+ord-0000000966,Margaret Hopper,margaret.hopper966@example.com,5550 Lavaca St,Portland,4555558310860273,hardware,refunded,187.87,5,2026-09-15T00:43:00
+ord-0000000967,Alan Hamilton,alan.hamilton967@example.com,4271 Barton Springs Rd,Boise,5555557661446002,grocery,pending,56.16,6,2026-09-07T00:11:00
+ord-0000000968,Radia Torvalds,radia.torvalds968@example.com,5341 Rainey St,Denver,5200003676865794,apparel,settled,274.66,3,2026-09-01T01:09:00
+ord-0000000969,Ada Perlman,ada.perlman969@example.com,3500 Rainey St,Portland,4555555892329214,grocery,refunded,1.51,5,2026-09-15T22:18:00
+ord-0000000970,Grace Torvalds,grace.torvalds970@example.com,7850 Lavaca St,Madison,6011003625048168,electronics,settled,369.41,2,2026-09-17T00:43:00
+ord-0000000971,Dennis Ritchie,dennis.ritchie971@example.com,9300 Barton Springs Rd,Raleigh,6011009885556287,fuel,refunded,294.77,4,2026-09-24T17:15:00
+ord-0000000972,Linus Lovelace,linus.lovelace972@example.com,1027 Speedway,Austin,4555552408136910,hardware,settled,460.77,5,2026-09-30T02:46:00
+ord-0000000973,Barbara Perlman,barbara.perlman973@example.com,1021 Rainey St,Madison,6011009602476058,grocery,pending,56.46,5,2026-09-27T11:39:00
+ord-0000000974,Margaret Ritchie,margaret.ritchie974@example.com,4998 Rainey St,Raleigh,5200007546782089,fuel,refunded,372.31,2,2026-09-24T14:25:00
+ord-0000000975,Radia Thompson,radia.thompson975@example.com,8416 Speedway,Boise,5555558540260150,fuel,settled,197.07,6,2026-09-10T05:44:00
+ord-0000000976,Barbara Turing,barbara.turing976@example.com,3651 Rainey St,Denver,5555553128006133,electronics,settled,277.54,4,2026-09-22T07:36:00
+ord-0000000977,Ada Lovelace,ada.lovelace977@example.com,1875 Barton Springs Rd,Austin,6011006926940660,grocery,pending,422.92,2,2026-09-19T07:29:00
+ord-0000000978,Barbara Turing,barbara.turing978@example.com,5163 Guadalupe St,Denver,5555550479864987,hardware,pending,249.49,4,2026-09-30T21:01:00
+ord-0000000979,Margaret Ritchie,margaret.ritchie979@example.com,9582 Rainey St,Denver,5200002152897321,dining,settled,287.40,2,2026-09-08T20:42:00
+ord-0000000980,Ada Allen,ada.allen980@example.com,3670 Barton Springs Rd,Madison,4555558568125429,electronics,pending,10.81,6,2026-09-19T01:50:00
+ord-0000000981,Margaret Hopper,margaret.hopper981@example.com,6298 Speedway,Boise,5200001304440857,fuel,settled,330.09,4,2026-09-15T17:41:00
+ord-0000000982,Grace Torvalds,grace.torvalds982@example.com,1341 Congress Ave,Madison,6011007023269136,hardware,settled,278.48,1,2026-09-26T02:57:00
+ord-0000000983,Radia Thompson,radia.thompson983@example.com,399 Guadalupe St,Raleigh,4555550475961178,fuel,pending,151.08,6,2026-09-29T22:29:00
+ord-0000000984,Alan Torvalds,alan.torvalds984@example.com,172 Speedway,Denver,4555553465302254,electronics,settled,295.76,4,2026-09-27T16:28:00
+ord-0000000985,Dennis Hamilton,dennis.hamilton985@example.com,5175 Rainey St,Boise,6011002780410973,pharmacy,settled,342.71,6,2026-09-08T09:31:00
+ord-0000000986,Linus Liskov,linus.liskov986@example.com,1909 Barton Springs Rd,Denver,5555558683587583,grocery,settled,228.28,1,2026-09-05T17:54:00
+ord-0000000987,Ken Perlman,ken.perlman987@example.com,1923 Rainey St,Madison,5555559208746621,fuel,settled,492.23,3,2026-09-24T09:08:00
+ord-0000000988,Barbara Turing,barbara.turing988@example.com,5625 Barton Springs Rd,Austin,4111110879223258,fuel,settled,307.11,2,2026-09-13T20:15:00
+ord-0000000989,Ken Perlman,ken.perlman989@example.com,9152 Guadalupe St,Austin,5200008156196990,dining,pending,450.17,4,2026-09-19T17:33:00
+ord-0000000990,Frances Allen,frances.allen990@example.com,6089 Lavaca St,Boise,6011001629304801,dining,settled,295.42,6,2026-09-20T18:18:00
+ord-0000000991,Alan Allen,alan.allen991@example.com,8000 Lavaca St,Boise,6011005053160381,pharmacy,settled,425.67,5,2026-09-26T02:57:00
+ord-0000000992,Linus Ritchie,linus.ritchie992@example.com,5935 Congress Ave,Raleigh,5555554928658412,pharmacy,pending,410.65,5,2026-09-20T16:48:00
+ord-0000000993,Ken Hamilton,ken.hamilton993@example.com,6707 Lavaca St,Boise,6011004858684158,electronics,settled,332.17,6,2026-09-14T08:22:00
+ord-0000000994,Dennis Turing,dennis.turing994@example.com,8122 Speedway,Austin,4111119293432387,apparel,settled,160.47,3,2026-09-11T12:48:00
+ord-0000000995,Alan Lovelace,alan.lovelace995@example.com,3908 Guadalupe St,Madison,4555552707331980,hardware,pending,452.92,6,2026-09-10T11:17:00
+ord-0000000996,Linus Thompson,linus.thompson996@example.com,9635 Speedway,Denver,5555550139774030,electronics,settled,84.39,2,2026-09-09T22:19:00
+ord-0000000997,Linus Ritchie,linus.ritchie997@example.com,421 Guadalupe St,Raleigh,6011009195579730,hardware,pending,179.73,3,2026-09-23T15:28:00
+ord-0000000998,Frances Torvalds,frances.torvalds998@example.com,9565 Guadalupe St,Boise,6011007052548277,apparel,settled,111.21,2,2026-09-09T07:56:00
+ord-0000000999,Ken Liskov,ken.liskov999@example.com,3792 Rainey St,Boise,5200000097740804,dining,refunded,449.75,4,2026-09-14T23:21:00
