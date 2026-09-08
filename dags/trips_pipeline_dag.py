@@ -78,11 +78,19 @@ try:
     for _k, _v in dotenv_values(ROOT / ".env.local").items():
         if _v and _k not in os.environ:
             os.environ[_k] = _v
-    _cred = os.environ.get("GOOGLE_APPLICATION_CREDENTIALS")
-    if _cred and not os.path.isabs(_cred):
-        os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = str(ROOT / _cred)
 except ImportError:
     pass
+
+# A relative credentials path is resolved against the repo root for a native
+# run and against /secrets (the bind mount) inside the container. Seen live:
+# `secrets/gcp-sa.json` in .env.local meant three BigQuery failures and a CSV
+# fallback every run, because nothing in the container has that relative path.
+_cred = os.environ.get("GOOGLE_APPLICATION_CREDENTIALS")
+if _cred and not os.path.isabs(_cred):
+    for _candidate in (ROOT / _cred, Path("/secrets") / Path(_cred).name):
+        if _candidate.exists():
+            os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = str(_candidate)
+            break
 
 from airflow.sdk import DAG, task
 
@@ -143,11 +151,15 @@ def run_env(ctx: dict) -> stages.RunEnv:
     """Everything a stage needs, derived from the Airflow context once."""
     dag_run = ctx.get("dag_run")
     ti = ctx.get("task_instance") or ctx.get("ti")
+    # A run triggered by the console carries its upload in conf:
+    # {"csv_path": ..., "dataset": ..., "row_limit": 0, "source": "upload"}.
+    conf = getattr(dag_run, "conf", None) or {}
     return stages.RunEnv.build(
         data_root=DATA,
         run_slot=logical_ts(ctx),
         run_id=getattr(dag_run, "run_id", None),
         try_number=int(getattr(ti, "try_number", 1) or 1),
+        conf=dict(conf) if isinstance(conf, dict) else {},
     )
 
 
@@ -228,8 +240,10 @@ with DAG(
         env = run_env(ctx)
         t0 = stage_start("verdict", env.trace_id)
         result = stages.emit_verdict(env, _pull_events(ctx))
+        # The task succeeded if a verdict was published, whatever it said;
+        # the verdict's own status is a field, not the task's outcome.
         stage_end("verdict", env.trace_id, t0, proceed=result["proceed"],
-                  status=result["status"], event_id=result["event_id"],
+                  verdict=result["status"], event_id=result["event_id"],
                   topic=result["topic"], reasons=len(result["verdict"]["reasons"]))
         return result
 

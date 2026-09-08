@@ -192,3 +192,12 @@ def test_orchestrator_cannot_get_a_crypto_token(idp_client):
     client, _ = idp_client
     r = _token(client, "orchestrator-job", "s3cret", "crypto-service")
     assert r.status_code == 403
+
+
+def test_key_id_identifies_the_key(idp_client):
+    """A new key must mean a new kid, or verifiers keep a stale JWKS forever."""
+    client, idp = idp_client
+    kid = client.get("/.well-known/jwks.json").json()["keys"][0]["kid"]
+    assert kid == idp.KEY_ID and kid.startswith("wps-idp-")
+    assert idp._key_id(OTHER_KEY.public_key()) != kid
+    assert idp._key_id(idp.PUBLIC_KEY) == kid          # stable for the same key
