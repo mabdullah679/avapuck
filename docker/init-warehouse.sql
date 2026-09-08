@@ -50,6 +50,34 @@ CREATE TABLE IF NOT EXISTS consumer.consumed_events (
 );
 CREATE INDEX IF NOT EXISTS idx_consumed_unit ON consumer.consumed_events (consumer, idempotency_key);
 
+-- ── Monitoring ────────────────────────────────────────────────────────────
+-- The Kafka tap (services/tap) writes every message it scrapes from the flat
+-- and control topics here; the console shows it as a table. Scrape-only:
+-- the tap has no Kafka write permission. docs/DECISIONS.md D19.
+CREATE SCHEMA IF NOT EXISTS monitor;
+
+CREATE TABLE IF NOT EXISTS monitor.kafka_log (
+    id               BIGSERIAL PRIMARY KEY,
+    topic            TEXT NOT NULL,
+    partition        INTEGER NOT NULL,
+    "offset"         BIGINT NOT NULL,
+    event_type       TEXT NOT NULL,
+    dataset          TEXT,
+    run_slot         TIMESTAMPTZ,
+    trace_id         TEXT,
+    event_id         TEXT,
+    idempotency_key  TEXT,
+    key              TEXT,
+    producer         TEXT,
+    produced_at      TIMESTAMPTZ,
+    payload          JSONB,
+    raw              TEXT,
+    received_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
+    UNIQUE (topic, partition, "offset")
+);
+CREATE INDEX IF NOT EXISTS idx_kafka_log_type ON monitor.kafka_log (event_type, received_at DESC);
+CREATE INDEX IF NOT EXISTS idx_kafka_log_slot ON monitor.kafka_log (dataset, run_slot);
+
 CREATE TABLE IF NOT EXISTS consumer.received_verdicts (
     idempotency_key TEXT PRIMARY KEY,
     event_id        TEXT NOT NULL,

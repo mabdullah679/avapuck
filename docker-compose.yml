@@ -10,8 +10,7 @@
 #   docker compose --env-file .env.local --profile core --profile ci up -d     # + Jenkins
 #   docker compose --env-file .env.local --profile core --profile ranger up -d # + Ranger admin
 #
-# setup.sh does all of this. Memory: the core profile's caps total ~15 GB but
-# the measured working set is ~4.7 GB; give Docker 8 GB.
+# setup.sh does all of this. Give Docker 8 GB.
 
 x-common: &common
   restart: unless-stopped
@@ -24,6 +23,7 @@ x-tls: &tls
   PIPELINE_CA_BUNDLE: /certs/ca.crt
   IDP_ISSUER: https://idp:8443
   IDP_JWKS_URL: https://idp:8443/.well-known/jwks.json
+  IDP_URL: https://idp:8443
 
 x-kafka-client: &kafka-client
   KAFKA_BOOTSTRAP: ${KAFKA_BOOTSTRAP:?}
@@ -32,6 +32,13 @@ x-kafka-client: &kafka-client
   KAFKA_TOPIC_CONTROL: ${KAFKA_TOPIC_CONTROL:?}
   KAFKA_SECURITY_PROTOCOL: SASL_PLAINTEXT
   KAFKA_SASL_MECHANISM: PLAIN
+
+x-postgres-client: &postgres-client
+  POSTGRES_HOST: postgres
+  POSTGRES_PORT: "5432"
+  POSTGRES_DB: ${POSTGRES_DB:?}
+  POSTGRES_USER: ${POSTGRES_USER:?}
+  POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?}
 
 services:
 
@@ -44,7 +51,9 @@ services:
     command: >
       uvicorn services.idp.app:app --host 0.0.0.0 --port 8443
       --ssl-certfile /certs/idp.crt --ssl-keyfile /certs/idp.key
-    volumes: ["./certs:/certs:ro"]
+    volumes:
+      - ./certs:/certs:ro
+      - ./config/traffic_profile.json:/opt/pipeline/config/traffic_profile.json:ro
     environment:
       IDP_ISSUER: https://idp:8443
       IDP_TOKEN_TTL: "300"
@@ -55,9 +64,17 @@ services:
       CLIENT_SECRET_REPORT_JOB: ${CLIENT_SECRET_REPORT_JOB:?}
       # May sign run verdicts (POST /sign) and nothing else.
       CLIENT_SECRET_ORCHESTRATOR_JOB: ${CLIENT_SECRET_ORCHESTRATOR_JOB:?}
+      # The console's admin login: the console forwards the password as this
+      # client's secret and verifies the token it gets back (D20).
+      CLIENT_SECRET_CONSOLE_ADMIN: ${CLIENT_SECRET_CONSOLE_ADMIN:?}
       # Empty -> an ephemeral key per start; tokens and verdict signatures
       # then do not survive a restart. Fine locally, fatal anywhere else.
       IDP_SIGNING_KEY: ${IDP_SIGNING_KEY?}
+      # Traffic audit (D18): the compose network is allowlisted so the
+      # pipeline's own token requests are never blocked; everything else is
+      # held to config/traffic_profile.json.
+      TRAFFIC_ALLOWLIST: ${TRAFFIC_ALLOWLIST_INTERNAL:?}
+      TRAFFIC_BLOCK_SECONDS: ${TRAFFIC_BLOCK_SECONDS:?}
     ports: ["8443:8443"]
     mem_limit: 512m
     healthcheck:
@@ -72,6 +89,11 @@ services:
     profiles: [core]
     build: {context: ., dockerfile: docker/Dockerfile.service}
     container_name: pl-crypto
+    # ONE worker process. With CRYPTO_MASTER_KEY empty each process generates
+    # its own random key, so `--workers N` makes decrypt fail for anything
+    # another worker encrypted (seen live, 2026-09-08). To scale this service
+    # for the 2 GB test, set CRYPTO_MASTER_KEY and BLIND_INDEX_KEY to fixed
+    # base64 32-byte values in .env.local FIRST, then add --workers N here.
     command: >
       uvicorn services.crypto.app:app --host 0.0.0.0 --port 8444
       --ssl-certfile /certs/crypto.crt --ssl-keyfile /certs/crypto.key
@@ -108,22 +130,16 @@ services:
       KAFKA_CONSUMER_PASSWORD: ${KAFKA_CONSUMER_PASSWORD:?}
       KAFKA_UI_PASSWORD: ${KAFKA_UI_PASSWORD:?}
       KAFKA_WATCHDOG_PASSWORD: ${KAFKA_WATCHDOG_PASSWORD:?}
+      KAFKA_TAP_PASSWORD: ${KAFKA_TAP_PASSWORD:?}
       # Single-node KRaft: this broker is also the controller. Fine for a
       # local stack; a real deployment runs 3+ controllers and RF>=3.
       KAFKA_NODE_ID: "1"
       KAFKA_PROCESS_ROLES: broker,controller
       KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:9093
-      # The CONTROLLER listener must NOT appear in advertised.listeners, and
-      # this image derives one from the other unless both are given
-      # explicitly -- otherwise it advertises 0.0.0.0 and refuses to start.
+      # The CONTROLLER listener must NOT appear in advertised.listeners.
       # Client listeners require SASL/PLAIN; the controller listener stays
       # plain because it never leaves this node in a single-node KRaft setup.
-      #
-      # SASL_PLAINTEXT is AUTHENTICATION, not encryption: it proves who the
-      # client is and the ACLs decide what they may do, but the message bytes
-      # still travel unencrypted. Sensitive fields on the encrypted topic are
-      # already AES ciphertext. Wire encryption needs SASL_SSL and broker
-      # certs -- TRUST-BOUNDARY 2.9a.
+      # SASL_PLAINTEXT is AUTHENTICATION, not encryption -- TRUST-BOUNDARY 2.9a.
       KAFKA_LISTENERS: SASL_PLAINTEXT://kafka:9092,CONTROLLER://kafka:9093,EXTERNAL://0.0.0.0:29092
       KAFKA_ADVERTISED_LISTENERS: SASL_PLAINTEXT://kafka:9092,EXTERNAL://localhost:29092
       KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: SASL_PLAINTEXT:SASL_PLAINTEXT,CONTROLLER:PLAINTEXT,EXTERNAL:SASL_PLAINTEXT
@@ -131,14 +147,9 @@ services:
       KAFKA_INTER_BROKER_LISTENER_NAME: SASL_PLAINTEXT
       KAFKA_SASL_ENABLED_MECHANISMS: PLAIN
       KAFKA_SASL_MECHANISM_INTER_BROKER_PROTOCOL: PLAIN
-      # Authorization. Without an authorizer, authentication alone would let
-      # any authenticated client read or write any topic.
       KAFKA_AUTHORIZER_CLASS_NAME: org.apache.kafka.metadata.authorizer.StandardAuthorizer
-      # ANONYMOUS is the controller listener's principal: that listener is
-      # PLAINTEXT (it never leaves this node), so the broker registering
-      # itself arrives unauthenticated and a deny-by-default authorizer
-      # refuses it. Client listeners still require SASL, so this does not
-      # make the broker open -- nothing external can reach CONTROLLER.
+      # ANONYMOUS is the controller listener's principal (PLAINTEXT, never
+      # leaves this node). Client listeners still require SASL.
       KAFKA_SUPER_USERS: User:admin;User:ANONYMOUS
       # Deny by default: a principal with no matching ACL gets nothing.
       KAFKA_ALLOW_EVERYONE_IF_NO_ACL_FOUND: "false"
@@ -147,9 +158,12 @@ services:
       KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: "1"
       KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: "0"
       KAFKA_AUTO_CREATE_TOPICS_ENABLE: "false"
+      # Uncapped uploads publish every row (D16): give the broker room.
+      KAFKA_LOG_RETENTION_BYTES: "-1"
+      KAFKA_HEAP_OPTS: -Xmx1g -Xms512m
       CLUSTER_ID: pl-kafka-local-cluster
     ports: ["29092:29092"]
-    mem_limit: 1500m
+    mem_limit: 2g
     volumes:
       - kafka_data:/var/lib/kafka/data
       - ./docker/kafka-entrypoint.sh:/kafka-entrypoint.sh:ro
@@ -160,8 +174,7 @@ services:
       retries: 20
       start_period: 30s
 
-  # Creates the topics and ACLs once, then exits. Topics are NOT auto-created:
-  # a typo in a topic name should fail loudly, not silently make a new topic.
+  # Creates the topics and ACLs once, then exits.
   kafka-init:
     <<: *common
     profiles: [core]
@@ -178,9 +191,6 @@ services:
     entrypoint: ["/bin/sh", "/kafka-init.sh"]
 
   # ── Kafka UI (Kafbat), read-only ─────────────────────────────────────────
-  # Always on: the point is watching a verdict land during a demo. Read-only
-  # twice over -- the UI flag, and an ACL principal that cannot write and
-  # cannot read the ciphertext topic. docs/DECISIONS.md D9.
   kafka-ui:
     <<: *common
     profiles: [core]
@@ -202,6 +212,7 @@ services:
     mem_limit: 768m
     depends_on:
       kafka: {condition: service_healthy}
+      kafka-init: {condition: service_completed_successfully}
     healthcheck:
       test: ["CMD-SHELL", "wget -q --spider http://localhost:8080/actuator/health || exit 1"]
       interval: 15s
@@ -209,29 +220,52 @@ services:
       retries: 20
       start_period: 60s
 
+  # ── Kafka tap: scrape-only, into monitor.kafka_log ───────────────────────
+  tap:
+    <<: *common
+    profiles: [core]
+    build: {context: ., dockerfile: docker/Dockerfile.ops}
+    container_name: pl-tap
+    command: uvicorn services.tap.app:app --host 0.0.0.0 --port 8449
+    environment:
+      <<: [*kafka-client, *postgres-client]
+      KAFKA_SASL_USERNAME: tap
+      KAFKA_SASL_PASSWORD: ${KAFKA_TAP_PASSWORD:?}
+    mem_limit: 256m
+    depends_on:
+      kafka: {condition: service_healthy}
+      # Its ACLs come from kafka-init; starting before that meant a
+      # "not authorized" first contact and a five-minute metadata wait.
+      kafka-init: {condition: service_completed_successfully}
+      postgres: {condition: service_healthy}
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request;urllib.request.urlopen('http://localhost:8449/healthz')"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+
   # ── Absence watchdog ─────────────────────────────────────────────────────
-  # Outside Airflow, because a dead scheduler cannot report itself. Unhealthy
-  # when a verdict is late or negative. docs/DECISIONS.md D8.
   watchdog:
     <<: *common
     profiles: [core]
-    build: {context: ., dockerfile: docker/Dockerfile.watchdog}
+    build: {context: ., dockerfile: docker/Dockerfile.ops}
     container_name: pl-watchdog
+    command: uvicorn services.watchdog.app:app --host 0.0.0.0 --port 8446
     environment:
       <<: [*tls, *kafka-client]
       KAFKA_SASL_USERNAME: watchdog
       KAFKA_SASL_PASSWORD: ${KAFKA_WATCHDOG_PASSWORD:?}
       WATCHDOG_INTERVAL_HOURS: ${WATCHDOG_INTERVAL_HOURS:?}
       WATCHDOG_GRACE_MINUTES: ${WATCHDOG_GRACE_MINUTES:?}
-      # Comma-separated datasets that MUST report. Empty: track whatever appears.
       WATCHDOG_DATASETS: ${WATCHDOG_DATASETS?}
-      # Slack/Teams-compatible webhook. Empty: log lines and /healthz only.
       WATCHDOG_WEBHOOK_URL: ${WATCHDOG_WEBHOOK_URL?}
     volumes: ["./certs:/certs:ro"]
     ports: ["8446:8446"]
     mem_limit: 256m
     depends_on:
       kafka: {condition: service_healthy}
+      kafka-init: {condition: service_completed_successfully}
       idp: {condition: service_healthy}
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request;urllib.request.urlopen('http://localhost:8446/healthz')"]
@@ -239,6 +273,86 @@ services:
       timeout: 5s
       retries: 3
       start_period: 60s
+
+  # ── Spark worker scaler: THE ONE SERVICE WITH THE DOCKER SOCKET ──────────
+  # Root-equivalent on the host (D17, TRUST-BOUNDARY). It does nothing but
+  # scale spark-worker between SPARK_WORKERS_MIN and _MAX on the master's load.
+  scaler:
+    <<: *common
+    profiles: [core]
+    build: {context: ., dockerfile: docker/Dockerfile.ops}
+    container_name: pl-scaler
+    user: root
+    command: uvicorn services.scaler.app:app --host 0.0.0.0 --port 8448
+    environment:
+      SPARK_MASTER_UI: http://spark-master:8080
+      SPARK_WORKERS_MIN: ${SPARK_WORKERS_MIN:?}
+      SPARK_WORKERS_MAX: ${SPARK_WORKERS_MAX:?}
+      SCALER_ENABLED: ${SCALER_ENABLED:?}
+      SCALER_POLL_SECONDS: ${SCALER_POLL_SECONDS:?}
+      SCALER_COOLDOWN_SECONDS: ${SCALER_COOLDOWN_SECONDS:?}
+      SCALER_UP_THRESHOLD: ${SCALER_UP_THRESHOLD:?}
+      SCALER_DOWN_THRESHOLD: ${SCALER_DOWN_THRESHOLD:?}
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    ports: ["8448:8448"]
+    mem_limit: 256m
+    depends_on:
+      spark-master: {condition: service_healthy}
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request;urllib.request.urlopen('http://localhost:8448/healthz')"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+
+  # ── Console: upload, run, watch ──────────────────────────────────────────
+  console:
+    <<: *common
+    profiles: [core]
+    build: {context: ., dockerfile: docker/Dockerfile.ops}
+    container_name: pl-console
+    command: uvicorn services.console.app:app --host 0.0.0.0 --port 8447
+    environment:
+      <<: [*tls, *postgres-client]
+      CONSOLE_ADMIN_USER: ${CONSOLE_ADMIN_USER:?}
+      CONSOLE_SESSION_SECRET: ${CONSOLE_SESSION_SECRET:?}
+      CONSOLE_SESSION_SECONDS: ${CONSOLE_SESSION_SECONDS:?}
+      # Dev auto-login (D23): a local browser gets a session without typing
+      # the password; the console logs in to the IdP itself with this secret.
+      # MUST be false anywhere the console is reachable from outside.
+      CONSOLE_DEV_AUTOLOGIN: ${CONSOLE_DEV_AUTOLOGIN:?}
+      CLIENT_SECRET_CONSOLE_ADMIN: ${CLIENT_SECRET_CONSOLE_ADMIN:?}
+      WATCHDOG_URL: http://watchdog:8446
+      UPLOAD_DIR: /data/incoming
+      UPLOAD_MAX_ROWS: ${UPLOAD_MAX_ROWS:?}
+      AIRFLOW_URL: http://airflow:8080
+      AIRFLOW_ADMIN_USER: ${AIRFLOW_ADMIN_USER:?}
+      AIRFLOW_ADMIN_PASSWORD: ${AIRFLOW_ADMIN_PASSWORD:?}
+      SCALER_URL: http://scaler:8448
+      EXTRACT_MODE: ${EXTRACT_MODE:?}
+      GCP_PROJECT_ID: ${GCP_PROJECT_ID?}
+      # The console is the front door: NOTHING is allowlisted, so browser
+      # traffic is what the audit sees (D18).
+      TRAFFIC_ALLOWLIST: ""
+      TRAFFIC_BLOCK_SECONDS: ${TRAFFIC_BLOCK_SECONDS:?}
+      WATCHDOG_WEBHOOK_URL: ${WATCHDOG_WEBHOOK_URL?}
+    volumes:
+      - ./data:/data:rw
+      - ./certs:/certs:ro
+      - ./config/traffic_profile.json:/opt/pipeline/config/traffic_profile.json:ro
+    ports: ["8447:8447"]
+    mem_limit: 512m
+    depends_on:
+      idp: {condition: service_healthy}
+      postgres: {condition: service_healthy}
+      watchdog: {condition: service_started}
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request;urllib.request.urlopen('http://localhost:8447/healthz')"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
 
   # ── Warehouse ────────────────────────────────────────────────────────────
   postgres:
@@ -300,9 +414,8 @@ services:
     volumes:
       - ./data/hive:/opt/hive/data/warehouse
       - ./docker/postgresql-jdbc.jar:/opt/hive/lib/postgresql.jar:ro
-      # The external table LOCATION is an absolute /data/... path written by
-      # the mask stage, and Hive resolves it inside ITS OWN container -- so
-      # /data must exist here too, at the same path.
+      # The external table LOCATION is an absolute /data/... path; Hive
+      # resolves it inside ITS OWN container, so /data must exist here too.
       - ./data:/data:rw
 
   hiveserver2:
@@ -341,13 +454,15 @@ services:
       timeout: 3s
       retries: 20
 
+  # The scaler clones THIS definition when it scales up: same image, command,
+  # environment, binds and network. Executors call the crypto service
+  # themselves (D16), which is why the spark-job secret and the CA are here.
   spark-worker:
     <<: *common
     profiles: [core]
     build: {context: ., dockerfile: docker/Dockerfile.spark}
     command: /opt/spark/bin/spark-class org.apache.spark.deploy.worker.Worker spark://spark-master:7077
     environment:
-      <<: *tls
       SPARK_NO_DAEMONIZE: "true"
       SPARK_WORKER_CORES: "2"
       SPARK_WORKER_MEMORY: 1g
@@ -356,17 +471,17 @@ services:
       CRYPTO_URL: https://crypto:8444
       PIPELINE_CA_BUNDLE: /opt/pipeline/certs/ca.crt
       CLIENT_SECRET_SPARK_JOB: ${CLIENT_SECRET_SPARK_JOB:?}
+      PIPELINE_BATCH_ROWS: ${PIPELINE_BATCH_ROWS:?}
     mem_limit: 1500m
     depends_on:
       spark-master: {condition: service_healthy}
     # Executors write the Parquet themselves, so /data must resolve to the
-    # SAME path here as in the driver container -- Spark passes an absolute
-    # output path across, not a relative one.
+    # SAME path here as in the driver container.
     volumes:
       - ./:/opt/pipeline:rw
       - ./data:/data:rw
     deploy:
-      replicas: 2
+      replicas: ${SPARK_WORKERS_MIN:?}
 
   # ── Airflow (standalone: api-server + scheduler + triggerer + dag-processor)
   airflow:
@@ -376,42 +491,35 @@ services:
     container_name: pl-airflow
     command: standalone
     environment:
-      <<: [*tls, *kafka-client]
+      <<: [*tls, *kafka-client, *postgres-client]
       # Deliberately NOT setting AIRFLOW__API__BASE_URL to the host-mapped
-      # localhost:8085: task subprocesses inherit that as
-      # execution_api_server_url and use it to phone home from inside the
-      # container, where 8085 doesn't exist -- only the container's own 8080.
+      # localhost:8085: task subprocesses use it to phone home from inside
+      # the container, where only 8080 exists.
       AIRFLOW__API__PORT: "8080"
+      # A known admin password, written into the passwords file by
+      # docker/airflow-entrypoint.sh so the console can trigger runs (D15).
+      AIRFLOW__CORE__SIMPLE_AUTH_MANAGER_USERS: ${AIRFLOW_ADMIN_USER:?}:admin
+      AIRFLOW__CORE__SIMPLE_AUTH_MANAGER_PASSWORDS_FILE: /opt/airflow/passwords.json
+      # New DAGs start unpaused: the consumer DAG's asset watcher only runs
+      # while its DAG is unpaused, and a paused listener hears no verdicts
+      # (seen live, 2026-09-08).
+      AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION: "False"
+      AIRFLOW_ADMIN_USER: ${AIRFLOW_ADMIN_USER:?}
+      AIRFLOW_ADMIN_PASSWORD: ${AIRFLOW_ADMIN_PASSWORD:?}
       PIPELINE_DATA_ROOT: /data
-      IDP_URL: https://idp:8443
+      PIPELINE_BATCH_ROWS: ${PIPELINE_BATCH_ROWS:?}
       CRYPTO_URL: https://crypto:8444
       # Encrypt stage runs on the real Spark cluster. Unset this and
-      # spark_encrypt falls back to pyarrow -- correct output either way, but
-      # the verdict then reports a degradation, which is the honest signal.
+      # spark_encrypt falls back to pyarrow; the verdict then says so.
       SPARK_MASTER_URL: spark://spark-master:7077
-      # The driver runs in THIS container and the executors run in the worker
-      # containers, so the workers must be able to reach back to the driver.
       SPARK_DRIVER_HOST: pl-airflow
-      # The executor interpreter is selected by the driver and shipped to the
-      # workers; must match this container's Python minor version.
       PYSPARK_PYTHON: /usr/bin/python3.12
       HIVE_JDBC_URL: jdbc:hive2://hiveserver2:10000
-      # The publisher authenticates as `pipeline`, which ACLs allow to WRITE
-      # the topics and to read none -- a compromised publisher cannot drain
-      # the topics it feeds.
+      # The publisher authenticates as `pipeline`: WRITE the topics, read none.
       KAFKA_SASL_USERNAME: pipeline
       KAFKA_SASL_PASSWORD: ${KAFKA_PIPELINE_PASSWORD:?}
       # The consumer DAG's trigger reads the control topic as `consumer`.
-      # An Airflow Connection, supplied by the environment: the Kafka provider
-      # reads the confluent client config from `extra`.
       AIRFLOW_CONN_KAFKA_CONTROL: '{"conn_type":"kafka","extra":{"bootstrap.servers":"${KAFKA_BOOTSTRAP:?}","group.id":"airflow-verdict-listener","security.protocol":"SASL_PLAINTEXT","sasl.mechanism":"PLAIN","sasl.username":"consumer","sasl.password":"${KAFKA_CONSUMER_PASSWORD:?}","auto.offset.reset":"latest","enable.auto.commit":"false"}}'
-      # postgres_load defaults to localhost:5433, the HOST-side mapping. From
-      # inside this container the warehouse is postgres:5432.
-      POSTGRES_HOST: postgres
-      POSTGRES_PORT: "5432"
-      POSTGRES_DB: ${POSTGRES_DB:?}
-      POSTGRES_USER: ${POSTGRES_USER:?}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?}
       CLIENT_SECRET_EXTRACT_JOB: ${CLIENT_SECRET_EXTRACT_JOB:?}
       CLIENT_SECRET_SPARK_JOB: ${CLIENT_SECRET_SPARK_JOB:?}
       CLIENT_SECRET_HIVE_JOB: ${CLIENT_SECRET_HIVE_JOB:?}
@@ -419,8 +527,7 @@ services:
       CLIENT_SECRET_REPORT_JOB: ${CLIENT_SECRET_REPORT_JOB:?}
       CLIENT_SECRET_ORCHESTRATOR_JOB: ${CLIENT_SECRET_ORCHESTRATOR_JOB:?}
       GOOGLE_APPLICATION_CREDENTIALS: ${GOOGLE_APPLICATION_CREDENTIALS:?}
-      # Empty: EXTRACT_MODE=auto falls through to the offline fixture instead
-      # of failing against someone else's GCP project.
+      # Empty: EXTRACT_MODE=auto falls through to the offline fixture.
       GCP_PROJECT_ID: ${GCP_PROJECT_ID?}
       EXTRACT_MODE: ${EXTRACT_MODE:?}
       BQ_DATASET: ${BQ_DATASET:?}
@@ -434,7 +541,7 @@ services:
       CSV_FALLBACK_PATH: ${CSV_FALLBACK_PATH:?}
       BQ_MAX_BYTES_BILLED: ${BQ_MAX_BYTES_BILLED:?}
     ports: ["8085:8080"]
-    mem_limit: 3g
+    mem_limit: 4g
     depends_on:
       idp: {condition: service_healthy}
       crypto: {condition: service_healthy}
@@ -445,14 +552,11 @@ services:
       - ./data:/data:rw
       - ./dags:/opt/pipeline/dags:ro
       - ./certs:/certs:ro
-      # Finished PDFs are filed here by the report stage.
       - ./pipeline-reports:/opt/pipeline/pipeline-reports:rw
-      # GCP service account key. Read-only, and secrets/ is gitignored.
       - ./secrets:/secrets:ro
-      # Mounted rather than only baked in so a code, contract or policy change
-      # takes effect on the next task run. config/ is writable because the
-      # pipeline GENERATES a Ranger policy and a data contract for a dataset it
-      # has not seen before, and those must land where a human can review them.
+      # Mounted so a code, contract or policy change takes effect on the next
+      # task run. config/ is writable: the pipeline GENERATES a Ranger policy
+      # and a data contract for a dataset it has not seen before.
       - ./pipeline:/opt/pipeline/pipeline:ro
       - ./contracts:/opt/pipeline/contracts:ro
       - ./config:/opt/pipeline/config:rw
@@ -465,9 +569,6 @@ services:
       start_period: 60s
 
   # ── Jenkins (opt in with --profile ci) ───────────────────────────────────
-  # Local CI: two stages, service tier then platform tier, both plain make
-  # targets. Seeded from docker/jenkins/casc.yaml; the repo is the git remote
-  # over a read-only bind mount. No docker socket. docs/DECISIONS.md D11.
   jenkins:
     <<: *common
     profiles: [ci]

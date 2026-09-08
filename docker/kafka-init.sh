@@ -14,6 +14,7 @@
 #   ui         DESCRIBE everything (topics, groups, offsets, lag); READ the
 #              flat and control topics only. Read-only by ACL, not by config.
 #   watchdog   READ the control topic only.
+#   tap        READ the flat and control topics, into monitor.kafka_log.
 set -eu
 K=/opt/kafka/bin/kafka-topics.sh
 A=/opt/kafka/bin/kafka-acls.sh
@@ -69,6 +70,13 @@ acl --allow-principal User:ui --operation Read --group '*'
 # watchdog: the control topic, nothing else.
 acl --allow-principal User:watchdog --operation Read --operation Describe --topic "$T_CTL"
 acl --allow-principal User:watchdog --operation Read --group '*'
+
+# tap: scrape-only. Reads flat + control into monitor.kafka_log; never the
+# ciphertext topic, never a write.
+for t in "$T_PUB" "$T_CTL"; do
+  acl --allow-principal User:tap --operation Read --operation Describe --topic "$t"
+done
+acl --allow-principal User:tap --operation Read --group '*'
 
 echo "topics:"
 "$K" --bootstrap-server "$BS" --command-config "$CFG" --list

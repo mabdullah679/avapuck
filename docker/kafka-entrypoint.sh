@@ -13,6 +13,7 @@ set -eu
 : "${KAFKA_CONSUMER_PASSWORD:?KAFKA_CONSUMER_PASSWORD is not set; add it to .env.local}"
 : "${KAFKA_UI_PASSWORD:?KAFKA_UI_PASSWORD is not set; add it to .env.local}"
 : "${KAFKA_WATCHDOG_PASSWORD:?KAFKA_WATCHDOG_PASSWORD is not set; add it to .env.local}"
+: "${KAFKA_TAP_PASSWORD:?KAFKA_TAP_PASSWORD is not set; add it to .env.local}"
 
 # Broker-side JAAS for the KRaft node: the inter-broker identity plus every
 # client principal the ACLs in kafka-init.sh refer to. `admin` is the only
@@ -26,7 +27,8 @@ KafkaServer {
   user_pipeline="${KAFKA_PIPELINE_PASSWORD}"
   user_consumer="${KAFKA_CONSUMER_PASSWORD}"
   user_ui="${KAFKA_UI_PASSWORD}"
-  user_watchdog="${KAFKA_WATCHDOG_PASSWORD}";
+  user_watchdog="${KAFKA_WATCHDOG_PASSWORD}"
+  user_tap="${KAFKA_TAP_PASSWORD}";
 };
 EOF
 

@@ -25,7 +25,6 @@ from fastapi import Depends, FastAPI, Form, Header, HTTPException, status
 from pydantic import BaseModel, Field
 
 ISSUER = os.environ.get("IDP_ISSUER", "https://idp.local")
-KEY_ID = "wps-idp-key-1"
 TOKEN_TTL_SECONDS = int(os.environ.get("IDP_TOKEN_TTL", "300"))   # 5 minutes
 
 # Registered pipeline jobs and the audiences each may request. A job asking for
@@ -42,6 +41,10 @@ CLIENTS: dict[str, dict] = {
     # else. Its token audience is the IdP itself; the JWS it gets back carries
     # a different audience (pipeline-consumers) so the two cannot be confused.
     "orchestrator-job": {"audiences": ["idp"], "scopes": ["verdict.sign"]},
+    # The console's single admin login (docs/DECISIONS.md D20). The console
+    # forwards the password as this client's secret and verifies the token it
+    # gets back; it never stores the password. RBAC later adds more clients.
+    "console-admin":    {"audiences": ["console"], "scopes": ["console.admin"]},
 }
 
 # The audience stamped on signed verdicts. Consumers verify against it.
@@ -68,7 +71,36 @@ def _load_or_create_key() -> rsa.RSAPrivateKey:
 PRIVATE_KEY = _load_or_create_key()
 PUBLIC_KEY = PRIVATE_KEY.public_key()
 
+
+def _key_id(public_key) -> str:
+    """A kid that identifies THIS key, derived from its public bytes.
+
+    Seen live (2026-09-08): with a constant kid, a restarted IdP with a fresh
+    ephemeral key kept the old kid, so every verifier's cached JWKS still
+    "matched" and verification failed until the verifier was restarted --
+    the console, the crypto service, the watchdog, all at once. PyJWKClient
+    refetches the JWKS on a kid MISS, so a kid that changes with the key makes
+    rotation self-healing: new key, new kid, one refetch. A fixed
+    IDP_SIGNING_KEY yields a stable kid across restarts.
+    """
+    import hashlib
+    der = public_key.public_bytes(serialization.Encoding.DER,
+                                  serialization.PublicFormat.SubjectPublicKeyInfo)
+    return "wps-idp-" + hashlib.sha256(der).hexdigest()[:16]
+
+
+KEY_ID = _key_id(PUBLIC_KEY)
+
 app = FastAPI(title="Pipeline IdP", version="1.0.0")
+
+# The IdP is a published surface and the auth front door, so it audits its
+# traffic (docs/DECISIONS.md D18). The compose network is allowlisted through
+# TRAFFIC_ALLOWLIST so the pipeline's own token requests are never blocked.
+try:
+    from pipeline.common.traffic import TrafficAuditor, TrafficProfile, install as _install_traffic
+    _install_traffic(app, TrafficAuditor(TrafficProfile.load()))
+except FileNotFoundError:
+    pass   # no profile shipped with this deployment; audit off, everything else on
 
 
 def _b64u(n: int) -> str:

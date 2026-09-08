@@ -1,0 +1,24 @@
+{
+  "_comment": [
+    "Expected traffic, per category, per 60-second window. The auditor",
+    "(pipeline/common/traffic.py) blocks a client over its per-client limit",
+    "for block_seconds, and refuses a whole category to non-allowlisted",
+    "clients while it is over its total limit. docs/DECISIONS.md D18.",
+    "",
+    "These numbers are a first guess for a laptop demo, not a measurement.",
+    "Tune them from the console's Traffic tab before trusting the block.",
+    "Matching is METHOD + path prefix, first match wins, top to bottom."
+  ],
+  "window_seconds": 60,
+  "block_seconds": 300,
+  "allowlist": ["127.0.0.0/8", "::1/128"],
+  "categories": {
+    "auth":   {"match": ["POST /api/login", "POST /token"],         "per_client_per_window": 10,  "total_per_window": 60},
+    "upload": {"match": ["POST /api/upload", "POST /api/run"],      "per_client_per_window": 20,  "total_per_window": 120},
+    "sign":   {"match": ["POST /sign"],                              "per_client_per_window": 60,  "total_per_window": 300},
+    "scale":  {"match": ["POST /api/spark/scale"],                   "per_client_per_window": 10,  "total_per_window": 30},
+    "read":   {"match": ["GET /api/"],                               "per_client_per_window": 600, "total_per_window": 3000},
+    "static": {"match": ["GET /"],                                   "per_client_per_window": 600, "total_per_window": 3000}
+  },
+  "default": {"per_client_per_window": 300, "total_per_window": 1500}
+}

@@ -14,6 +14,8 @@ RUN pip install --no-cache-dir \
 
 COPY pipeline/ /opt/pipeline/pipeline/
 COPY services/ /opt/pipeline/services/
+# The IdP audits its traffic against this profile (docs/DECISIONS.md D18).
+COPY config/traffic_profile.json /opt/pipeline/config/traffic_profile.json
 ENV PYTHONPATH=/opt/pipeline PYTHONUNBUFFERED=1
 
 # Run as non-root: these processes hold key material in memory.

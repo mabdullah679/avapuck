@@ -1,0 +1,177 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>avapuck console</title>
+<link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+<header class="top">
+  <div class="brand">
+    <span class="mark">avapuck</span>
+    <span class="sub">console</span>
+  </div>
+  <nav id="tabs" hidden>
+    <button data-tab="upload" class="active">Upload &amp; run</button>
+    <button data-tab="runs">Runs</button>
+    <button data-tab="kafka">Kafka log</button>
+    <button data-tab="spark">Spark cluster</button>
+    <button data-tab="traffic">Traffic</button>
+  </nav>
+  <div class="who" id="who" hidden>
+    <span id="username"></span>
+    <button id="logout" class="ghost">Log out</button>
+  </div>
+</header>
+
+<main>
+  <!-- Login -->
+  <section id="login" class="card narrow">
+    <h1>Sign in</h1>
+    <p class="muted">Your credentials go to the identity service, not to this page. The session is a signed cookie.</p>
+    <form id="login-form">
+      <label>Username <input name="username" autocomplete="username" value="admin" required></label>
+      <label>Password <input name="password" type="password" autocomplete="current-password" required></label>
+      <button type="submit" class="primary">Sign in</button>
+      <p class="error" id="login-error" hidden></p>
+    </form>
+  </section>
+
+  <!-- Upload & run -->
+  <section id="tab-upload" class="tab" hidden>
+    <div class="grid two">
+      <div class="card">
+        <h2>Upload a CSV</h2>
+        <div id="dropzone" class="dropzone" tabindex="0">
+          <p><strong>Drop a CSV here</strong> or</p>
+          <label class="button">Choose a file <input id="file-input" type="file" accept=".csv,text/csv" hidden></label>
+          <p class="muted small">Any size. Uploads are not capped at 100 rows; the schedule's BigQuery source is.</p>
+        </div>
+        <div id="upload-progress" class="progress" hidden><div class="bar"></div><span class="label"></span></div>
+        <div id="upload-result" class="result" hidden></div>
+      </div>
+      <div class="card">
+        <div class="row between">
+          <h2>Run the pipeline</h2>
+          <button class="ghost" data-refresh="pipelines">Refresh</button>
+        </div>
+        <form id="run-form">
+          <label>Show
+            <select id="preset">
+              <option value="all">All pipelines</option>
+              <option value="responding">Responding 200</option>
+              <option value="connected">Connected</option>
+            </select>
+          </label>
+          <label>Pipeline <select name="dag_id" id="dag-select" required></select></label>
+          <p class="muted small" id="pipeline-line"></p>
+          <label>Dataset name <input name="dataset" pattern="[a-z][a-z0-9_]{0,62}" placeholder="derived from the file name"></label>
+          <label>Row cap <input name="row_limit" type="number" min="0" placeholder="0 = uncapped"></label>
+          <button type="submit" class="primary" id="run-button" disabled>Run</button>
+          <p class="muted small">Starts one fresh run of the selected pipeline with this file as its source. A mother pipeline gets its own run slot, PDF and signed verdict; a child normally wakes on a verdict, but can be run by hand here. <em>Connected</em> means the pipeline transmitted within the watchdog's window and the check on it passed.</p>
+        </form>
+        <div id="run-result" class="result" hidden></div>
+        <div class="source card inner">
+          <h3>Scheduled source</h3>
+          <p id="source-line" class="muted">…</p>
+          <p class="muted small" id="source-note"></p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Runs -->
+  <section id="tab-runs" class="tab" hidden>
+    <div class="card">
+      <div class="row between">
+        <h2>Recent runs</h2>
+        <button class="ghost" data-refresh="runs">Refresh</button>
+      </div>
+      <div class="table-wrap">
+        <table id="runs-table">
+          <thead><tr><th>Pipeline</th><th>Run</th><th>Source</th><th>Dataset</th><th>Airflow state</th><th>Verdict</th><th>Reasons</th><th>Slot</th></tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <!-- Kafka log -->
+  <section id="tab-kafka" class="tab" hidden>
+    <div class="card">
+      <div class="row between wrap">
+        <h2>Kafka log</h2>
+        <form id="kafka-filters" class="row wrap">
+          <select name="event_type"><option value="">all events</option><option>run.verdict</option><option>row.flat</option><option>invalid</option></select>
+          <input name="dataset" placeholder="dataset">
+          <input name="run_slot" placeholder="run slot, e.g. 2026-09-08T04:00:00Z">
+          <button type="submit" class="ghost">Filter</button>
+        </form>
+      </div>
+      <p class="muted small" id="kafka-counts"></p>
+      <div class="table-wrap">
+        <table id="kafka-table">
+          <thead><tr><th>#</th><th>Received</th><th>Topic</th><th>Event</th><th>Dataset</th><th>Slot</th><th>Key</th><th>Event id</th><th>Payload</th></tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+      <div class="row between">
+        <span class="muted small" id="kafka-page"></span>
+        <div><button class="ghost" id="kafka-prev">Newer</button> <button class="ghost" id="kafka-next">Older</button></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Spark -->
+  <section id="tab-spark" class="tab" hidden>
+    <div class="card">
+      <div class="row between wrap">
+        <h2>Spark cluster</h2>
+        <div class="row">
+          <span id="spark-summary" class="muted small"></span>
+          <button class="ghost" data-refresh="spark">Refresh</button>
+        </div>
+      </div>
+      <div id="workers" class="workers"></div>
+      <div class="grid two">
+        <div class="card inner">
+          <h3>Scaler</h3>
+          <p id="scaler-line" class="muted"></p>
+          <form id="scale-form" class="row">
+            <label>Target workers <input name="workers" type="number" min="0" max="64" required></label>
+            <button type="submit" class="ghost">Scale</button>
+          </form>
+        </div>
+        <div class="card inner">
+          <h3>Recent decisions</h3>
+          <ul id="scaler-history" class="plain small"></ul>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Traffic -->
+  <section id="tab-traffic" class="tab" hidden>
+    <div class="card">
+      <div class="row between">
+        <h2>Traffic audit</h2>
+        <span id="attack-badge" class="badge"></span>
+      </div>
+      <p class="muted small">Requests to this console per category over the last window, against the written profile. A client over its limit is blocked; a category over its total is refused to everyone not allowlisted.</p>
+      <div class="table-wrap">
+        <table id="traffic-table">
+          <thead><tr><th>Category</th><th>Hits in window</th><th>Total limit</th><th>Per-client limit</th><th>State</th><th>Top clients</th></tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+      <div class="grid two">
+        <div class="card inner"><h3>Blocked clients</h3><ul id="blocked" class="plain small"></ul></div>
+        <div class="card inner"><h3>Recent alerts</h3><ul id="alerts" class="plain small"></ul></div>
+      </div>
+    </div>
+  </section>
+</main>
+<script src="/static/app.js"></script>
+</body>
+</html>

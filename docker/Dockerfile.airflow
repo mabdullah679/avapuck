@@ -80,6 +80,8 @@ COPY services/   /opt/pipeline/services/
 COPY config/     /opt/pipeline/config/
 COPY contracts/  /opt/pipeline/contracts/
 COPY dags/       /opt/pipeline/dags/
+COPY docker/airflow-entrypoint.sh /usr/local/bin/airflow-entrypoint.sh
+RUN chmod 0755 /usr/local/bin/airflow-entrypoint.sh
 
 ENV PYTHONPATH=/opt/pipeline \
     PYTHONUNBUFFERED=1 \
@@ -94,5 +96,5 @@ USER 10001
 
 EXPOSE 8080
 
-ENTRYPOINT ["airflow"]
+ENTRYPOINT ["/usr/local/bin/airflow-entrypoint.sh"]
 CMD ["standalone"]
