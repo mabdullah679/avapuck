@@ -359,3 +359,14 @@ recorded here so the reasoning survives.
 | The consumer DAG never woke | Airflow's serializer passes the trigger's empty args and kwargs to the filter as stray arguments; and the DAG was created paused | The filter accepts and ignores extras; new DAGs are created unpaused; setup unpauses both |
 | The first scheduled run failed in two stages | It began on the old container the moment the DAG was unpaused, and the container was replaced mid-run | Not a bug in the current stack; recorded so nobody chases it |
 | `setup.sh` claimed a PDF that was days old | It listed the newest file in the folder; the run had actually failed before the DAG was parsed | Wait for the DAG to be parsed; look up the PDF by slot; surface the run's errors |
+| The owner's first real upload, the BLM lease-sale export, went red after eight minutes with a verdict that said only "extract did not complete", seven times | The contract gate refused it in 0.06s (the committed contract was written from the demo copy of that export, which carries a synthetic `card_info` column the real export lacks). The refusal is a decision, and Airflow retried it twice with backoff. The reason lived only in the task log: a stage that raises left nothing behind for the verdict, so the console and the watchdog could not show it | A stage that raises records a `failure_record` to XCom before the exception leaves it; the verdict names it (`extract failed: …`) and carries it per stage as `error`; `stages.NON_RETRYABLE_ERRORS` (the contract refusal) fails the task in one try. Verified live: the same upload re-run went red in ten seconds with the sentence in the Runs tab and on `/status` |
+| That refused run's verdict was filed under dataset `trips` | With no stage event to name the dataset, the verdict fell back to the pipeline's name, so the watchdog blamed the wrong dataset | The run's conf (`dataset`) is consulted before the pipeline name |
+| A console upload was committed to git | `data/incoming/` was not ignored; a test upload (synthetic, 1000 generated rows) went in with the console round | `data/incoming/` ignored and the file untracked. Uploads are plaintext by definition; the history still holds that synthetic file |
+
+Two things the same run showed and this round did NOT change, pending a
+decision: Airflow marks such a run `success`, because the run's state follows
+its leaf task and `emit_verdict` succeeds whenever a verdict was published
+(the console shows that state beside the verdict's `failed`); and the
+console derives the dataset name from the file name, so an export of a
+dataset the schedule already ingests is, correctly, held to that dataset's
+contract, with no warning before the run starts.

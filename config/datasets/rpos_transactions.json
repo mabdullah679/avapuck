@@ -1,0 +1,122 @@
+{
+  "schema": {
+    "_generated": true,
+    "primary_key": "transaction_id",
+    "key_is_synthetic": false,
+    "columns": {
+      "transaction_id": {
+        "source_name": "transaction_id",
+        "sql_type": "BIGINT",
+        "sensitivity": "public",
+        "treatment": ""
+      },
+      "order_id": {
+        "source_name": "order_id",
+        "sql_type": "BIGINT",
+        "sensitivity": "public",
+        "treatment": ""
+      },
+      "transaction_time": {
+        "source_name": "transaction_time",
+        "sql_type": "TIMESTAMP",
+        "sensitivity": "public",
+        "treatment": ""
+      },
+      "sale_price": {
+        "source_name": "sale_price",
+        "sql_type": "DOUBLE PRECISION",
+        "sensitivity": "public",
+        "treatment": ""
+      },
+      "order_status": {
+        "source_name": "order_status",
+        "sql_type": "TEXT",
+        "sensitivity": "public",
+        "treatment": ""
+      },
+      "product_name": {
+        "source_name": "product_name",
+        "sql_type": "TEXT",
+        "sensitivity": "quasi_identifier",
+        "treatment": ""
+      },
+      "product_category": {
+        "source_name": "product_category",
+        "sql_type": "TEXT",
+        "sensitivity": "public",
+        "treatment": ""
+      },
+      "product_brand": {
+        "source_name": "product_brand",
+        "sql_type": "TEXT",
+        "sensitivity": "public",
+        "treatment": ""
+      },
+      "customer_first_name": {
+        "source_name": "customer_first_name",
+        "sql_type": "TEXT",
+        "sensitivity": "direct_identifier",
+        "treatment": ""
+      },
+      "customer_last_name": {
+        "source_name": "customer_last_name",
+        "sql_type": "TEXT",
+        "sensitivity": "direct_identifier",
+        "treatment": ""
+      },
+      "customer_email": {
+        "source_name": "customer_email",
+        "sql_type": "TEXT",
+        "sensitivity": "direct_identifier",
+        "treatment": ""
+      },
+      "customer_street_address": {
+        "source_name": "customer_street_address",
+        "sql_type": "TEXT",
+        "sensitivity": "direct_identifier",
+        "treatment": ""
+      },
+      "customer_postal_code": {
+        "source_name": "customer_postal_code",
+        "sql_type": "TEXT",
+        "sensitivity": "direct_identifier",
+        "treatment": ""
+      },
+      "customer_city": {
+        "source_name": "customer_city",
+        "sql_type": "TEXT",
+        "sensitivity": "quasi_identifier",
+        "treatment": ""
+      },
+      "customer_state": {
+        "source_name": "customer_state",
+        "sql_type": "TEXT",
+        "sensitivity": "public",
+        "treatment": ""
+      },
+      "traffic_source": {
+        "source_name": "traffic_source",
+        "sql_type": "TEXT",
+        "sensitivity": "public",
+        "treatment": ""
+      },
+      "card_info": {
+        "source_name": "card_info",
+        "sql_type": "BIGINT",
+        "sensitivity": "direct_identifier",
+        "treatment": "card_split"
+      }
+    }
+  },
+  "_comment": [
+    "Data contract for dataset 'rpos_transactions'.",
+    "",
+    "The `schema` block was GENERATED from inference the first time this",
+    "dataset was seen and is never regenerated. A later run whose inferred",
+    "schema differs FAILS naming the difference. To accept a change, edit",
+    "this block (or run `python -m pipeline.metadata.contract accept`) and",
+    "commit. `columns` above/below are sensitivity overrides fed INTO",
+    "inference; `schema` is what inference produced. Optional:",
+    "`event_time_column` names the column the PDF's data window is read from."
+  ]
+}

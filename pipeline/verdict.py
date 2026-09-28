@@ -6,10 +6,18 @@ what counts as a finished run lives here and nowhere else, which is why this
 module carries the heaviest tests in the repository and no I/O at all.
 
 INPUT   the stage events -- the dict each task returned, keyed by stage name,
-        None where a stage produced nothing (failed, skipped, never ran).
+        None where a stage produced nothing (failed, skipped, never ran);
+        and, optionally, the FAILURES -- for a stage that raised, the error
+        text the runner recorded before the exception left it.
 OUTPUT  a Verdict: proceed (the only field a machine reads), status and
         reasons (for people and the PDF), per-stage detail, and the run's
         outputs so a consumer can find what was produced without guessing.
+
+WHY FAILURES ARE AN INPUT. Seen live (2026-09-08): a console upload was
+stopped by the dataset contract gate in under a second, and the verdict said
+"extract did not complete" seven times over -- the one sentence that
+explained the run lived only in the Airflow task log. A stage that raised is
+a different fact from a stage that never ran, and the verdict says which.
 
 THE RULE
   proceed  = extract, card_split, encrypt, publish, mask, load and report all
@@ -82,10 +90,17 @@ _DETAIL_KEYS = {
 }
 
 
-def compute(events: Mapping[str, dict | None], now: datetime | None = None) -> Verdict:
-    """Decide. Pure: same events in, same verdict out (bar computed_at)."""
+def compute(events: Mapping[str, dict | None], now: datetime | None = None,
+            failures: Mapping[str, str] | None = None) -> Verdict:
+    """Decide. Pure: same events in, same verdict out (bar computed_at).
+
+    `failures` maps a stage name to the error it raised. It is consulted only
+    for stages with no event: a stage that reported succeeded, whatever an
+    earlier try of it may have recorded.
+    """
     reasons: list[str] = []
     stages: dict[str, dict] = {}
+    failures = failures or {}
 
     for stage in STAGES:
         ev = events.get(stage)
@@ -94,12 +109,19 @@ def compute(events: Mapping[str, dict | None], now: datetime | None = None) -> V
         entry: dict = {"ok": ok, "reported": reported}
         if reported:
             entry["detail"] = _detail(ev, _DETAIL_KEYS.get(stage, ()))
+        elif failures.get(stage):
+            entry["error"] = _one_line(failures[stage])
         stages[stage] = entry
 
     # ── Required stages: any one missing means the run did not finish ──
+    # A stage that raised says so, with the error; a stage that never ran
+    # (upstream failed, timed out before it) "did not complete".
     for stage in STAGES:
         if stage in REQUIRED_FOR_PROCEED and not stages[stage]["reported"]:
-            reasons.append(f"{stage} did not complete")
+            if "error" in stages[stage]:
+                reasons.append(f"{stage} failed: {stages[stage]['error']}")
+            else:
+                reasons.append(f"{stage} did not complete")
 
     proceed = all(stages[s]["reported"] for s in REQUIRED_FOR_PROCEED)
 
@@ -115,7 +137,9 @@ def compute(events: Mapping[str, dict | None], now: datetime | None = None) -> V
 
     hive = events.get("hive_register")
     if hive is None:
-        if proceed:
+        if "error" in stages["hive_register"]:
+            reasons.append(f"hive_register failed: {stages['hive_register']['error']}")
+        elif proceed:
             reasons.append("hive_register did not report; table registration unknown")
     elif not hive.get("registered"):
         stages["hive_register"]["ok"] = False
@@ -141,6 +165,16 @@ def compute(events: Mapping[str, dict | None], now: datetime | None = None) -> V
         data_window=_data_window(ex),
         computed_at=_iso_now(now),
     )
+
+
+MAX_ERROR_CHARS = 1000
+
+
+def _one_line(text: str) -> str:
+    """An error as one bounded line: a reason is read in a table cell, a PDF
+    line and a log line, none of which want a traceback."""
+    flat = " ".join(part.strip() for part in str(text).splitlines() if part.strip())
+    return flat if len(flat) <= MAX_ERROR_CHARS else flat[:MAX_ERROR_CHARS - 1] + "…"
 
 
 def _collect_failed(collected) -> bool:

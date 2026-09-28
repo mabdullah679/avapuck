@@ -52,6 +52,14 @@ Uploads land in `data/incoming/` on the host, which is `/data/incoming` for
 Airflow. Each run's conf records the file, the dataset, the cap and who
 started it; the extract stage event says `source: upload`.
 
+The dataset name defaults to the file name. If that is a dataset the
+schedule already ingests, the upload is held to that dataset's committed
+contract, exactly as a scheduled run would be, and a file with different
+columns stops at extract with the differences listed (see "Ingesting a
+different CSV" below). Either name the dataset differently in the form, or
+accept the new contract first. A run that fails this way shows the sentence
+in the Runs tab's reasons column within seconds; Airflow does not retry it.
+
 **Connected** means: the pipeline's last run succeeded within the watchdog's
 window (interval + grace) and, for a mother pipeline, the watchdog has seen a
 positive verdict in that window. It is the watchdog's own loop read from the
@@ -177,7 +185,8 @@ bypass. `event_time_column` is optional and drives the PDF's data window.
 | console: `Airflow refused the console's credentials` | `AIRFLOW_ADMIN_PASSWORD` differs between airflow and console | both read `.env.local`; recreate both |
 | console: 429 `refused: over the per-client limit` | you tripped the traffic profile | wait `TRAFFIC_BLOCK_SECONDS`, or raise the category's limit |
 | `REFUSING TO WRITE: sensitive plaintext` | encryption did not apply to a chunk | check the crypto service; **do not bypass this guard** |
-| `dataset 'x' no longer matches its contract` | the export changed shape | read the differences; `contract accept` if intended |
+| `extract failed: dataset 'x' no longer matches its contract` (Runs tab, watchdog, task log) | the export changed shape, or an upload reused a scheduled dataset's name | read the differences; `contract accept` if intended, or another dataset name; not retried |
+| A run shows `success` in Airflow and the console beside a verdict that says `failed` | Airflow's run state follows its last task, and `emit_verdict` succeeds whenever a verdict was published | read the verdict, not the run colour; the reasons name the stage that raised |
 | Spark tab shows a worker `unhealthy` | the master lost its heartbeat | `docker compose ps`; the scaler will add one if below min |
 | scaler `socket unreachable` | the socket mount is missing or the daemon refused | check `/var/run/docker.sock` on the host; `SCALER_ENABLED=false` to stop trying |
 | watchdog unhealthy: `no verdict seen since` | the DAG did not run within interval + grace | check the scheduler; `docker compose logs airflow` |

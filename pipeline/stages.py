@@ -22,8 +22,34 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from pipeline.common.trace import stage_event, trace_id as make_trace_id
+from pipeline.metadata.contract import ContractMismatch
 
 log = logging.getLogger(__name__)
+
+# Errors that are DECISIONS, not failures: the same input will get the same
+# answer, so a retry only delays the red run. Seen live (2026-09-08): a
+# contract refusal that took 0.06s was retried twice with backoff and the run
+# went red after eight minutes. Infrastructure errors (a service down, a
+# broker away) stay retryable. Kept deliberately short and explicit.
+NON_RETRYABLE_ERRORS: tuple[type[BaseException], ...] = (ContractMismatch,)
+MAX_FAILURE_CHARS = 2000
+
+
+def failure_record(stage: str, exc: BaseException) -> dict:
+    """What a runner keeps about a stage that raised, for the verdict.
+
+    The stage event is the record of success; this is the record of failure.
+    It is stored beside the event (XCom in Airflow, a dict in the runner) and
+    read by `emit_verdict` so the reason reaches the control topic, the console
+    and the watchdog rather than living only in a task log.
+    """
+    text = str(exc) or type(exc).__name__
+    return {
+        "stage": stage,
+        "error_type": type(exc).__name__,
+        "message": text if len(text) <= MAX_FAILURE_CHARS else text[:MAX_FAILURE_CHARS - 1] + "…",
+        "retryable": not isinstance(exc, NON_RETRYABLE_ERRORS),
+    }
 
 # (stage name, Airflow task id). The stage name is what events and the verdict
 # use; the task id is what the Airflow UI shows.
@@ -289,10 +315,13 @@ def run_stage(name: str, env: RunEnv, events: dict) -> dict:
 # ── The verdict: always last, always emitted ──────────────────────────────
 
 def emit_verdict(env: RunEnv, events: dict, dataset: str | None = None,
-                 signer=None, publisher=None) -> dict:
+                 signer=None, publisher=None, failures: dict | None = None) -> dict:
     """Compute, sign and publish the run verdict. Returns the publish result
     plus the verdict payload. Raises AFTER publishing if any stage event was
-    malformed, so the DAG shows red while downstream still hears a verdict."""
+    malformed, so the DAG shows red while downstream still hears a verdict.
+
+    `failures` maps a stage to its `failure_record` (or bare error text); the
+    verdict names the error for any such stage that has no event."""
     from pipeline import verdict as verdict_mod
     from pipeline.messaging.contracts import ContractError, validate_stage_event
     from pipeline.publish.kafka_publish import RunContext, publish_verdict
@@ -311,13 +340,21 @@ def emit_verdict(env: RunEnv, events: dict, dataset: str | None = None,
             malformed.append(f"{stage}: {e}")
             clean[stage] = None
 
-    v = verdict_mod.compute(clean)
+    errors = {s: (f["message"] if isinstance(f, dict) else str(f))
+              for s, f in (failures or {}).items() if f}
+    v = verdict_mod.compute(clean, failures=errors)
     if malformed:
         v.reasons.extend(f"stage event violated its contract -- {m}" for m in malformed)
     payload = v.to_payload()
 
-    dataset = dataset or next((ev["dataset"] for ev in clean.values()
-                               if ev and ev.get("dataset")), None) or env.pipeline
+    # The dataset the verdict is ABOUT: what a stage reported, else what the
+    # run was asked for (an upload's conf), else the pipeline's name. Seen
+    # live: a refused upload's verdict was filed under "trips", so the
+    # watchdog marked the wrong dataset unhealthy.
+    dataset = (dataset
+               or next((ev["dataset"] for ev in clean.values() if ev and ev.get("dataset")), None)
+               or env.conf.get("dataset")
+               or env.pipeline)
     ctx = RunContext(run_slot=env.run_slot, trace_id=env.trace_id, run_id=env.run_id,
                      try_number=env.try_number,
                      producer=os.environ.get("KAFKA_SASL_USERNAME", "pipeline"))

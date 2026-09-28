@@ -203,3 +203,54 @@ def test_failed_verdict_payload_also_satisfies_the_contract():
 @pytest.mark.parametrize("stage", V.STAGES)
 def test_every_fixture_stage_event_satisfies_the_stage_contract(stage):
     validate_stage_event(good_events()[stage])
+
+
+# ── A stage that raised is named, with its error ──────────────────────────
+
+def test_a_stage_that_raised_names_its_error_not_merely_incomplete():
+    """Seen live 2026-09-08: a contract refusal reached the console as
+    "extract did not complete" x7. The error is the reason; the rest of the
+    chain never ran and says so."""
+    err = ("dataset 'blm' no longer matches its contract config/datasets/blm.json:\n"
+           "  column 'card_info': in the contract, missing from the data\n"
+           "If the change is intended, update the contract and commit it:\n"
+           "  python -m pipeline.metadata.contract accept blm <landed csv>")
+    v = V.compute({}, now=NOW, failures={"extract": err})
+    assert v.proceed is False and v.status == "failed"
+    assert v.reasons[0] == ("extract failed: dataset 'blm' no longer matches its contract "
+                            "config/datasets/blm.json: column 'card_info': in the contract, "
+                            "missing from the data If the change is intended, update the "
+                            "contract and commit it: python -m pipeline.metadata.contract "
+                            "accept blm <landed csv>")
+    assert v.stages["extract"] == {"ok": False, "reported": False, "error": v.reasons[0][16:]}
+    assert v.reasons[1] == "card_split did not complete"
+    assert "error" not in v.stages["card_split"]
+
+
+def test_a_recorded_failure_is_ignored_once_the_stage_reported():
+    """A first try that failed and a second that succeeded: the event wins."""
+    v = V.compute(_events(), now=NOW, failures={"extract": "try 1 lost the broker"})
+    assert v.proceed is True and v.status == "complete" and v.reasons == []
+    assert "error" not in v.stages["extract"]
+
+
+def test_a_failed_hive_registration_is_named_too():
+    v = V.compute(_events(hive_register=None), now=NOW,
+                  failures={"hive_register": "metastore refused: thrift timeout"})
+    assert v.proceed is True                    # still not load-bearing
+    assert v.reasons == ["hive_register failed: metastore refused: thrift timeout"]
+
+
+def test_error_text_is_one_bounded_line():
+    v = V.compute({}, now=NOW, failures={"extract": "x\n" * 5000})
+    err = v.stages["extract"]["error"]
+    assert "\n" not in err and len(err) == V.MAX_ERROR_CHARS and err.endswith("…")
+
+
+def test_failed_verdict_with_errors_satisfies_the_contract():
+    payload = V.compute({}, now=NOW, failures={"extract": "refused"}).to_payload()
+    msg = build(event_type=EVENT_RUN_VERDICT, dataset="trips",
+                run_slot=datetime(2026, 9, 6, 4, tzinfo=timezone.utc),
+                trace_id="t", run_id="r", try_number=1, key=None, producer="pipeline",
+                payload=payload, signature="x.y.z")
+    validate_message(msg)

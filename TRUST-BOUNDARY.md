@@ -35,6 +35,7 @@ and exercised**, which found nine defects (listed in `docs/DECISIONS.md`,
 | The scaler acting through the Docker socket | it cloned a worker at boot (the startup race, now fixed with a grace period) and removed it when idle after cooldown |
 | The console's pipelines endpoint and the three presets | mother and child listed; both `connected` after a run |
 | Dev auto-login from a loopback client | `GET /api/me` with no cookie returned the admin session |
+| **A stage's failure reaching the verdict**, and a contract refusal not being retried | the owner's BLM export, re-run after the fix: `extract_to_csv` failed once in 0.08s, the run ended in ten seconds, and `extract failed: dataset … no longer matches its contract … column 'card_info'` appeared in the Runs tab, on the control topic and on the watchdog's `/status` |
 | Kafbat UI | container healthy, login page answers 200; **not visually inspected** |
 | The test suite (306 tests), both CI tiers, both DAGs parsing, compose rendering | on the host |
 
@@ -52,6 +53,10 @@ and exercised**, which found nine defects (listed in `docs/DECISIONS.md`,
 
 Until each row above moves to the first table, describe the corresponding
 feature as **built and unit-tested, not exercised**.
+
+Known and unchanged: Airflow marks a run `success` whenever `emit_verdict`
+published, whatever the verdict said, because the run state follows the
+leaf task. The verdict is the predicate (D6); the run colour is not.
 
 ## 1. BigQuery — live and verified (2026-08-30)
 

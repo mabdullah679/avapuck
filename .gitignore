@@ -59,6 +59,9 @@ id_ed25519.*
 
 # Extracted source data, before any encryption. PLAINTEXT by definition.
 data/csv/
+# Files uploaded through the console: whatever a person dropped there, so
+# treat every one as plaintext PII. One got committed on 2026-09-08.
+data/incoming/
 # Card prefix/suffix split out of PANs. Middles are encrypted, but the clear
 # prefix and suffix are still cardholder data and must not be committed.
 data/cards/

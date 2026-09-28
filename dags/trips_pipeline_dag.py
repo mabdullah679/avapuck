@@ -55,6 +55,13 @@ but `emit_verdict` still runs (trigger_rule=all_done) and publishes
 proceed=false. The whole run is bounded by dagrun_timeout, and every task
 failure logs a structured ALERT line. So: stuck, failed and absent are three
 different signals, and the watchdog outside Airflow watches for absent.
+
+A stage that raises records WHY before the exception leaves it: an XCom
+under `stage_failure`, which `emit_verdict` folds into the verdict's reasons
+(seen live 2026-09-08: a contract refusal reached the console as "extract
+did not complete", seven times, and nothing else). A refusal that is a
+decision rather than a failure -- `stages.NON_RETRYABLE_ERRORS` -- fails the
+task at once instead of sitting through two retries with backoff.
 """
 from __future__ import annotations
 
@@ -92,6 +99,7 @@ if _cred and not os.path.isabs(_cred):
             os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = str(_candidate)
             break
 
+from airflow.exceptions import AirflowFailException
 from airflow.sdk import DAG, task
 
 from pipeline import stages
@@ -103,15 +111,27 @@ log = logging.getLogger("airflow.task")
 DATA = Path(os.environ.get("PIPELINE_DATA_ROOT") or (ROOT / "data"))
 SCHEDULE = "0 */4 * * *"
 
+# The XCom key under which a stage that raised leaves its failure_record.
+FAILURE_XCOM_KEY = "stage_failure"
+
 
 def _alert_on_failure(context):
     """One greppable line per task failure. The watchdog covers absence; this
     covers loud failure, and the two must not be confused with each other."""
     ti = context.get("task_instance")
+    exc = context.get("exception")
+    if exc is None:
+        # Airflow 3 does not always hand the exception to the callback (seen
+        # live: `exception=None` on a real failure). The stage recorded it.
+        try:
+            rec = ti.xcom_pull(task_ids=ti.task_id, key=FAILURE_XCOM_KEY)
+            exc = rec.get("message") if isinstance(rec, dict) else None
+        except Exception:  # noqa: BLE001 -- the alert line must always print
+            exc = None
     log.error("ALERT kind=task_failed dag=%s task=%s run_id=%s try=%s exception=%s",
               getattr(ti, "dag_id", "?"), getattr(ti, "task_id", "?"),
               getattr(ti, "run_id", "?"), getattr(ti, "try_number", "?"),
-              str(context.get("exception"))[:300])
+              str(exc)[:300])
 
 
 DEFAULT_ARGS = {
@@ -163,11 +183,37 @@ def run_env(ctx: dict) -> stages.RunEnv:
     )
 
 
+def _record_failure(ctx: dict, rec: dict) -> None:
+    """Leave the failure where the verdict task can find it. Best effort: the
+    bookkeeping must never hide the error it is recording."""
+    ti = ctx.get("task_instance") or ctx.get("ti")
+    push = getattr(ti, "xcom_push", None)
+    if push is None:
+        return
+    try:
+        push(key=FAILURE_XCOM_KEY, value=rec)
+    except Exception as e:  # noqa: BLE001
+        log.warning("could not record the failure of %s to XCom: %s", rec["stage"], e)
+
+
 def _run(stage: str, ctx: dict, events: dict | None = None) -> dict:
-    """Run one stage with UI banners around it and return its event to XCom."""
+    """Run one stage with UI banners around it and return its event to XCom.
+
+    On failure the record goes to XCom first, then the exception continues:
+    unchanged when a retry could help, as AirflowFailException (no retry)
+    when the stage refused on a decision that the same input cannot change."""
     env = run_env(ctx)
     t0 = stage_start(stage, env.trace_id)
-    ev = stages.run_stage(stage, env, events or {})
+    try:
+        ev = stages.run_stage(stage, env, events or {})
+    except Exception as e:
+        rec = stages.failure_record(stage, e)
+        stage_end(stage, env.trace_id, t0, status="FAILED", error=rec["message"][:300],
+                  error_type=rec["error_type"], retryable=rec["retryable"])
+        _record_failure(ctx, rec)
+        if not rec["retryable"]:
+            raise AirflowFailException(rec["message"]) from e
+        raise
     stage_end(stage, env.trace_id, t0,
               **{k: v for k, v in ev.items() if k not in ("trace_id", "stage")})
     return ev
@@ -183,6 +229,17 @@ def _pull_events(ctx: dict, upto: str | None = None) -> dict:
         names.append(name)
     pulled = ti.xcom_pull(task_ids=[stages.TASK_ID_FOR[n] for n in names]) or []
     return {n: (ev if isinstance(ev, dict) else None) for n, ev in zip(names, pulled)}
+
+
+def _pull_failures(ctx: dict) -> dict:
+    """Every stage's recorded failure, keyed by stage name; absent stages omitted.
+    The verdict only consults these for stages that produced no event."""
+    ti = ctx["task_instance"] if "task_instance" in ctx else ctx["ti"]
+    names = [n for n, _ in stages.STAGES]
+    pulled = ti.xcom_pull(task_ids=[stages.TASK_ID_FOR[n] for n in names],
+                          key=FAILURE_XCOM_KEY) or []
+    return {n: rec for n, rec in zip(names, pulled)
+            if isinstance(rec, dict) and rec.get("message")}
 
 
 with DAG(
@@ -239,7 +296,7 @@ with DAG(
         treat silence as the one remaining failure mode."""
         env = run_env(ctx)
         t0 = stage_start("verdict", env.trace_id)
-        result = stages.emit_verdict(env, _pull_events(ctx))
+        result = stages.emit_verdict(env, _pull_events(ctx), failures=_pull_failures(ctx))
         # The task succeeded if a verdict was published, whatever it said;
         # the verdict's own status is a field, not the task's outcome.
         stage_end("verdict", env.trace_id, t0, proceed=result["proceed"],

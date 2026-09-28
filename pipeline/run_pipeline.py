@@ -74,6 +74,7 @@ def main(argv=None) -> int:
     log.info("run slot %s  trace %s  run_id %s", env.run_slot.isoformat(), env.trace_id, env.run_id)
 
     events: dict[str, dict | None] = {}
+    failures: dict[str, dict] = {}       # stage -> failure_record, for the verdict
     wanted = stages.STAGE_NAMES if args.stage == "all" else [args.stage]
     failed: Exception | None = None
     for name in stages.STAGE_NAMES:
@@ -87,14 +88,17 @@ def main(argv=None) -> int:
                      " ".join(f"{k}={v}" for k, v in ev.items()
                               if k not in ("trace_id", "stage") and v is not None)[:200])
         except Exception as e:  # noqa: BLE001 -- recorded, then re-raised after the verdict
-            log.error("%-14s FAILED: %s", name.upper(), e)
+            rec = stages.failure_record(name, e)
+            failures[name] = rec
+            log.error("%-14s FAILED (%s%s): %s", name.upper(), rec["error_type"],
+                      "" if rec["retryable"] else ", a retry would not help", e)
             events[name] = None
             failed = e
             break
 
     if args.stage == "all" and not args.no_verdict:
         try:
-            v = stages.emit_verdict(env, events)
+            v = stages.emit_verdict(env, events, failures=failures)
             log.info("VERDICT        proceed=%s status=%s event=%s", v["proceed"], v["status"],
                      v["event_id"])
             events["verdict"] = v
@@ -103,7 +107,7 @@ def main(argv=None) -> int:
             if failed is None:
                 failed = e
 
-    print("\n" + json.dumps(events, indent=2, default=str))
+    print("\n" + json.dumps({**events, "failures": failures}, indent=2, default=str))
     if failed is not None:
         raise failed
     return 0

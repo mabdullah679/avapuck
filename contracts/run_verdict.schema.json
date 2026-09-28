@@ -43,7 +43,8 @@
                 "properties": {
                   "ok": {"type": "boolean"},
                   "reported": {"type": "boolean", "description": "Whether a stage event existed at all."},
-                  "detail": {"type": "object"}
+                  "detail": {"type": "object"},
+                  "error": {"type": "string", "description": "Present only when the stage raised and produced no event: the error, one line, so the reason is on the control topic and not only in a task log."}
                 }
               }
             },

@@ -28,7 +28,7 @@ Every message on every topic is:
     "proceed": true,                     // the ONLY field you react to
     "status": "degraded",                // complete | degraded | failed -- for people
     "reasons": ["hive table not registered: HiveServer2 unreachable"],
-    "stages": { "...per stage: ok, reported, detail..." },
+    "stages": { "...per stage: ok, reported, detail; error when the stage raised..." },
     "outputs": {
       "warehouse_table": "warehouse.trips",
       "hive_table": null,

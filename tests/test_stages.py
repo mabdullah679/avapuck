@@ -108,3 +108,77 @@ def test_emit_verdict_publishes_even_when_events_are_missing_and_flags_malformed
 def test_find_input_names_the_directory_it_searched(tmp_path):
     with pytest.raises(FileNotFoundError, match=str(tmp_path)):
         stages.find_input(tmp_path, "*.parquet", "mask")
+
+
+# ── Failures are recorded, and decisions are not retried ──────────────────
+
+def test_failure_record_marks_a_contract_refusal_as_not_worth_retrying():
+    from pipeline.metadata.contract import ContractMismatch
+    exc = ContractMismatch("blm", Path("config/datasets/blm.json"),
+                           ["column 'card_info': in the contract, missing from the data"])
+    rec = stages.failure_record("extract", exc)
+    assert rec["stage"] == "extract" and rec["error_type"] == "ContractMismatch"
+    assert rec["retryable"] is False
+    assert "column 'card_info': in the contract, missing from the data" in rec["message"]
+    assert "contract accept blm" in rec["message"]
+
+
+def test_failure_record_keeps_infrastructure_errors_retryable_and_bounded():
+    rec = stages.failure_record("publish", ConnectionError("k" * 5000))
+    assert rec["retryable"] is True and rec["error_type"] == "ConnectionError"
+    assert len(rec["message"]) == stages.MAX_FAILURE_CHARS and rec["message"].endswith("…")
+    assert stages.failure_record("load", RuntimeError())["message"] == "RuntimeError"
+
+
+def test_emit_verdict_carries_the_recorded_failure_onto_the_control_topic():
+    from pipeline.metadata.contract import ContractMismatch
+
+    sent = []
+
+    class Pub:
+        def __enter__(self): return self
+        def __exit__(self, *a): pass
+        def send(self, topic, key, message): sent.append((topic, key, message))
+        def flush(self): pass
+
+    class Signer:
+        def sign(self, envelope, payload): return "a.b.c"
+
+    env = stages.RunEnv.build(Path("/tmp/x"), datetime(2026, 9, 6, 4, tzinfo=timezone.utc),
+                              run_id="upload__abc__1")
+    rec = stages.failure_record("extract", ContractMismatch(
+        "blm", Path("/opt/pipeline/config/datasets/blm.json"),
+        ["column 'card_info': in the contract, missing from the data"]))
+    result = stages.emit_verdict(env, {}, dataset="blm", signer=Signer(), publisher=Pub(),
+                                 failures={"extract": rec})
+    payload = sent[0][2]["payload"]
+    assert result["proceed"] is False and payload["status"] == "failed"
+    assert payload["reasons"][0].startswith(
+        "extract failed: dataset 'blm' no longer matches its contract")
+    assert "card_info" in payload["stages"]["extract"]["error"]
+    assert payload["reasons"][1] == "card_split did not complete"
+
+
+def test_a_verdict_with_no_stage_events_is_filed_under_the_requested_dataset():
+    """A refused upload has no stage event to name its dataset; the conf does.
+    Seen live: filed under "trips", the watchdog blamed the wrong dataset."""
+    sent = []
+
+    class Pub:
+        def __enter__(self): return self
+        def __exit__(self, *a): pass
+        def send(self, topic, key, message): sent.append((topic, key, message))
+        def flush(self): pass
+
+    class Signer:
+        def sign(self, envelope, payload): return "a.b.c"
+
+    env = stages.RunEnv.build(Path("/tmp/x"), datetime(2026, 9, 6, 4, tzinfo=timezone.utc),
+                              run_id="upload__abc__1",
+                              conf={"csv_path": "/data/incoming/abc_blm.csv", "dataset": "blm"})
+    stages.emit_verdict(env, {}, signer=Signer(), publisher=Pub(),
+                        failures={"extract": "refused"})
+    assert sent[0][1] == "blm" and sent[0][2]["envelope"]["dataset"] == "blm"
+    bare = stages.RunEnv.build(Path("/tmp/x"), datetime(2026, 9, 6, 4, tzinfo=timezone.utc))
+    stages.emit_verdict(bare, {}, signer=Signer(), publisher=Pub())
+    assert sent[1][1] == "trips"                    # no conf, no events: the pipeline's name
