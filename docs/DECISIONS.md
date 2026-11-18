@@ -146,6 +146,12 @@ docker socket, because it is root on the host.
 Known limit: with no GitHub status integration nothing stops a push except
 the local hook.
 
+**Addendum 2026-11-18:** `.github/workflows/ci.yml` now runs the same two
+`make` tiers (and a gitleaks scan) on a free GitHub runner, so a PR shows a
+visible result. Jenkins stays the local history; the make targets stay the
+single definition of the checks. The runner is free for a public repo; the
+rejection above was about minutes on a private one.
+
 ## D12. Secrets: one file, no third-party manager
 
 The Google Secret Manager scripts, make targets and document are removed; a
