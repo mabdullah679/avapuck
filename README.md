@@ -80,7 +80,7 @@ make ci
 
 ## Design notes
 
-- **Encryption at the edge, not in the warehouse.** Encrypting inside Hive or Postgres would leave plaintext in Kafka and Parquet. Here the only plaintext window is inside the crypto service ([D1-D2](docs/DECISIONS.md)).
+- **Encryption at the edge, not in the warehouse.** Encrypting inside Hive or Postgres would leave plaintext in Kafka and Parquet. Here the only plaintext window is inside the crypto service.
 - **Masking is policy, not code.** Transformation code that masks columns drifts from what security signed off; Ranger JSON is authored once and enforced at the Hive boundary.
 - **The verdict is a boolean from a pure function.** Downstream teams reacting to log text or task states would break on rewording; they read `proceed` ([D4-D5](docs/DECISIONS.md)).
 - **CI is both Jenkins and GitHub Actions.** Both call the same `make` targets, so neither can drift from the other ([D11](docs/DECISIONS.md)).
