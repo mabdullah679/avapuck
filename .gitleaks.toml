@@ -1,0 +1,8 @@
+title = "avapuck gitleaks config"
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Contract example payloads hold fake idempotency keys and a deliberately unsigned example JWT"
+paths = ['''contracts/examples/.*\.json''']

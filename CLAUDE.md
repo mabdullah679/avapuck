@@ -1,29 +1,49 @@
-# BigQuery → Spark → Kafka → Hive → Postgres → PDF → signed verdict
+# avapuck
 
-Four-hourly pipeline: pull 100 rows/run from a BigQuery public dataset, or
-take an uncapped CSV upload from the console (`services/console/`), encrypt
-sensitive fields with AES-256-GCM via an HTTPS service, publish to Kafka in
-the platform envelope, land Parquet, mask in Hive under Apache Ranger policy,
-load Postgres, emit one PDF per run, and publish one signed `run.verdict`
-that downstream teams react to. Around it: a Kafka tap into Postgres, a
-watchdog for absent verdicts, a Spark worker scaler (the one service with
-the Docker socket), and a traffic audit that detects and blocks.
+Privacy-first data platform: BigQuery public data or console CSV uploads go
+through Spark, Kafka, Hive (Ranger masking) and Postgres, produce one PDF per
+run, and end in one signed `run.verdict`. Master rules for working with the
+owner: `~/.claude/CLAUDE.md` (read it; not copied here). Working agreement for
+changing code: `AGENTS.md`. What is stubbed or unverified: `TRUST-BOUNDARY.md`.
 
-`pipeline/metadata/schema.py` infers each dataset's columns, sensitivity and
-key; `pipeline/metadata/contract.py` holds later runs to that inference as a
-committed contract. Every stage reads the manifest instead of naming columns.
-Trips is one dataset through that path, not a special case.
+## Commands (run 2026-11-18, Python 3.12)
 
-Read `docs/DECISIONS.md` for why the platform layer is shaped as it is,
-`docs/ARCHITECTURE.md` for the data flow, and `TRUST-BOUNDARY.md` for what is
-stubbed or unverified. `docs/RUNBOOK.md` is the operator guide;
-`docs/CONSUMING.md` is for downstream teams. `AGENTS.md` is the working
-agreement for anyone changing code.
+```bash
+python3.12 -m venv .venv && .venv/bin/pip install -r requirements-ci.txt
+make ci            # service tier + platform tier; 318 passed, 4 skipped
+make test          # pytest only
+make ci-service    # pytest + contracts_check.py examples
+make ci-platform   # contract backward-compat vs CI_BASE_REF (default main)
+./setup.sh         # full Docker stack (needs Docker; not run in CI)
+```
 
-The stage list lives once, in `pipeline/stages.py`; the DAG and
-`pipeline/run_pipeline.py` both walk it. Payment-card columns get a split
-stage driven by the manifest's `card_split` treatment marker, never a column
-name. See `TRUST-BOUNDARY.md` §2.8 for the limits of that scheme.
+Skips are environment-dependent (no `google-cloud-bigquery` in
+`requirements-ci.txt`, no extract secret, no service-account key). The suite is
+pure Python: no Docker, no cloud. GitHub Actions (`.github/workflows/ci.yml`)
+runs the same two make tiers plus a gitleaks scan; Jenkins (`Jenkinsfile`)
+runs the same tiers locally. `.gitleaks.toml` allowlists only
+`contracts/examples/`.
+
+## Layout
+
+`pipeline/` stages (`stages.py` is the single stage list), `dags/` two Airflow
+DAGs, `services/` idp, crypto, console, tap, watchdog, scaler, `contracts/`
+JSON Schemas + examples, `config/` per-dataset contracts and Ranger policy,
+`docker/` images, `scripts/ci/` contract checks, `docs/` design (`DECISIONS.md`
+is the why), `tests/`.
+
+## Do not touch / do not do
+
+- Never commit `.env.local`, `certs/`, `secrets/`, `data/` contents, or
+  `pipeline-reports/` (all gitignored; `tests/test_secret_hygiene.py` guards it).
+- `config/datasets/` and `config/ranger/` files are generated once and then
+  owner-edited; do not regenerate over them. Contracts in `contracts/` must stay
+  backward-compatible (the platform tier fails otherwise).
+- This repo is public. No real data, client names, or account IDs.
+- `.claude/settings.json` auto-allows Bash for the owner's sessions; do not
+  widen it.
+- `docker compose` project name defaults to `avapuck`; running the stack from a
+  second checkout shares the first one's volumes and network.
 
 ## Non-negotiables
 
